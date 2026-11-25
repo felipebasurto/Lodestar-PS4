@@ -21,3 +21,13 @@ references. Local grouping remains valid; missing memory must not be interpreted
 that an update or add-on is absent everywhere.
 Check: read (allocation-failure injection is not available in the catalog host harness).
 Source: rewrite memory audit 2026-11-25.
+
+### CAT-3: title lookup is indexed for large catalogs
+Grouping and public title lookup must not walk every game for every package. A catalog may keep
+a private open-addressed index from title id to game index, rebuilt whenever games are regrouped.
+The index is only an accelerator: package roles, duplicate handling, cross references, and lookup
+results are identical to the linear scan. If the index cannot be allocated, grouping and lookup
+fall back to the linear scan. Walks that invalidate game indexes do not reuse stale entries.
+Check: test (large input space and public catalog behavior). Test: `test/catalog_test.c` ›
+large catalog lookup case.
+Source: scan algorithmic audit 2026-11-25.

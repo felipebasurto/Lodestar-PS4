@@ -281,11 +281,59 @@ int catalog_read(catalog_t *c) {
     return n;
 }
 
+static unsigned title_hash(const char *s) {
+    unsigned h = 2166136261u;
+    for (; *s; s++)
+        h = (h ^ (unsigned char)*s) * 16777619u;
+    return h;
+}
+
+/* The index stores game index + 1 in an open-addressed table. Its capacity is larger than
+ * npkgs, so a rebuilt table always has an empty probe stop; allocation failure simply means
+ * no index and the original linear lookup remains correct. */
+static int game_hash_reset(catalog_t *c) {
+    int need = 64;
+    while (need <= c->npkgs)
+        need *= 2;
+    if (!c->game_hash || c->game_hash_cap < need) {
+        int *next = realloc(c->game_hash, sizeof(*next) * (size_t)need);
+        if (!next) {
+            free(c->game_hash);
+            c->game_hash = NULL;
+            c->game_hash_cap = 0;
+            return -1;
+        }
+        c->game_hash = next;
+        c->game_hash_cap = need;
+    }
+    memset(c->game_hash, 0, sizeof(*c->game_hash) * (size_t)c->game_hash_cap);
+    return 0;
+}
+
 static cat_game_t *game_find(catalog_t *c, const char *title_id) {
+    if (c->game_hash) {
+        unsigned h = title_hash(title_id) & (unsigned)(c->game_hash_cap - 1);
+        while (c->game_hash[h]) {
+            int idx = c->game_hash[h] - 1;
+            if (idx < c->ngames && !strcmp(c->games[idx].title_id, title_id))
+                return &c->games[idx];
+            h = (h + 1) & (unsigned)(c->game_hash_cap - 1);
+        }
+        return NULL;
+    }
     for (int i = 0; i < c->ngames; i++)
         if (!strcmp(c->games[i].title_id, title_id))
             return &c->games[i];
     return NULL;
+}
+
+static void game_hash_insert(catalog_t *c, int idx) {
+    if (!c->game_hash)
+        return;
+    unsigned h = title_hash(c->games[idx].title_id) & (unsigned)(c->game_hash_cap - 1);
+    while (c->game_hash[h])
+        h = (h + 1) & (unsigned)(c->game_hash_cap - 1);
+    c->game_hash[h] = idx + 1;
 }
 
 static int is_kind(const cat_pkg_t *p, const char *kind) {
@@ -329,6 +377,7 @@ static int pick_update(const catalog_t *c, const cat_game_t *g, cat_choose_fn ch
 
 void catalog_group(catalog_t *c, cat_choose_fn choose) {
     release_xstore(c);
+    game_hash_reset(c);
     c->ngames = c->dupes = c->orphans = c->included = 0;
     for (int i = 0; i < c->npkgs; i++)
         c->pkgs[i].role = CAT_ROLE_NONE;
@@ -348,12 +397,14 @@ void catalog_group(catalog_t *c, cat_choose_fn choose) {
             c->games = n;
             c->gcap = cap;
         }
-        cat_game_t *g = &c->games[c->ngames++];
+        int game_idx = c->ngames++;
+        cat_game_t *g = &c->games[game_idx];
         memset(g, 0, sizeof(*g));
         snprintf(g->title_id, sizeof(g->title_id), "%s", c->pkgs[i].title_id);
         g->app = i;
         g->patch = -1;
         g->xpatch = -1;
+        game_hash_insert(c, game_idx);
         c->pkgs[i].role = CAT_ROLE_APP;
     }
     for (int i = 0; i < c->npkgs; i++) {
@@ -399,6 +450,16 @@ void catalog_group(catalog_t *c, cat_choose_fn choose) {
 }
 
 const cat_game_t *catalog_game(const catalog_t *c, const char *title_id) {
+    if (c->game_hash) {
+        unsigned h = title_hash(title_id) & (unsigned)(c->game_hash_cap - 1);
+        while (c->game_hash[h]) {
+            int idx = c->game_hash[h] - 1;
+            if (idx < c->ngames && !strcmp(c->games[idx].title_id, title_id))
+                return &c->games[idx];
+            h = (h + 1) & (unsigned)(c->game_hash_cap - 1);
+        }
+        return NULL;
+    }
     for (int i = 0; i < c->ngames; i++)
         if (!strcmp(c->games[i].title_id, title_id))
             return &c->games[i];
@@ -678,5 +739,6 @@ void catalog_free(catalog_t *c) {
     release_xstore(c);
     free(c->pkgs);
     free(c->games);
+    free(c->game_hash);
     memset(c, 0, sizeof(*c));
 }

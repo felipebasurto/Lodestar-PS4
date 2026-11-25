@@ -79,7 +79,8 @@ typedef struct {
     int npkgs, cap;
     cat_game_t *games;
     cat_ref_t *xupdates_store, *xdlc_store; /* backing blocks for cross links, when used */
-    int ngames, gcap;
+    int *game_hash; /* private title-id index of games, or NULL for linear lookup */
+    int ngames, gcap, game_hash_cap;
     int dupes;    /* game pkgs not used: an earlier copy of the same game is used */
     int orphans;  /* add-ons whose game is not on the drive */
     int included; /* updates not newer than their game (merged base+update pkgs) */

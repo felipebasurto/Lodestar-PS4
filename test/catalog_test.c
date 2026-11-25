@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "catalog.h"
+#include "la_alloc.h"
 #include "pkgmake.h"
 
 static int g_failed, g_checks;
@@ -363,8 +364,55 @@ static void test_classics(void) {
     cleanup(root);
 }
 
+
+/* CAT-3: hundreds of games and updates group and resolve by exact title id. This exercises
+ * the indexed large-input path without depending on wall-clock timing. */
+static void test_large_catalog(void) {
+    printf("catalog: large library lookup\n");
+    enum { N = 300 };
+    catalog_t c = {0};
+    c.pkgs = la_realloc(NULL, (size_t)N * 2 * sizeof(*c.pkgs)); /* catalog_free() releases with la_free() */
+    CHECK(c.pkgs != NULL);
+    if (!c.pkgs)
+        return;
+    memset(c.pkgs, 0, (size_t)N * 2 * sizeof(*c.pkgs));
+    c.npkgs = c.cap = N * 2;
+    for (int i = 0; i < N; i++) {
+        char tid[10], cid[40];
+        snprintf(tid, sizeof(tid), "CUSA%05d", 10000 + i);
+        for (int k = 0; k < 2; k++) {
+            cat_pkg_t *p = &c.pkgs[i * 2 + k];
+            p->state = CAT_OK;
+            snprintf(p->category, sizeof(p->category), "%s", k ? "gp" : "gd");
+            snprintf(p->title_id, sizeof(p->title_id), "%s", tid);
+            snprintf(cid, sizeof(cid), "UP0000-%s_00-LARGE%08d", tid, i);
+            snprintf(p->content_id, sizeof(p->content_id), "%s", cid);
+            snprintf(p->app_ver, sizeof(p->app_ver), "%s", k ? "01.02" : "01.00");
+            snprintf(p->path, sizeof(p->path), "/large/%s/%s.pkg", tid, k ? "update" : "game");
+        }
+    }
+    catalog_group(&c, NULL);
+    CHECK(c.ngames == N);
+    const cat_game_t *first = catalog_game(&c, "CUSA10000");
+    const cat_game_t *mid = catalog_game(&c, "CUSA10150");
+    const cat_game_t *last = catalog_game(&c, "CUSA10299");
+    CHECK(first && mid && last);
+    CHECK(first != mid && mid != last);
+    if (first && mid && last) {
+        CHECK(catalog_patch(&c, &c, first) == &c.pkgs[1]);
+        CHECK(catalog_patch(&c, &c, mid) == &c.pkgs[301]);
+        CHECK(catalog_patch(&c, &c, last) == &c.pkgs[599]);
+        CHECK(first->nupdates == 1 && mid->nupdates == 1 && last->nupdates == 1);
+    }
+    CHECK(catalog_game(&c, "CUSA1029") == NULL);  /* no prefix match */
+    CHECK(catalog_game(&c, "CUSA10300") == NULL); /* just after the range */
+    CHECK(catalog_game(&c, "cusa10150") == NULL); /* exact case */
+    catalog_free(&c);
+}
+
 int main(void) {
     test_scan();
+    test_large_catalog();
     test_skip_dir();
     test_choose();
     test_classics();
