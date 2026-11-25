@@ -366,6 +366,7 @@ static void test_pkg_reader(void) {
     CHECK(pkg.entries == NULL && pkg.nentries == 0);
     /* memory regression bounds: the measured library has 11..54 entries; these objects
      * used to reserve 512 entries (pkg) and 512-byte strings (sfo) for every parse */
+    CHECK(sizeof(pkg_entry_t) == 32);
     CHECK(sizeof(pkg_t) < 8192);
     CHECK(sizeof(sfo_t) < 20480);
     unlink(p);

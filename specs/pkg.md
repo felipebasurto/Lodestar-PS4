@@ -10,8 +10,10 @@ memory constraints in `specs/ps4-native.md`.
 
 ### PKG-1: the PKG entry cap is a validity bound, not a memory layout
 A pkg may have at most `PKG_MAX_ENTRIES` entries. The reader stores the entries the file actually
-has, not a fixed worst-case table for every open pkg. Rejecting a pkg above the cap is unchanged;
-memory use must scale with the real entry count.
+has, not a fixed worst-case table for every open pkg. Each retained entry is the raw 32-byte table
+record needed for lookup and decryption; parsed copies of fields already present in that record are
+not duplicated. Rejecting a pkg above the cap is unchanged; memory use must scale with the real entry
+count.
 Check: test (external file format and large input space). Test: `test/unit.c` › `test_pkg_reader`.
 Source: rewrite memory audit 2026-11-25.
 

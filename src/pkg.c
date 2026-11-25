@@ -101,21 +101,8 @@ int pkg_open(pkg_t *pkg, const char *path) {
     pkg->entries = count ? malloc(count * sizeof(*pkg->entries)) : NULL;
     if (count && !pkg->entries)
         goto fail;
-    uint8_t *tbl = malloc(count * 32u);
-    if ((count && !tbl) || read_at(pkg->fd, tbl, count * 32u, table)) {
-        free(tbl);
+    if (read_at(pkg->fd, pkg->entries, count * 32u, table))
         goto fail;
-    }
-    for (uint32_t i = 0; i < count; i++) {
-        pkg_entry_t *e = &pkg->entries[i];
-        memcpy(e->raw, tbl + i * 32, 32);
-        e->id = be32(e->raw);
-        e->flags1 = be32(e->raw + 8);
-        e->flags2 = be32(e->raw + 12);
-        e->offset = be32(e->raw + 16);
-        e->size = be32(e->raw + 20);
-    }
-    free(tbl);
     pkg->nentries = (int)count;
     return 0;
 fail:
@@ -139,20 +126,22 @@ void pkg_close(pkg_t *pkg) {
 uint8_t *pkg_entry(pkg_t *pkg, uint32_t id, size_t *len) {
     for (int i = 0; i < pkg->nentries; i++) {
         pkg_entry_t *e = &pkg->entries[i];
-        if (e->id != id)
+        if (be32(e->raw) != id)
             continue;
+        uint32_t flags1 = be32(e->raw + 8), flags2 = be32(e->raw + 12);
+        uint32_t offset = be32(e->raw + 16), size = be32(e->raw + 20);
         /* the size comes from the file: the entries read here (param.sfo, artwork, sound,
          * PlayGo data) are far smaller, and a bigger one is a damaged pkg */
-        if (e->size > PKG_MAX_ENTRY_SIZE)
+        if (size > PKG_MAX_ENTRY_SIZE)
             return NULL;
-        size_t padded = ((size_t)e->size + 15u) & ~(size_t)15u;
+        size_t padded = ((size_t)size + 15u) & ~(size_t)15u;
         uint8_t *buf = mem_alloc(padded + 1);
-        if (!buf || read_at(pkg->fd, buf, padded, e->offset)) {
+        if (!buf || read_at(pkg->fd, buf, padded, offset)) {
             mem_free(buf);
             return NULL;
         }
-        if (e->flags1 & 0x80000000u) {
-            if (!pkg_fake_key(pkg) || ((e->flags2 >> 12) & 0xf) != 3) {
+        if (flags1 & 0x80000000u) {
+            if (!pkg_fake_key(pkg) || ((flags2 >> 12) & 0xf) != 3) {
                 mem_free(buf);
                 return NULL;
             }
@@ -162,8 +151,8 @@ uint8_t *pkg_entry(pkg_t *pkg, uint32_t id, size_t *len) {
             sha256(seed, sizeof(seed), ivk);
             aes128_cbc_decrypt(ivk + 16, ivk, buf, padded);
         }
-        buf[e->size] = 0;
-        *len = e->size;
+        buf[size] = 0;
+        *len = size;
         return buf;
     }
     return NULL;

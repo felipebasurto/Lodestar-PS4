@@ -57,8 +57,7 @@ static inline const char *game_platform(const char *tid) {
 #define PKG_MAX_ENTRY_SIZE (64u << 20) /* largest entry pkg_entry reads */
 
 typedef struct {
-    uint32_t id, flags1, flags2, offset, size;
-    uint8_t raw[32];
+    uint8_t raw[32]; /* the on-disk table record; decryption also uses it as seed material */
 } pkg_entry_t;
 
 typedef struct {
