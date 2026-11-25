@@ -8,32 +8,24 @@
 #include <string.h>
 
 #define BGFT_TITLE_ID_LEN 9
+/* System pkg paths are at most 95 bytes. Longer records still expose their real length
+ * and truncation state, but only the bytes that can ever be canonical are retained. */
+#define BGFTINFO_URL_CAP 95
 
 typedef struct {
-    int records;              /* records decoded, when valid */
-    const uint8_t *title_id;  /* record 0x7c, normally 9 bytes */
-    size_t title_id_len;
-    const uint8_t *url;       /* record 0x1388, the game pkg path handed to BGFT */
-    size_t url_len;
-    uint32_t error;           /* record 0x68 when present */
+    int records; /* records decoded; zero when the stream is malformed */
+    int has_title;
+    char title_id[BGFT_TITLE_ID_LEN + 1];
+    int has_url;
+    size_t url_len;      /* the record's real length, also when truncated */
+    int url_truncated;
+    char url[BGFTINFO_URL_CAP + 1];
     int error_present;
+    uint32_t error;
 } bgft_info_t;
 
 static inline uint32_t bgft_le32(const uint8_t *p) {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
-}
-
-/* 1 when needle (nlen bytes) occurs in hay (hlen bytes). Unlike a C-string search this is
- * safe for PDB values, which are length-delimited and need not end in NUL. */
-static inline int bgft_bytes_contains(const uint8_t *hay, size_t hlen, const uint8_t *needle, size_t nlen) {
-    if (!nlen)
-        return 1;
-    if (nlen > hlen)
-        return 0;
-    for (size_t i = 0; i + nlen <= hlen; i++)
-        if (!memcmp(hay + i, needle, nlen))
-            return 1;
-    return 0;
 }
 
 
@@ -68,13 +60,13 @@ static inline int bgft_legacy_title_id(const uint8_t *d, size_t len, char out[BG
 /* A BGFT d0.pdb/d1.pdb is a little-endian u32 zero followed by records. Each record is
  * key, length, length again, then data, with no trailing bytes. Returns 0 and fills out
  * for a well-formed task, -1 for anything malformed. Missing individual keys are not
- * malformed: they only leave the matching field empty. */
+ * malformed: they only leave the matching field absent. Repeated keys use the last one. */
 static inline int bgft_task_parse(const uint8_t *d, size_t len, bgft_info_t *out) {
     memset(out, 0, sizeof(*out));
     if (!d || len < 4 || bgft_le32(d))
         return -1;
+    bgft_info_t tmp = {0};
     size_t off = 4;
-    int records = 0;
     while (off < len) {
         if (len - off < 12)
             return -1;
@@ -86,18 +78,33 @@ static inline int bgft_task_parse(const uint8_t *d, size_t len, bgft_info_t *out
             return -1;
         const uint8_t *data = d + off;
         if (key == 0x7c) {
-            out->title_id = data;
-            out->title_id_len = n1;
+            tmp.has_title = n1 == BGFT_TITLE_ID_LEN;
+            memset(tmp.title_id, 0, sizeof(tmp.title_id));
+            if (tmp.has_title)
+                memcpy(tmp.title_id, data, BGFT_TITLE_ID_LEN);
         } else if (key == 0x1388) {
-            out->url = data;
-            out->url_len = n1;
-        } else if (key == 0x68 && n1 == 4) {
-            out->error = bgft_le32(data);
-            out->error_present = 1;
+            size_t keep = n1 <= BGFTINFO_URL_CAP ? n1 : BGFTINFO_URL_CAP;
+            tmp.has_url = 1;
+            tmp.url_len = n1;
+            tmp.url_truncated = n1 > BGFTINFO_URL_CAP;
+            memcpy(tmp.url, data, keep);
+            tmp.url[keep] = 0;
+        } else if (key == 0x68) {
+            tmp.error_present = n1 == 4;
+            tmp.error = tmp.error_present ? bgft_le32(data) : 0;
         }
         off += n1;
-        records++;
+        tmp.records++;
     }
-    out->records = records;
+    *out = tmp;
     return 0;
+}
+
+/* 1 when the canonical package URL record is exactly url. A longer record that merely
+ * contains url is a different URL and cannot prove that the task is healthy. */
+static inline int bgft_info_url_is(const bgft_info_t *info, const char *url) {
+    if (!info || !url)
+        return 0;
+    size_t n = strlen(url);
+    return info->has_url && !info->url_truncated && info->url_len == n && !memcmp(info->url, url, n);
 }

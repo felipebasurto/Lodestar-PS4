@@ -781,10 +781,14 @@ static void test_bgft_info(void) {
     bgft_info_t info;
     CHECK(bgft_task_parse(b.data, b.len, &info) == 0);
     CHECK(info.records == 41);
-    CHECK(info.title_id && info.title_id_len == 9 && !memcmp(info.title_id, "CUSA00001", 9));
-    CHECK(info.url && info.url_len == strlen(url) && !memcmp(info.url, url, info.url_len));
+    CHECK(info.has_title && !strcmp(info.title_id, "CUSA00001"));
+    CHECK(info.has_url && info.url_len == strlen(url) && !memcmp(info.url, url, info.url_len));
     CHECK(info.error_present && info.error == 0);
-    CHECK(bgft_bytes_contains(info.url, info.url_len, (const uint8_t *)url, strlen(url)));
+    CHECK(bgft_info_url_is(&info, url));
+    CHECK(!bgft_info_url_is(&info, "/mnt/usb0/ps4/CUSA00001/other.pkg"));
+    bgft_info_t longer = info;
+    longer.url_len = strlen(url) + 1; /* a trailing NUL is a different length-delimited value */
+    CHECK(!bgft_info_url_is(&longer, url));
     char legacy_tid[10] = "";
     CHECK(bgft_legacy_title_id(b.data, b.len, legacy_tid));
     CHECK(!strcmp(legacy_tid, "CUSA00001"));
@@ -864,7 +868,6 @@ static void test_bgft_scan(void) {
     write_bin(file, legacy, sizeof(legacy) - 1);
     snprintf(dir, sizeof(dir), "%s/0000f000", root); /* install task id: outside the game range */
     CHECK(mkdir(dir, 0777) == 0);
-
     bgftscan_t scan;
     bgftscan_init(&scan);
     bgftscan_load(&scan, root, 0xf001, 0xffff);
@@ -883,6 +886,19 @@ static void test_bgft_scan(void) {
     CHECK(!bgftscan_find(&scan, "CUSA00009"));
     bgftscan_free(&scan);
     CHECK(scan.entries == NULL && scan.count == 0 && !scan.usable);
+
+    /* enough extra valid tasks to cross the scanner's initial allocation growth boundary */
+    for (int i = 0; i < 20; i++) {
+        snprintf(dir, sizeof(dir), "%s/0000f1%02x", root, i * 2 + 1);
+        CHECK(mkdir(dir, 0777) == 0);
+        snprintf(file, sizeof(file), "%s/d0.pdb", dir);
+        write_bin(file, one.data, one.len);
+    }
+    bgftscan_load(&scan, root, 0xf001, 0xffff);
+    CHECK(scan.usable);
+    CHECK(scan.count == 23);
+    CHECK(scan.capacity >= scan.count);
+    bgftscan_free(&scan);
 
     char cmd[384];
     snprintf(cmd, sizeof(cmd), "rm -rf '%s'", root);

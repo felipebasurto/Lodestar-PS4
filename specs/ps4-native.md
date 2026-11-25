@@ -84,7 +84,7 @@ Check: read. Source: user requirement for agent-auditable output.
 
 ### P4N-13: BGFT task state is parsed once per scan epoch
 A scan evaluates titles against one bounded snapshot of BGFT task metadata. The parser reads the canonical
-PDB records (`0x7c` title id, `0x1388` package URL, `0x68` error) with strict length checks. A malformed or
+PDB records (`0x7c` title id, exact length-delimited `0x1388` package URL, `0x68` error) with strict length checks. A malformed or
 unreadable task is unknown/untrusted, never proof that registration is healthy. Registration and removal
 paths that mutate tasks still read fresh state; the snapshot is only the scan's consistent read model.
 Check: test (keep bar 1: external file format; keep bar 3: scan ordering). Test: `test/unit.c` ›

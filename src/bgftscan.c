@@ -11,7 +11,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "bgftinfo.h"
 #include "mem.h"
 
 void bgftscan_init(bgftscan_t *s) { memset(s, 0, sizeof(*s)); }
@@ -51,6 +50,29 @@ static uint8_t *read_task(const char *path, size_t *len) {
     return d;
 }
 
+static int bgftscan_reserve(bgftscan_t *s, size_t need) {
+    if (need <= s->capacity)
+        return 1;
+    if (need > SIZE_MAX / sizeof(*s->entries))
+        return 0;
+    size_t cap = s->capacity ? s->capacity : 16;
+    while (cap < need) {
+        if (cap > SIZE_MAX / 2) {
+            cap = need;
+            break;
+        }
+        cap *= 2;
+    }
+    if (cap > SIZE_MAX / sizeof(*s->entries))
+        return 0;
+    bgftscan_entry_t *entries = mem_realloc(s->entries, cap * sizeof(*entries));
+    if (!entries)
+        return 0;
+    s->entries = entries;
+    s->capacity = cap;
+    return 1;
+}
+
 void bgftscan_load(bgftscan_t *s, const char *dir, uint32_t first, uint32_t last) {
     s->count = 0;
     s->usable = 0;
@@ -61,25 +83,6 @@ void bgftscan_load(bgftscan_t *s, const char *dir, uint32_t first, uint32_t last
     }
     struct dirent *e;
     uint32_t id;
-    size_t dirs = 0;
-    while ((e = readdir(d)))
-        dirs += task_dir_id(e->d_name, first, last, &id) != 0;
-    rewinddir(d);
-    if (!dirs) {
-        closedir(d);
-        s->usable = 1;
-        return;
-    }
-    if (dirs > SIZE_MAX / sizeof(*s->entries)) {
-        closedir(d);
-        return;
-    }
-    bgftscan_entry_t *entries = mem_realloc(s->entries, dirs * sizeof(*entries));
-    if (!entries) {
-        closedir(d);
-        return;
-    }
-    s->entries = entries;
     char path[512];
     size_t n = 0;
     while ((e = readdir(d))) {
@@ -93,31 +96,31 @@ void bgftscan_load(bgftscan_t *s, const char *dir, uint32_t first, uint32_t last
         if (!data)
             continue;
         bgft_info_t info;
-        int ok = bgft_task_parse(data, len, &info) == 0;
-        char tid[10] = "";
-        if (ok && info.title_id && info.title_id_len == BGFT_TITLE_ID_LEN) {
-            memcpy(tid, info.title_id, BGFT_TITLE_ID_LEN);
-            tid[BGFT_TITLE_ID_LEN] = 0;
-        } else {
-            bgft_legacy_title_id(data, len, tid);
+        int parse_ok = bgft_task_parse(data, len, &info) == 0;
+        int canonical = parse_ok && info.has_title;
+        char legacy[BGFT_TITLE_ID_LEN + 1];
+        int legacy_id = !canonical && bgft_legacy_title_id(data, len, legacy);
+        if (legacy_id) {
+            if (!parse_ok)
+                memset(&info, 0, sizeof(info));
+            info.has_title = 1;
+            snprintf(info.title_id, sizeof(info.title_id), "%s", legacy);
         }
-        /* The directory is external mutable state. The first count is capacity, not a
-         * proof that no task appeared since; writes remain bounded either way. */
-        if (*tid && n < dirs) {
-            bgftscan_entry_t *x = &s->entries[n++];
-            memset(x, 0, sizeof(*x));
-            x->id = id;
-            x->malformed = !ok;
-            x->error = ok && info.error_present ? info.error : !ok;
-            snprintf(x->tid, sizeof(x->tid), "%s", tid);
-            if (ok && info.url && info.url_len <= SYS_PATH_MAX) {
-                memcpy(x->url, info.url, info.url_len);
-                x->url_len = (uint8_t)info.url_len;
-            } else if (ok && info.url) {
-                x->malformed = 1;
-                x->error = 1;
-            }
+        if (!info.has_title) {
+            mem_free(data);
+            continue;
         }
+        if (!bgftscan_reserve(s, n + 1)) {
+            mem_free(data);
+            closedir(d);
+            s->count = 0;
+            return; /* not usable: the caller falls back to fresh direct reads */
+        }
+        bgftscan_entry_t *x = &s->entries[n++];
+        x->id = id;
+        x->malformed = !canonical;
+        x->error = canonical && info.error_present ? info.error : !canonical;
+        x->info = info;
         mem_free(data);
     }
     closedir(d);
@@ -129,12 +132,11 @@ const bgftscan_entry_t *bgftscan_find(const bgftscan_t *s, const char *tid) {
     if (!s->usable)
         return NULL;
     for (size_t i = 0; i < s->count; i++)
-        if (!strcmp(s->entries[i].tid, tid))
+        if (!strcmp(s->entries[i].info.title_id, tid))
             return &s->entries[i];
     return NULL;
 }
 
 int bgftscan_names(const bgftscan_entry_t *e, const char *url) {
-    return e && !e->malformed && e->url_len &&
-           bgft_bytes_contains((const uint8_t *)e->url, e->url_len, (const uint8_t *)url, strlen(url));
+    return e && !e->malformed && bgft_info_url_is(&e->info, url);
 }

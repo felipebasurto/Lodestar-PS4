@@ -1577,6 +1577,11 @@ static int contains(const uint8_t *d, size_t n, const char *s) {
 
 static bgftscan_t g_bgftscan;
 
+/* A task write/remove is rare. Invalidating the whole scan snapshot keeps the ordering
+ * proof simple: later title_state calls fall back to fresh direct reads until the next
+ * batch reload. This is synchronous main-loop state, not shared with the install threads. */
+static void bgftscan_invalidate(void) { g_bgftscan.usable = 0; }
+
 /* The id of the game task of tid written here, 0 when there is none. */
 static uint32_t bgft_find(const char *tid) {
     char want[48], p[64];
@@ -1676,6 +1681,7 @@ static void bgft_remove(const char *tid) {
     char p[64];
     snprintf(p, sizeof(p), BGFT_DIR "/%08x", id);
     rm_tree(p);
+    bgftscan_invalidate();
     printf("[reg] %s: BGFT game task %08x removed\n", tid, id);
 }
 
@@ -1717,6 +1723,7 @@ static int place_bgft(title_src_t *t, const buf_t *json, const patch_ref_t *pr) 
         buf_free(&b);
     }
     if (changed) {
+        bgftscan_invalidate(); /* also when a write failed part way: the next read is fresh */
         printf("[reg] %s: BGFT game task %08x %s\n", tid, id, fresh ? "written" : "updated");
         mark_reboot(tid);
     }
@@ -6419,6 +6426,7 @@ static void shutdown_daemon(int lock) {
     links_stop();
     drive_stop();
     install_close();
+    bgftscan_free(&g_bgftscan);
     if (g_web >= 0)
         close(g_web);
     if (g_klog >= 0)
