@@ -67,6 +67,7 @@
 #include "origin.h"
 #include "pkg.h"
 #include "retention.h"
+#include "scanreq.h"
 #include "restore.h"
 #include "shortpath.h"
 #include "emu.h"
@@ -2068,7 +2069,7 @@ typedef struct {
 } managed_t;
 
 static managed_t g_managed[MAX_TITLES];
-static int g_manual_scan; /* "Scan for games" in the panel */
+static int g_scan_manual_active; /* main-loop epoch snapshot of a panel "scan for games" request */
 static int g_walk_now;    /* a drive came (the share connected): walked now, without saying so */
 static int g_deleting; /* a delete screen is open: game folders are unmounted */
 static time_t g_deleting_since;
@@ -3660,7 +3661,7 @@ static int catalog_update(catalog_t *cat, const char *root, int fresh) {
     }
     /* A drive with no sign of games (a music stick, the boot partition) is searched all
      * the same, but without saying so: only a ps4 folder or a pkg announces the scan. */
-    int announce = fresh && g_manual_scan && (has_candidates(root) || has_pkg(root));
+    int announce = fresh && g_scan_manual_active && (has_candidates(root) || has_pkg(root));
     if (announce)
         notify_kind(NOTIFY_DRIVE, TR("Scanning %s for PS4 games...", "Buscando juegos de PS4 en %s..."), root_label(root));
     activity_set("scanning", root_label(root), NULL, NULL, 0, cat->npkgs, 0, 0);
@@ -3723,6 +3724,43 @@ static void clear_removed_dlc_for(const char *tid) {
 
 static int readd_queue(const char *tid, const char *why);
 
+/* WEBAPI-4 boundary: upload, Drive and links threads request scans here; the scan itself
+ * remains main-loop state. The mutex only covers this small intent machine, never a scan. */
+static pthread_mutex_t g_scanreq_mu = PTHREAD_MUTEX_INITIALIZER;
+static scanreq_t g_scanreq;
+
+static void scan_request(int manual) {
+    pthread_mutex_lock(&g_scanreq_mu);
+    scanreq_request(&g_scanreq, manual);
+    pthread_mutex_unlock(&g_scanreq_mu);
+}
+
+static int scan_due(time_t now) {
+    pthread_mutex_lock(&g_scanreq_mu);
+    int due = scanreq_due(&g_scanreq, now);
+    pthread_mutex_unlock(&g_scanreq_mu);
+    return due;
+}
+
+static unsigned scan_begin(int *manual) {
+    pthread_mutex_lock(&g_scanreq_mu);
+    unsigned seq = scanreq_begin(&g_scanreq, manual);
+    pthread_mutex_unlock(&g_scanreq_mu);
+    return seq;
+}
+
+static void scan_keep_manual(int manual) {
+    pthread_mutex_lock(&g_scanreq_mu);
+    scanreq_keep_manual(&g_scanreq, manual);
+    pthread_mutex_unlock(&g_scanreq_mu);
+}
+
+static void scan_finish(unsigned seq) {
+    pthread_mutex_lock(&g_scanreq_mu);
+    scanreq_finish(&g_scanreq, seq, time(NULL), SCAN_SECONDS);
+    pthread_mutex_unlock(&g_scanreq_mu);
+}
+
 static int g_stop; /* the panel asked to stop: the long loops end before the daemon does */
 
 static void scan_root(const char *root, int fresh, int reconnected) {
@@ -3734,7 +3772,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         return;
     }
     activity_set("scanning", label, NULL, NULL, 0, 0, 0, 0);
-    if (fresh && g_manual_scan && !in_place(root))
+    if (fresh && g_scan_manual_active && !in_place(root))
         notify_kind(NOTIFY_DRIVE, TR("Scanning %s for PS4 games...", "Buscando juegos de PS4 en %s..."), label);
     int moved = in_place(root) ? 0 : adopt_root_pkgs(root);
     if (moved && !fresh)
@@ -3776,9 +3814,9 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         pending += t->state == 1;
     }
     /* the totals for a scan asked in the panel; otherwise only what changed */
-    if (fresh && g_manual_scan && !count)
+    if (fresh && g_scan_manual_active && !count)
         notify_kind(NOTIFY_DRIVE, TR("%s: no PS4 games found", "%s: no se encontraron juegos de PS4"), label);
-    else if (fresh && g_manual_scan)
+    else if (fresh && g_scan_manual_active)
         notify_kind(NOTIFY_DRIVE,
                     TR("%s: %d PS4 game(s) found, %d new or updated",
                        "%s: %d juego(s) de PS4 encontrado(s), %d nuevo(s) o actualizado(s)"),
@@ -4212,7 +4250,7 @@ static void release_dlc_mounts(void) {
     mem_free(list);
 }
 
-static void scan_all(void) {
+static int scan_all(void) {
     static int seen[NROOTS], first = 1;
     static time_t nas_scanned;
     char root[PATH_MAX];
@@ -4221,7 +4259,7 @@ static void scan_all(void) {
     if (!db_ready()) {
         /* every game would look unregistered and be added again: wait for a good read */
         printf("[scan] the system's app.db could not be read: the scan waits\n");
-        return;
+        return 0;
     }
     release_stale();
     if (!g_cfg.organize || nas_active()) {
@@ -4234,10 +4272,10 @@ static void scan_all(void) {
         for (int i = 0; i < NROOTS; i++) {
             root_path(i, root, sizeof(root));
             if (root_present(root)) {
-                int due = g_manual_scan || g_walk_now || !g_cat_loaded[i] ||
+                int due = g_scan_manual_active || g_walk_now || !g_cat_loaded[i] ||
                           (is_nas(root) ? nas_due(now, g_cat_walked[i]) : now - g_cat_walked[i] >= CATALOG_SECONDS);
                 if (due) {
-                    ready[i] = catalog_update(&g_cat[i], root, !seen[i] || g_manual_scan || g_walk_now);
+                    ready[i] = catalog_update(&g_cat[i], root, !seen[i] || g_scan_manual_active || g_walk_now);
                     g_cat_walked[i] = now;
                 } else {
                     ready[i] = catalog_has_games(root);
@@ -4257,7 +4295,7 @@ static void scan_all(void) {
             int present = root_present(root);
             /* every pkg of a game is opened in a scan: over the share that is a round trip
              * per pkg, so it is looked at less often */
-            int fresh = !seen[i] || g_manual_scan || g_walk_now;
+            int fresh = !seen[i] || g_scan_manual_active || g_walk_now;
             if (ready[i] && is_nas(root) && !fresh && !nas_due(now, nas_scanned))
                 ready[i] = 0;
             else if (ready[i] && is_nas(root))
@@ -4288,15 +4326,15 @@ static void scan_all(void) {
             int present = root_present(root);
             if (present) {
                 titles_file_load(i, root);
-                scan_root(root, !seen[i] || g_manual_scan, !seen[i] && !first);
+                scan_root(root, !seen[i] || g_scan_manual_active, !seen[i] && !first);
                 titles_file_save(root);
             }
             seen[i] = present;
         }
     }
     first = 0;
-    g_manual_scan = 0;
     g_walk_now = 0;
+    return 1;
 }
 
 /* --- klog events --- */
@@ -4778,12 +4816,7 @@ static void handle_klog_line(const char *line) {
 
 /* --- web panel --- */
 
-static time_t g_next_scan;
-
-void app_rescan(void) {
-    g_next_scan = 0;
-    g_manual_scan = 1;
-}
+void app_rescan(void) { scan_request(1); }
 
 /* The panel's own "scan for games": every pkg is read again, even when its file kept the
  * same size and time (a share that replaces a pkg in place looks unchanged otherwise). */
@@ -5063,7 +5096,7 @@ int app_add(const char *tid, char *msg, size_t cap) {
     snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", tid);
     unlink(rm);
     clear_removed_dlc_for(tid);
-    g_next_scan = 0;
+    scan_request(0);
     snprintf(msg, cap, TR("Adding %s to the library", "Añadiendo %s a la biblioteca"), tid);
     return 0;
 }
@@ -5601,7 +5634,7 @@ static void run_restore(char (*only)[10], int nonly, int remember) {
     for (int i = 0; i < n; i++)
         if (restore_clear_state_ok(unregistered[i], move_failed[i]))
             restore_clear_state(items[i].tid);
-    g_next_scan = 0;
+    scan_request(0);
     if (n == 1 && done)
         notify_kind(NOTIFY_READY, TR("%s: %d pkg file(s) restored%s", "%s: %d pkg(s) restaurado(s)%s"), items[0].name,
                     moved,
@@ -5742,7 +5775,7 @@ int app_restore(const char *tids, char *msg, size_t cap) {
 
 int app_restored_forget(char *msg, size_t cap) {
     unlink(RESTORED_LIST);
-    g_next_scan = 0;
+    scan_request(0);
     snprintf(msg, cap, "%s", TR("Restored pkgs will be used again on the next scan", "Los pkgs restaurados se volverán a usar en la próxima búsqueda"));
     return 0;
 }
@@ -6251,7 +6284,7 @@ int app_config_set(const char *body, char *msg, size_t cap) {
             g_migrated[i] = 0;
     if (nas_changed)
         nas_apply(1);
-    g_next_scan = 0;
+    scan_request(0);
     if (nas_changed && c.nas && !nas_active())
         snprintf(msg, cap, TR("Saved, but the NAS did not connect: %s", "Guardado, pero el NAS no conectó: %s"),
                  nas_status());
@@ -7627,18 +7660,22 @@ int main(void) {
         nas_ask_reload(); /* the boot instance cannot open the fuse devices: ask for a load */
         install_received(); /* an app sent with "Send and install" */
         panel_app_step();
-        if (time(NULL) >= g_next_scan && !g_deleting) {
+        if (scan_due(time(NULL)) && !g_deleting) {
             if (g_setup && time(NULL) >= (g_setup_seen > g_setup_start ? g_setup_seen : g_setup_start) + SETUP_WAIT) {
                 printf("[main] first start: nobody at the panel, the default settings are saved\n");
                 config_save();
             }
+            int manual = 0;
+            unsigned scan_seq = scan_begin(&manual);
+            g_scan_manual_active = manual;
+            int scanned = 1;
             if (g_setup) {
-                if (g_manual_scan)
+                if (manual)
                     notify("%s", TR("Save the settings in the panel first: no game is added until then",
                                     "Guarda primero los ajustes en el panel: hasta entonces no se añade ningún juego"));
             } else if (g_reg_mode != REG_NONE) {
                 migrate_organized(); /* organize off: the games it had organized, back in place */
-                scan_all();
+                scanned = scan_all();
                 /* After a boot the games are mounted by this first scan: one started before
                  * says its data is corrupted. Saying when they are there tells when to start. */
                 static int ready_said;
@@ -7650,12 +7687,14 @@ int main(void) {
                     if (playable)
             notify_kind(NOTIFY_READY, TR("%d game(s) ready to play", "%d juego(s) listo(s) para jugar"), playable);
                 }
-            } else if (g_manual_scan)
+            } else if (manual)
                 notify_kind(NOTIFY_WARN, TR("Firmware %s is not supported yet: no games are added",
                           "El firmware %s aún no es compatible: no se añaden juegos"),
                        g_fw_text);
-            g_manual_scan = 0;
-            g_next_scan = time(NULL) + SCAN_SECONDS;
+            if (!scanned)
+                scan_keep_manual(manual);
+            g_scan_manual_active = 0;
+            scan_finish(scan_seq);
             install_cleanup();
             dlc_pending_check();
         }

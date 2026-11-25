@@ -25,6 +25,7 @@
 #include "mountplan.h"
 #include "retention.h"
 #include "restore.h"
+#include "scanreq.h"
 #include "stage.h"
 #include "webnet.h"
 #include "pdb_template.h"
@@ -1334,6 +1335,44 @@ static void test_emu(void) {
     CHECK(!emu_is_dir(""));
 }
 
+
+/* WEBAPI-4 (specs/webapi.md): scan requests arriving during a scan survive end-of-scan
+ * scheduling, and manual requests are consumed exactly once unless the scan never ran. */
+static void test_scanreq(void) {
+    printf("scan requests: cross-thread intent ordering\n");
+    scanreq_t q;
+    scanreq_init(&q);
+    CHECK(scanreq_due(&q, 0)); /* the first scan is due at start */
+    int manual = -1;
+    unsigned seq = scanreq_begin(&q, &manual);
+    CHECK(manual == 0);
+    scanreq_finish(&q, seq, 10, 10);
+    CHECK(!scanreq_due(&q, 19) && scanreq_due(&q, 20));
+
+    scanreq_request(&q, 1);
+    CHECK(scanreq_due(&q, 1));
+    seq = scanreq_begin(&q, &manual);
+    CHECK(manual == 1);
+    seq = scanreq_begin(&q, &manual);
+    CHECK(manual == 0); /* consumed by one epoch only */
+
+    scanreq_init(&q);
+    scanreq_request(&q, 1);
+    seq = scanreq_begin(&q, &manual);
+    scanreq_request(&q, 0); /* an upload finishes while the scan is still walking */
+    scanreq_finish(&q, seq, 30, 10);
+    CHECK(scanreq_due(&q, 30)); /* not overwritten by routine scheduling */
+
+    scanreq_init(&q);
+    scanreq_request(&q, 1);
+    seq = scanreq_begin(&q, &manual);
+    scanreq_keep_manual(&q, manual); /* app.db unreadable: the scan never ran */
+    scanreq_finish(&q, seq, 40, 10);
+    CHECK(!scanreq_due(&q, 41)); /* no immediate retry loop */
+    seq = scanreq_begin(&q, &manual);
+    CHECK(manual == 1); /* but the next scheduled scan is still fresh/manual */
+}
+
 int main(void) {
     test_crypto();
     test_app_json();
@@ -1361,6 +1400,7 @@ int main(void) {
     test_retention_marks();
     test_restore_plan();
     test_emu();
+    test_scanreq();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;
 }

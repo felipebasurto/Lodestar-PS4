@@ -28,3 +28,13 @@ with the web layer, which answers and closes. Other routes close their own conne
 response.
 Check: test through `test/http_test.c` and `test/upload_test.c`; read for ownership.
 Source: existing upload behavior, made explicit.
+
+### WEBAPI-4: scan requests are ordered intents, not shared flags
+Upload, Drive and links threads may ask for a scan, and the panel may ask for a fresh manual
+scan. Those requests cross the owner boundary through one synchronized scan-request machine.
+A request that arrives while a scan is running must not be overwritten by that scan's normal
+end-of-scan scheduling; it causes another scan. A manual request is consumed by one scan epoch
+and is kept for the next scheduled epoch when the scan never ran because the system database
+was unreadable. The scan body uses its epoch snapshot, not a mutable global flag.
+Check: test for the ordering machine (`test/unit.c` › `test_scanreq`); read for mutex use in
+`main.c`. Source: existing cross-thread `app_rescan()` callers, made explicit.
