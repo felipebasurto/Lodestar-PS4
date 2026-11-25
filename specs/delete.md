@@ -40,7 +40,8 @@ in `src/main.c`.
 `POST /api/unmount` must never uninstall a normally installed title merely because its title id is valid. Removal
 is admitted only when the title is currently managed, has PS4Mount source state, or is present in a scanned library
 root, and never when the title is installed internally without a PS4Mount mount. Running or still-mounted titles are
-refused before any state changes.
+refused before any state changes. If the system uninstall fails after removal state was written, that state is rolled
+back before the request returns.
 Check: test (keep bar 2: data loss/security). Test: `test/unit.c` › `test_remove_admission`. Source: delete audit
 2026-11-25.
 

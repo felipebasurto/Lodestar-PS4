@@ -4664,19 +4664,27 @@ int app_remove(const char *tid, char *msg, size_t cap) {
         snprintf(msg, cap, TR("Could not unmount %s; nothing was removed", "No se pudo desmontar %s; no se quitó nada"), tid);
         return -1;
     }
-    char path[64];
+    char path[64], srcpath[64];
+    snprintf(srcpath, sizeof(srcpath), STATE_DIR "/%s.src", tid);
+    size_t srclen = 0;
+    uint8_t *savedsrc = read_all(srcpath, &srclen);
     snprintf(path, sizeof(path), STATE_DIR "/%s.removed", tid);
     write_file(path, tid, strlen(tid), 0666);
-    snprintf(path, sizeof(path), STATE_DIR "/%s.src", tid);
-    unlink(path);
+    unlink(srcpath);
     int rc = db_is_registered(tid) ? uninstall_title(tid) : 0;
     if (!rc) {
         clean_holds(tid, m ? m->dlc_tids : NULL, m ? m->ndlc_tids : 0);
         /* the task goes with it: BGFT keeps the state of an id for the whole boot, and a
          * game added again under the same one could not start */
         bgft_remove(tid);
+    } else {
+        /* a failed uninstall is not a removal: put back the scan ownership evidence */
+        unlink(path);
+        if (savedsrc && write_file(srcpath, savedsrc, srclen, 0666))
+            printf("[web] remove %s: its source state could not be restored\n", tid);
     }
-    if (m)
+    mem_free(savedsrc);
+    if (!rc && m)
         m->used = 0;
     printf("[web] remove %s: uninstall=0x%08x\n", tid, rc);
     if (rc == -2)
