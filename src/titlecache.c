@@ -104,6 +104,10 @@ static int g_n;
 static unsigned long g_clock;
 static int g_loading; /* the entries come from the file: nothing to write back */
 
+#define KEY_HASH_CAP 1024 /* twice MAX_ENTRIES: probing always has an empty stop */
+static int g_key_hash[KEY_HASH_CAP];
+static unsigned g_key_hash_used;
+
 
 int title_marker_tail(const char *marker, const char *dir, char *out, size_t cap) {
     size_t n = strlen(dir);
@@ -139,7 +143,63 @@ static int same_game(const entry_t *e, const char *root, const char *tid) {
     return e->used && !strcmp(e->root, root) && !strcmp(e->info.title_id, tid);
 }
 
+static unsigned key_hash(const char *root, const char *tid) {
+    unsigned h = 2166136261u;
+    for (const char *p = root; *p; p++)
+        h = (h ^ (unsigned char)*p) * 16777619u;
+    h = (h ^ 0x1f) * 16777619u;
+    for (const char *p = tid; *p; p++)
+        h = (h ^ (unsigned char)*p) * 16777619u;
+    return h;
+}
+
+static void key_insert_raw(int idx) {
+    entry_t *e = &g_entries[idx];
+    unsigned h = key_hash(e->root, e->info.title_id) & (KEY_HASH_CAP - 1);
+    while (g_key_hash[h])
+        h = (h + 1) & (KEY_HASH_CAP - 1);
+    g_key_hash[h] = idx + 1;
+    g_key_hash_used++;
+}
+
+static void key_rebuild(void) {
+    memset(g_key_hash, 0, sizeof(g_key_hash));
+    g_key_hash_used = 0;
+    if (!g_entries)
+        return;
+    for (int i = 0; i < g_n; i++)
+        if (g_entries[i].used)
+            key_insert_raw(i);
+}
+
+/* Stale entries may point at slots since reused for another key. They only cost probes:
+ * the full key is verified before any hit, and a miss falls back to the linear scan. */
+static void key_insert(int idx) {
+    if ((g_key_hash_used + 1) * 4 >= KEY_HASH_CAP * 3)
+        key_rebuild();
+    if ((g_key_hash_used + 1) * 4 < KEY_HASH_CAP * 3)
+        key_insert_raw(idx);
+}
+
+static int key_find(const char *root, const char *tid) {
+    unsigned h = key_hash(root, tid) & (KEY_HASH_CAP - 1);
+    while (g_key_hash[h]) {
+        int idx = g_key_hash[h] - 1;
+        if (idx < g_n && same_game(&g_entries[idx], root, tid))
+            return idx;
+        h = (h + 1) & (KEY_HASH_CAP - 1);
+    }
+    return -1;
+}
+
 const title_info_t *title_cache_find(const char *root, const char *tid, uint64_t fp) {
+    if (g_entries) {
+        int idx = key_find(root, tid);
+        if (idx >= 0 && g_entries[idx].fp == fp) {
+            g_entries[idx].touched = ++g_clock;
+            return &g_entries[idx].info;
+        }
+    }
     for (int i = 0; i < g_n; i++) {
         entry_t *e = &g_entries[i];
         if (same_game(e, root, tid) && e->fp == fp) {
@@ -177,6 +237,7 @@ title_info_t *title_cache_add(const char *root, const char *tid, uint64_t fp) {
     e->touched = ++g_clock;
     snprintf(e->root, sizeof(e->root), "%s", root);
     snprintf(e->info.title_id, sizeof(e->info.title_id), "%s", tid);
+    key_insert((int)(e - g_entries));
     return &e->info;
 }
 
@@ -198,6 +259,7 @@ void title_cache_forget(void) {
         g_entries[i].used = 0;
         g_entries[i].info.dlc = NULL;
     }
+    key_rebuild();
 }
 
 /* ---- the file of the last run ---- */

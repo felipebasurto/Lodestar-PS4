@@ -25,3 +25,13 @@ A cached entry whose marker's first line is not exactly its directory is damaged
 Check: test (external cache format and memory representation). Test: `test/titlecache_test.c` ›
 marker round-trip case.
 Source: rewrite memory audit 2026-11-25.
+
+### TCACHE-3: cache lookup is indexed without making the index authoritative
+Per-drive title lookup must not walk every cached entry for every scanned game on the hit path.
+A private open-addressed root/title index may accelerate lookup, but every hit must still verify
+root, title id and file fingerprint. Stale slots after LRU replacement are harmless probes, never
+ownership evidence. A miss may fall back to the exact linear scan, and forgetting or rebuilding
+the cache removes stale index state.
+Check: test (large input space and lookup behavior). Test: `test/titlecache_test.c` existing
+cache lookup/eviction cases.
+Source: scan algorithmic audit 2026-11-25.
