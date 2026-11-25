@@ -632,7 +632,7 @@ static int write_buf(const char *path, const buf_t *b) { return write_file(path,
 typedef struct {
     char path[PATH_MAX];
     pkg_t pkg;
-    sfo_t sfo;
+    pkg_meta_t meta;
     int data;    /* 1: has data (mounted by the game), 0: only unlocks content */
     int install; /* 1: installed with BGFT (compat mode, tiny license-only), 0: mounted */
 } dlc_src_t;
@@ -642,7 +642,7 @@ typedef struct {
     char dir[PATH_MAX], app_path[PATH_MAX], patch_path[PATH_MAX];
     pkg_t app, patch;
     int has_patch;
-    sfo_t app_sfo, patch_sfo;
+    pkg_meta_t app_meta, patch_meta;
     /* the update's param.sfo, as /system_data/priv/appmeta keeps it */
     unsigned char patch_sfo_sha[32];
     uint32_t patch_sfo_len;
@@ -672,6 +672,18 @@ static int read_sfo_ex(pkg_t *pkg, sfo_t *sfo, unsigned char *sha, uint32_t *sle
 }
 
 static int read_sfo(pkg_t *pkg, sfo_t *sfo) { return read_sfo_ex(pkg, sfo, NULL, NULL); }
+
+/* Registration keeps only its decision keys; callers that need other keys still use the
+ * full bounded parser above. */
+static int read_meta_ex(pkg_t *pkg, pkg_meta_t *meta, unsigned char *sha, uint32_t *slen) {
+    sfo_t sfo;
+    int rc = read_sfo_ex(pkg, &sfo, sha, slen);
+    if (!rc)
+        sfo_meta(&sfo, meta);
+    return rc;
+}
+
+static int read_meta(pkg_t *pkg, pkg_meta_t *meta) { return read_meta_ex(pkg, meta, NULL, NULL); }
 
 static void src_close(title_src_t *t) {
     pkg_close(&t->app);
@@ -720,15 +732,14 @@ static void dlc_open(title_src_t *t) {
             snprintf(a->path, sizeof(a->path), "%s/%s/ac.pkg", sub, f->d_name);
             if (!exists(a->path))
                 continue;
-            if (pkg_open(&a->pkg, a->path) || read_sfo(&a->pkg, &a->sfo)) {
+            if (pkg_open(&a->pkg, a->path) || read_meta(&a->pkg, &a->meta)) {
                 if (a->pkg.fd > 0)
                     pkg_close(&a->pkg);
                 continue;
             }
-            const sfo_item_t *cat = sfo_get(&a->sfo, "CATEGORY");
             /* the fake key was checked when the pkg was moved here; checking it again on
              * every scan would cost an RSA operation per add-on */
-            if (!cat || strcmp(cat->sval, "ac") || strcmp(a->pkg.title_id, e->d_name) ||
+            if (!a->meta.has_category || strcmp(a->meta.category, "ac") || strcmp(a->pkg.title_id, e->d_name) ||
                 strcmp(a->pkg.content_id + 20, f->d_name)) {
                 pkg_close(&a->pkg);
                 continue;
@@ -800,7 +811,7 @@ static void dlc_open_catalog(title_src_t *t, const catalog_t *c, const cat_game_
         snprintf(a->path, sizeof(a->path), "%s", p->path);
         /* the catalog checked the category and the fake key when it first read the pkg;
          * checking the key again on every scan would cost an RSA operation per add-on */
-        if (pkg_open(&a->pkg, a->path) || read_sfo(&a->pkg, &a->sfo)) {
+        if (pkg_open(&a->pkg, a->path) || read_meta(&a->pkg, &a->meta)) {
             if (a->pkg.fd >= 0)
                 pkg_close(&a->pkg);
             continue;
@@ -907,7 +918,7 @@ static int title_patch_path(const char *root, const char *tid, char *out, size_t
 /* Opens the pkgs of tid with the paths already chosen (dir, app_path and patch_path).
  * cat is NULL for the folders of older versions. */
 static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat, const cat_game_t *g) {
-    if (pkg_open(&t->app, t->app_path) || read_sfo(&t->app, &t->app_sfo)) {
+    if (pkg_open(&t->app, t->app_path) || read_meta(&t->app, &t->app_meta)) {
         if (first_time(t->app_path))
             printf("[scan] %s: unreadable app pkg\n", t->app_path);
         if (t->app.fd >= 0)
@@ -920,13 +931,12 @@ static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat,
         return -1;
     }
     if (t->patch_path[0] && exists(t->patch_path)) {
-        const sfo_item_t *gv = sfo_get(&t->app_sfo, "VERSION");
         if (patch_refused(tid, t->patch_path)) {
             snprintf(t->update_issue, sizeof(t->update_issue), "%s",
                      TR("Update left out: the system refuses it. It is tried again when the pkg changes",
                         "Actualización descartada: el sistema la rechaza. Se vuelve a probar cuando cambie el pkg"));
         } else if (pkg_open(&t->patch, t->patch_path) ||
-            read_sfo_ex(&t->patch, &t->patch_sfo, t->patch_sfo_sha, &t->patch_sfo_len)) {
+            read_meta_ex(&t->patch, &t->patch_meta, t->patch_sfo_sha, &t->patch_sfo_len)) {
             snprintf(t->update_issue, sizeof(t->update_issue), "%s",
                      TR("Update ignored: the update pkg could not be read",
                         "Actualización ignorada: no se pudo leer el pkg de la actualización"));
@@ -935,8 +945,8 @@ static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat,
         } else {
             /* An update only fits the title it was made for. (Master VERSION may differ:
              * installed games run with base 01.02 + update 01.00.) */
-            const sfo_item_t *uv = sfo_get(&t->patch_sfo, "VERSION");
-            const char *gver = gv ? gv->sval : "?", *uver = uv ? uv->sval : "?";
+            const char *gver = t->app_meta.has_version ? t->app_meta.version : "?",
+                         *uver = t->patch_meta.has_version ? t->patch_meta.version : "?";
             if (strcmp(t->patch.title_id, tid)) {
                 snprintf(t->update_issue, sizeof(t->update_issue),
                          TR("Update ignored: it is for %s version %s, the game is %s version %s",
@@ -948,15 +958,12 @@ static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat,
             }
         }
         if (t->update_issue[0] && first_time(t->patch_path)) {
-            const sfo_item_t *title = sfo_get(&t->app_sfo, "TITLE");
-            notify_kind(NOTIFY_WARN, "%s: %s", title ? title->sval : tid, t->update_issue);
+            notify_kind(NOTIFY_WARN, "%s: %s", t->app_meta.has_title ? t->app_meta.title : tid, t->update_issue);
         }
     }
-    const sfo_t *eff = t->has_patch ? &t->patch_sfo : &t->app_sfo;
-    const sfo_item_t *it = sfo_get(eff, "TITLE");
-    snprintf(t->name, sizeof(t->name), "%s", it ? it->sval : tid);
-    it = sfo_get(eff, "APP_VER");
-    snprintf(t->ver, sizeof(t->ver), "%s", it && !it->is_int ? it->sval : "01.00");
+    const pkg_meta_t *eff = t->has_patch ? &t->patch_meta : &t->app_meta;
+    snprintf(t->name, sizeof(t->name), "%s", eff->has_title ? eff->title : tid);
+    snprintf(t->ver, sizeof(t->ver), "%s", eff->app_ver_valid ? eff->app_ver : "01.00");
     char digest[65] = "";
     if (t->has_patch)
         for (int i = 0; i < 32; i++)
@@ -1115,10 +1122,9 @@ static void info_from_src(const title_src_t *t, title_info_t *e) {
     snprintf(e->content_id, sizeof(e->content_id), "%s", t->app.content_id);
     snprintf(e->update_issue, sizeof(e->update_issue), "%s", t->update_issue);
     snprintf(e->marker, sizeof(e->marker), "%s", t->marker);
-    const sfo_t *eff = t->has_patch ? &t->patch_sfo : &t->app_sfo;
-    const sfo_item_t *sv = sfo_get(eff, "SYSTEM_VER"), *av = sfo_get(&t->app_sfo, "APP_VER");
-    e->system_ver = sv && sv->is_int ? sv->ival : 0;
-    snprintf(e->game_ver, sizeof(e->game_ver), "%s", av && !av->is_int ? av->sval : "");
+    const pkg_meta_t *eff = t->has_patch ? &t->patch_meta : &t->app_meta;
+    e->system_ver = eff->system_ver_valid ? eff->system_ver : 0;
+    snprintf(e->game_ver, sizeof(e->game_ver), "%s", t->app_meta.app_ver_valid ? t->app_meta.app_ver : "");
     if (t->has_patch) {
         memcpy(e->sfo_sha, t->patch_sfo_sha, sizeof(e->sfo_sha));
         e->sfo_len = t->patch_sfo_len;
@@ -1301,8 +1307,7 @@ static int place_license(pkg_t *pkg) {
  * for add-ons with data, the icon. */
 static int place_dlc(dlc_src_t *a) {
     pkg_t *pkg = &a->pkg;
-    const sfo_item_t *v = sfo_get(&a->sfo, "VERSION");
-    const char *ver = v && !v->is_int ? v->sval : "01.00", *label = pkg->content_id + 20;
+    const char *ver = a->meta.version_valid ? a->meta.version : "01.00", *label = pkg->content_id + 20;
     char dir[PATH_MAX], p[PATH_MAX], q[PATH_MAX];
     snprintf(dir, sizeof(dir), HOLD_DIR "/addcont/%s/%s", pkg->title_id, label);
     mkdirs(dir, 0777);
@@ -1753,10 +1758,10 @@ static int dlc_install(dlc_src_t *a) {
     /* pkg_size + margin can wrap: compare without adding */
     if (big && ((a->pkg.pkg_size > fb_user || fb_user - a->pkg.pkg_size < DLC_SPACE_MARGIN) ||
                 g_ndlc_pending == MAX_DLC_PENDING)) {
-        const sfo_item_t *n = sfo_get(&a->sfo, "TITLE");
+        const char *dlc_name = a->meta.title_valid ? a->meta.title : a->pkg.content_id;
         notify_kind(NOTIFY_WARN, TR("Not enough space on the console to install the add-on %s (%llu MB): free some space and load PS4Mount again",
                   "No hay espacio en la consola para instalar el DLC %s (%llu MB): libera espacio y vuelve a cargar PS4Mount"),
-               n && !n->is_int ? n->sval : a->pkg.content_id, (unsigned long long)(a->pkg.pkg_size >> 20));
+               dlc_name, (unsigned long long)(a->pkg.pkg_size >> 20));
         if (g_ndlc_failed < MAX_DLC_FAILED)
             snprintf(g_dlc_failed[g_ndlc_failed++], sizeof(g_dlc_failed[0]), "%s", a->pkg.content_id);
         return 2;
@@ -1766,19 +1771,19 @@ static int dlc_install(dlc_src_t *a) {
     /* a folder mounted here by an older PS4Mount: the install must reach the real one */
     if (mounted_from(target, NULL, 0))
         unmount_all_layers(target, 1);
-    const sfo_item_t *n = sfo_get(&a->sfo, "TITLE");
+    const char *dlc_name = a->meta.title_valid ? a->meta.title : a->pkg.content_id;
     int32_t user = 0;
     sceUserServiceGetForegroundUser(&user);
     char kind[24];
     snprintf(kind, sizeof(kind), "ac-%.16s", a->pkg.content_id + 20);
     int task = install_pkg(pkg_url(a->pkg.title_id, kind, a->path, url, sizeof(url)),
-                           n && !n->is_int ? n->sval : a->pkg.content_id, user, msg, sizeof(msg));
+                           dlc_name, user, msg, sizeof(msg));
     printf("[dlc] %s: %s\n", a->pkg.content_id, msg);
     if (big && task >= 0) { /* minutes: followed by dlc_pending_check() */
         pthread_mutex_lock(&g_act_mu);
         dlc_pending_t *p = &g_dlc_pending[g_ndlc_pending++];
         snprintf(p->content_id, sizeof(p->content_id), "%s", a->pkg.content_id);
-        snprintf(p->name, sizeof(p->name), "%s", n && !n->is_int ? n->sval : a->pkg.content_id);
+        snprintf(p->name, sizeof(p->name), "%s", dlc_name);
         p->size = a->pkg.pkg_size;
         p->since = time(NULL);
         pthread_mutex_unlock(&g_act_mu);
@@ -3507,7 +3512,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
                 restart += reboot;
                 if (!grouped && reboot) {
                     if (pending == 1)
-                        notify_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it",
+            notify_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it",
                                                     "%s añadido. Reinicia la consola una vez para jugarlo"),
                                     t->name);
                     else
@@ -3516,7 +3521,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
                                            t->name);
                 } else if (!grouped) {
                     if (pending == 1)
-                        notify_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
+            notify_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
                     else
                         notify_detail_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
                 }
@@ -7167,7 +7172,7 @@ int main(void) {
                     for (int i = 0; i < MAX_TITLES; i++)
                         playable += g_managed[i].used && !needs_reboot(g_managed[i].tid);
                     if (playable)
-                        notify_kind(NOTIFY_READY, TR("%d game(s) ready to play", "%d juego(s) listo(s) para jugar"), playable);
+            notify_kind(NOTIFY_READY, TR("%d game(s) ready to play", "%d juego(s) listo(s) para jugar"), playable);
                 }
             } else if (g_manual_scan)
                 notify_kind(NOTIFY_WARN, TR("Firmware %s is not supported yet: no games are added",

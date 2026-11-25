@@ -5,6 +5,7 @@
 #include "pkg.h"
 
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -202,4 +203,31 @@ const sfo_item_t *sfo_get(const sfo_t *sfo, const char *key) {
         if (!strcmp(sfo->items[i].key, key))
             return &sfo->items[i];
     return NULL;
+}
+
+static void meta_str(char *out, size_t cap, const sfo_item_t *it) {
+    if (!it)
+        return;
+    snprintf(out, cap, "%s", it->sval);
+}
+
+void sfo_meta(const sfo_t *sfo, pkg_meta_t *out) {
+    memset(out, 0, sizeof(*out));
+    const sfo_item_t *title = sfo_get(sfo, "TITLE"), *version = sfo_get(sfo, "VERSION");
+    const sfo_item_t *app_ver = sfo_get(sfo, "APP_VER"), *system_ver = sfo_get(sfo, "SYSTEM_VER");
+    const sfo_item_t *category = sfo_get(sfo, "CATEGORY");
+    out->has_title = title != NULL;
+    out->has_version = version != NULL;
+    out->has_app_ver = app_ver != NULL;
+    out->has_system_ver = system_ver != NULL;
+    out->has_category = category != NULL;
+    meta_str(out->title, sizeof(out->title), title);
+    meta_str(out->version, sizeof(out->version), version);
+    meta_str(out->app_ver, sizeof(out->app_ver), app_ver);
+    meta_str(out->category, sizeof(out->category), category);
+    out->title_valid = title && !title->is_int;
+    out->version_valid = version && !version->is_int;
+    out->app_ver_valid = app_ver && !app_ver->is_int;
+    out->system_ver_valid = system_ver && system_ver->is_int;
+    out->system_ver = out->system_ver_valid ? system_ver->ival : 0;
 }

@@ -96,3 +96,14 @@ typedef struct {
 
 int sfo_parse(const uint8_t *data, size_t len, sfo_t *out);
 const sfo_item_t *sfo_get(const sfo_t *sfo, const char *key);
+
+/* The only param.sfo decision fields registration may retain. Strings are copied with the
+ * same bounded widths as the parser; has_* separates absence from an empty present value. */
+typedef struct {
+    uint8_t has_title, has_version, has_app_ver, has_system_ver, has_category;
+    uint8_t title_valid, version_valid, app_ver_valid, system_ver_valid;
+    char title[96], version[96], app_ver[96], category[96];
+    uint32_t system_ver;
+} pkg_meta_t;
+
+void sfo_meta(const sfo_t *sfo, pkg_meta_t *out);

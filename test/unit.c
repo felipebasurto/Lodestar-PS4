@@ -338,6 +338,40 @@ static void test_sfo(void) {
     CHECK(sfo_parse(d, n, &s) != 0);
 }
 
+
+/* REG-1/REG-2 (specs/registration.md): registration distills only decision keys and
+ * preserves the difference between absent keys, empty strings and wrong value types. */
+static void test_pkg_meta(void) {
+    printf("registration metadata distillation\n");
+    sfo_t s;
+    memset(&s, 0, sizeof(s));
+    s.count = 5;
+    snprintf(s.items[0].key, sizeof(s.items[0].key), "TITLE");
+    snprintf(s.items[0].sval, sizeof(s.items[0].sval), "Game");
+    snprintf(s.items[1].key, sizeof(s.items[1].key), "VERSION");
+    snprintf(s.items[1].sval, sizeof(s.items[1].sval), "01.04");
+    snprintf(s.items[2].key, sizeof(s.items[2].key), "APP_VER");
+    s.items[2].is_int = 1; /* wrong type: present, but not valid string metadata */
+    s.items[2].ival = 7;
+    snprintf(s.items[3].key, sizeof(s.items[3].key), "SYSTEM_VER");
+    s.items[3].is_int = 1;
+    s.items[3].ival = 0x09008000;
+    snprintf(s.items[4].key, sizeof(s.items[4].key), "CATEGORY");
+    snprintf(s.items[4].sval, sizeof(s.items[4].sval), "ac");
+    pkg_meta_t m;
+    sfo_meta(&s, &m);
+    CHECK(m.has_title && m.title_valid && !strcmp(m.title, "Game"));
+    CHECK(m.has_version && m.version_valid && !strcmp(m.version, "01.04"));
+    CHECK(m.has_app_ver && !m.app_ver_valid); /* absence and wrong type stay different */
+    CHECK(m.has_system_ver && m.system_ver_valid && m.system_ver == 0x09008000);
+    CHECK(m.has_category && !strcmp(m.category, "ac"));
+    memset(&s, 0, sizeof(s));
+    sfo_meta(&s, &m);
+    CHECK(!m.has_title && !m.title_valid && !m.has_version && !m.version_valid);
+    CHECK(!m.has_app_ver && !m.app_ver_valid && !m.has_system_ver && !m.system_ver_valid);
+    CHECK(sizeof(pkg_meta_t) < 416);
+}
+
 static void touch(const char *path) {
     FILE *f = fopen(path, "w");
     if (f)
@@ -1055,12 +1089,14 @@ int main(void) {
     test_lang();
     test_license();
     test_sfo();
+    test_pkg_meta();
     test_origin();
     test_autorun();
     test_stage();
     test_delete_target();
     test_delete_scene();
     test_delete_window();
+    test_remove_admission();
     test_web_net();
     test_emu();
     printf("%d checks, %d failed\n", g_checks, g_failed);
