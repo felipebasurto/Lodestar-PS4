@@ -926,8 +926,8 @@ typedef struct {
     int done, refs;
 } talk_t;
 
-static volatile int g_talk_out;        /* talks still inside a mount */
-static volatile long long g_talk_last; /* when the newest one started */
+static int g_talk_out;               /* talks still inside a mount (atomic) */
+static long long g_talk_last;        /* when the newest one started (atomic) */
 
 static void talk_release(talk_t *t) {
     if (__atomic_sub_fetch(&t->refs, 1, __ATOMIC_ACQ_REL) == 0)

@@ -26,7 +26,7 @@ typedef struct {
     size_t body_len;
     http_sink_t sink;         /* NULL: the body goes to http_resp_t.body (at most HTTP_BODY_MAX) */
     void *sink_ctx;
-    volatile int *cancel;     /* set from another thread: the request stops (may be NULL) */
+    int *cancel;              /* atomically set from another thread: the request stops (may be NULL) */
     int stall;                /* seconds without a byte before the request gives up (0: 60) */
     http_keep_t *keep;        /* NULL: a connection of its own, closed after the answer */
     int any_server;           /* a certificate from the public roots will do (links), not only Google's */

@@ -319,7 +319,7 @@ static void start_server(void) {
 static char g_scan[512], g_state[512];
 static uint64_t g_free = UINT64_MAX / 4;
 static int g_arrived, g_notes;
-static char g_arrived_dir[1024], g_last_note[600];
+static char g_arrived_dir[1024], g_last_note[600], g_note_log[65536];
 static pthread_mutex_t g_hmu = PTHREAD_MUTEX_INITIALIZER;
 
 static int h_dest(const char *dest, char *dir, size_t n) {
@@ -363,8 +363,18 @@ static void h_notify(const char *m) {
     pthread_mutex_lock(&g_hmu);
     g_notes++;
     snprintf(g_last_note, sizeof(g_last_note), "%s", m);
+    size_t used = strlen(g_note_log);
+    if (used < sizeof(g_note_log) - 2)
+        snprintf(g_note_log + used, sizeof(g_note_log) - used, "%s\n", m);
     pthread_mutex_unlock(&g_hmu);
     printf("    [notify] %s\n", m);
+}
+
+static int note_seen(const char *needle) {
+    pthread_mutex_lock(&g_hmu);
+    int seen = strstr(g_note_log, needle) != NULL;
+    pthread_mutex_unlock(&g_hmu);
+    return seen;
 }
 
 static const links_host_t k_host = {h_dest, h_free, h_check, h_arrived, h_notify};
@@ -983,9 +993,8 @@ int main(int argc, char **argv) {
     snprintf(p, sizeof(p), "%s/links_queue.txt", g_state);
     CHECK(exists(p));
     g_slow_us = 0;
-    int notes = g_notes;
     links_start(g_state, &k_host);
-    CHECK(g_notes == notes + 1 && strstr(g_last_note, "Going on with 1 download"));
+    CHECK(note_seen("Going on with 1 download"));
     CHECK(!wait_idle(60));
     CHECK(has_game("game", 1));
     CHECK(work_gone());

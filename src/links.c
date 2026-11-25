@@ -77,7 +77,11 @@ static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_cv = PTHREAD_COND_INITIALIZER;
 static pthread_t g_thread;
 static int g_started, g_quit;
-static volatile int g_cancel;
+static int g_cancel;
+
+static int flag_read(int *flag) { return __atomic_load_n(flag, __ATOMIC_ACQUIRE); }
+static void flag_write(int *flag, int value) { __atomic_store_n(flag, value, __ATOMIC_RELEASE); }
+static int transfer_stopping(void) { return flag_read(&g_cancel) || flag_read(&g_quit); }
 static char g_queue_path[PATH_MAX], g_pw_path[PATH_MAX];
 static links_host_t g_host;
 
@@ -119,7 +123,7 @@ static struct {
     int nvol, kind;
     const ljob_t *job;
     char work[PATH_MAX];
-    volatile int stop; /* a failure, a cancel, PS4Mount stopping, or the archive read to its end */
+    int stop;          /* atomically published: failure, cancel, stopping, or the archive read to its end */
     int failed;
     char err[600];
     int x_vol;         /* the file the archive reader is on */
@@ -130,6 +134,9 @@ static struct {
     rar5keys_t *keys;  /* a RAR's passwords to try */
     int locked;        /* the archive wants a password none of them is */
 } g_rt = {.mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER};
+
+static int rt_stop_read(void) { return __atomic_load_n(&g_rt.stop, __ATOMIC_ACQUIRE); }
+static void rt_stop_write(int value) { __atomic_store_n(&g_rt.stop, value, __ATOMIC_RELEASE); }
 
 /* --- small helpers --- */
 
@@ -155,7 +162,7 @@ static void fail_job(const char *fmt, ...) {
         g_rt.failed = 1;
         vsnprintf(g_rt.err, sizeof(g_rt.err), fmt, ap);
     }
-    g_rt.stop = 1;
+    rt_stop_write(1);
     pthread_cond_broadcast(&g_rt.cv);
     pthread_mutex_unlock(&g_rt.mu);
     va_end(ap);
@@ -172,7 +179,7 @@ static void json_esc(buf_t *b, const char *s) {
     buf_put(b, "\"", 1);
 }
 
-static int halted(void) { return g_rt.stop || g_cancel || g_quit; }
+static int halted(void) { return rt_stop_read() || transfer_stopping(); }
 
 /* Sleeps s seconds, a second at a time: 0, or -1 when the download stops. */
 static int pause_s(int s) {
@@ -533,7 +540,7 @@ static dl_t *g_relay_dl; /* the file whose blocks can be taken */
 static int g_relay_users, g_relay_conns;
 static time_t g_relay_seen; /* atomic: read without g_relay_mu */
 static int g_relay_fd = -1;
-static volatile int g_relay_quit;
+static int g_relay_quit;
 static pthread_t g_relay_thread;
 
 static int relay_active(void) {
@@ -578,6 +585,9 @@ typedef struct {
     size_t at, want;
 } piece_t;
 
+#define dl_stop_read(d) __atomic_load_n(&(d)->stop, __ATOMIC_ACQUIRE)
+#define dl_stop_write(d, v) __atomic_store_n(&(d)->stop, v, __ATOMIC_RELEASE)
+
 static uint64_t dl_have_locked(const dl_t *d) {
     uint64_t w = d->written * g_links_block;
     return w < d->v->size ? w : d->v->size;
@@ -619,7 +629,7 @@ static int piece_sink(void *ctx, const uint8_t *p, size_t len) {
     uint64_t all = have_all_locked() - d->v->have + h;
     pthread_mutex_unlock(&g_rt.mu);
     progress(all);
-    return halted() || d->stop;
+    return halted() || dl_stop_read(d);
 }
 
 /* Writes the blocks that are next in order (with d->mu held). */
@@ -627,16 +637,16 @@ static void dl_flush_locked(dl_t *d) {
     int wrote = 0;
     for (;;) {
         int s = (int)(d->written % (uint64_t)d->slots);
-        if (d->written >= d->nblocks || !d->ready[s] || d->stop)
+        if (d->written >= d->nblocks || !d->ready[s] || dl_stop_read(d))
             break;
         size_t len = d->len[s], o = 0;
         off_t at = (off_t)(d->written * g_links_block);
         while (o < len) {
             ssize_t w = pwrite(d->fd, d->buf[s] + o, len - o, at + (off_t)o);
             if (w <= 0) {
-                d->stop = 1;
                 snprintf(d->err, sizeof(d->err), TR("write failed (%s): is the drive full?", "falló la escritura (%s): ¿está llena la unidad?"),
                          strerror(errno));
+                dl_stop_write(d, 1);
                 pthread_cond_broadcast(&d->cv);
                 return;
             }
@@ -683,7 +693,7 @@ static void *dl_worker(void *arg) {
         for (;;) {
             relay_expire_locked(d);
             /* a server that limits connections: this one ends (its block was done) */
-            if (d->stop || halted() || d->active > d->allowed || (have = take_block_locked(d, 0, &b)))
+            if (dl_stop_read(d) || halted() || d->active > d->allowed || (have = take_block_locked(d, 0, &b)))
                 break;
             if (d->next >= d->nblocks && !d->nredo && !relay_claims_locked(d))
                 break;
@@ -704,7 +714,7 @@ static void *dl_worker(void *arg) {
         uint64_t from = b * g_links_block, to = from + g_links_block < d->v->size ? from + g_links_block : d->v->size;
         piece_t pc = {d, d->buf[s], 0, (size_t)(to - from)};
         int ok = 0;
-        while (!ok && !d->stop && !halted()) {
+        while (!ok && !dl_stop_read(d) && !halted()) {
             char url[URL_MAX], range[64], err[512] = "";
             pthread_mutex_lock(&d->mu);
             snprintf(url, sizeof(url), "%s", d->v->url);
@@ -717,7 +727,7 @@ static void *dl_worker(void *arg) {
              * the block is the whole file, not the part asked for */
             int st = r.status, throttled = 0, gone = 0;
             http_resp_free(&r);
-            if (q && pc.at < pc.want && !halted() && !d->stop)
+            if (q && pc.at < pc.want && !halted() && !dl_stop_read(d))
                 printf("[links] %s block %llu: %s at %zu of %zu bytes, opening it again\n", d->part, (unsigned long long)b, err,
                        pc.at, pc.want);
             if (st && st != 206 && !(st == 200 && from == 0 && !before && to == d->v->size)) {
@@ -746,12 +756,12 @@ static void *dl_worker(void *arg) {
             /* a piece that moved on is not a failure: the connection dropped, it goes on */
             int fails = pc.at > before || throttled || (gone && !dead) ? d->fails : ++d->fails;
             if (fails >= TRIES * 2 || dead) {
-                d->stop = 1;
                 snprintf(d->err, sizeof(d->err), "%s", err);
+                dl_stop_write(d, 1);
                 pthread_cond_broadcast(&d->cv);
             }
             pthread_mutex_unlock(&d->mu);
-            if (!d->stop && pc.at == before && !(gone && !dead) && pause_s(g_links_retry_seconds << (fails < 5 ? fails : 5)))
+            if (!dl_stop_read(d) && pc.at == before && !(gone && !dead) && pause_s(g_links_retry_seconds << (fails < 5 ? fails : 5)))
                 break;
         }
         pthread_mutex_lock(&d->mu);
@@ -761,7 +771,7 @@ static void *dl_worker(void *arg) {
             dl_flush_locked(d);
         } else {
             d->inflight -= pc.at;
-            d->stop = 1; /* in order: a block that cannot come stops the file (it resumes later) */
+            dl_stop_write(d, 1); /* in order: a block that cannot come stops the file (it resumes later) */
             pthread_cond_broadcast(&d->cv);
         }
         pthread_mutex_unlock(&d->mu);
@@ -815,7 +825,7 @@ static void relay_claim(int fd) {
     pthread_mutex_lock(&d->mu);
     relay_expire_locked(d);
     uint64_t b;
-    if (d->stop || halted())
+    if (dl_stop_read(d) || halted())
         buf_printf(&out, "{\"idle\":true}");
     else if (!take_block_locked(d, 1, &b))
         buf_printf(&out, "{\"wait\":%d}", d->next >= d->nblocks ? 2000 : 300);
@@ -877,7 +887,7 @@ static void relay_deliver(int fd, const char *path, int put, const uint8_t *pre,
         pthread_mutex_lock(&d->mu);
         d->receiving[s] = 0;
         d->claimed[s] = 0;
-        if (ok && !d->stop) {
+        if (ok && !dl_stop_read(d)) {
             d->inflight += want;
             d->len[s] = want;
             d->ready[s] = 1;
@@ -932,7 +942,7 @@ static void *relay_conn(void *arg) {
 /* Until links_stop (a payload's threads outlive its main: it must end by itself). */
 static void *relay_thread(void *arg) {
     (void)arg;
-    while (!g_relay_quit) {
+    while (!flag_read(&g_relay_quit)) {
         /* a bare accept() sleeps through links_stop: shutdown() on a listening socket
          * does not reach it (ENOTCONN on BSD/macOS), so it is waited on at most 100 ms */
         struct pollfd listener = {g_relay_fd, POLLIN, 0};
@@ -940,7 +950,7 @@ static void *relay_thread(void *arg) {
             continue;
         int fd = accept(g_relay_fd, NULL, NULL);
         if (fd < 0) {
-            if (!g_relay_quit)
+            if (!flag_read(&g_relay_quit))
                 usleep(100000);
             continue;
         }
@@ -990,7 +1000,7 @@ static void relay_start(void) {
         return;
     }
     g_relay_fd = fd;
-    g_relay_quit = 0;
+    flag_write(&g_relay_quit, 0);
     if (pthread_create(&g_relay_thread, NULL, relay_thread, NULL)) {
         close(fd);
         g_relay_fd = -1;
@@ -1002,7 +1012,7 @@ static void relay_start(void) {
 static void relay_stop(void) {
     if (g_relay_fd < 0)
         return;
-    g_relay_quit = 1;
+    flag_write(&g_relay_quit, 1);
     shutdown(g_relay_fd, SHUT_RDWR);
     pthread_join(g_relay_thread, NULL);
     close(g_relay_fd);
@@ -1239,13 +1249,13 @@ static void part_path(int vi, char *out, size_t n) { snprintf(out, n, "%.4000s/v
 static ssize_t raw_read(struct archive *a, xvol_t *x) {
     pthread_mutex_lock(&g_rt.mu);
     const vol_t *v = &g_rt.v[x->i];
-    while (!g_rt.stop && !g_cancel && !g_quit && v->have <= x->pos && !v->complete) {
+    while (!rt_stop_read() && !transfer_stopping() && v->have <= x->pos && !v->complete) {
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_sec += 1;
         pthread_cond_timedwait(&g_rt.cv, &g_rt.mu, &ts);
     }
-    int stop = g_rt.stop || g_cancel || g_quit;
+    int stop = rt_stop_read() || transfer_stopping();
     uint64_t avail = v->have > x->pos ? v->have - x->pos : 0;
     pthread_mutex_unlock(&g_rt.mu);
     if (stop) {
@@ -1570,7 +1580,7 @@ static void *x_thread(void *arg) {
             pthread_mutex_lock(&g_rt.mu);
             int none = !g_rt.npkgs;
             g_rt.x_ok = !none;
-            g_rt.stop = 1; /* the archive is read: nothing more is needed */
+            rt_stop_write(1); /* the archive is read: nothing more is needed */
             if (!none && g_rt.keys)
                 remember_password(rar5keys_found(g_rt.keys));
             pthread_cond_broadcast(&g_rt.cv);
@@ -1881,7 +1891,7 @@ static int run_job(ljob_t *j) {
     }
     if (g_rt.failed)
         return -1;
-    if (g_cancel || g_quit)
+    if (transfer_stopping())
         return 1;
     if (kind != K_PKG && !g_rt.x_ok) {
         fail_job("%s", TR("the archive ended before its end", "el archivo comprimido se cortó antes de su final"));
@@ -2043,7 +2053,7 @@ static int load_queue_locked(void) {
 static void *worker(void *arg) {
     (void)arg;
     pthread_mutex_lock(&g_mu);
-    while (!g_quit) {
+    while (!flag_read(&g_quit)) {
         ljob_t *j = NULL;
         for (int i = 0; i < g_njobs && !j; i++)
             if (g_jobs[i].state == S_QUEUED)
@@ -2061,7 +2071,7 @@ static void *worker(void *arg) {
         ljob_t run = *j;
         g_busy = 1;
         g_cur_id = run.id;
-        g_cancel = 0;
+        flag_write(&g_cancel, 0);
         snprintf(g_cur_name, sizeof(g_cur_name), "%s", run.name);
         g_cur_file[0] = g_cur_pkg[0] = 0;
         g_file_i = 0;
@@ -2080,7 +2090,8 @@ static void *worker(void *arg) {
         g_rt.nvol = run.nvol;
         g_rt.kind = run.kind;
         g_rt.job = &run;
-        g_rt.stop = g_rt.failed = g_rt.x_ok = g_rt.npkgs = g_rt.stream = g_rt.checked = g_rt.locked = 0;
+        rt_stop_write(0);
+        g_rt.failed = g_rt.x_ok = g_rt.npkgs = g_rt.stream = g_rt.checked = g_rt.locked = 0;
         g_rt.x_vol = 0;
         g_rt.consumed = 0;
         g_rt.err[0] = 0;
@@ -2094,7 +2105,7 @@ static void *worker(void *arg) {
             memset(v, 0, sizeof(vol_t) * (size_t)run.nvol);
             rc = run_job(&run);
         }
-        if (g_cancel && !g_quit) {
+        if (flag_read(&g_cancel) && !flag_read(&g_quit)) {
             set_result(0, TR("%s: cancelled", "%s: cancelado"), run.name);
             if (g_rt.work[0]) {
                 wipe_work(g_rt.work);
@@ -2119,9 +2130,9 @@ static void *worker(void *arg) {
         ljob_t *now = find_locked(run.id);
         if (now) {
             /* cut by PS4Mount stopping: it stays, for the next start */
-            if (g_quit || (rc > 0 && !g_cancel))
+            if (flag_read(&g_quit) || (rc > 0 && !flag_read(&g_cancel)))
                 now->state = S_QUEUED;
-            else if (rc < 0 && !g_cancel) {
+            else if (rc < 0 && !flag_read(&g_cancel)) {
                 now->state = S_FAILED;
                 now->locked = g_rt.locked;
                 snprintf(now->error, sizeof(now->error), "%.511s", g_rt.err);
@@ -2132,12 +2143,12 @@ static void *worker(void *arg) {
                 g_njobs--;
             }
             /* PS4Mount stopping saves the queue as it was */
-            if (!g_quit)
+            if (!flag_read(&g_quit))
                 save_queue_locked();
         }
         g_busy = 0;
         g_cur_id = 0;
-        g_cancel = 0;
+        flag_write(&g_cancel, 0);
     }
     pthread_mutex_unlock(&g_mu);
     return NULL;
@@ -2149,7 +2160,7 @@ void links_start(const char *state_dir, const links_host_t *host) {
     snprintf(g_pw_path, sizeof(g_pw_path), "%s/passwords.txt", state_dir);
     if (g_started)
         return;
-    g_quit = 0;
+    flag_write(&g_quit, 0);
     pthread_mutex_lock(&g_mu);
     int resumed = load_queue_locked();
     pthread_mutex_unlock(&g_mu);
@@ -2178,12 +2189,12 @@ void links_stop(void) {
     if (!g_started)
         return;
     pthread_mutex_lock(&g_mu);
-    g_quit = 1;
-    g_cancel = 1;
+    flag_write(&g_quit, 1);
+    flag_write(&g_cancel, 1);
     pthread_cond_signal(&g_cv);
     pthread_mutex_unlock(&g_mu);
     pthread_mutex_lock(&g_rt.mu);
-    g_rt.stop = 1;
+    rt_stop_write(1);
     pthread_cond_broadcast(&g_rt.cv);
     pthread_mutex_unlock(&g_rt.mu);
     pthread_join(g_thread, NULL);
@@ -2570,8 +2581,8 @@ int links_cancel(int id, char *msg, size_t n) {
         return -1;
     }
     if (g_busy && g_cur_id == id) {
-        g_cancel = 1;
-        g_rt.stop = 1;
+        flag_write(&g_cancel, 1);
+        rt_stop_write(1);
         pthread_mutex_unlock(&g_mu);
         pthread_mutex_lock(&g_rt.mu);
         pthread_cond_broadcast(&g_rt.cv);

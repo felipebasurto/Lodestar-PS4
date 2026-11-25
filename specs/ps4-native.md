@@ -123,6 +123,16 @@ as evidence of the current call.
 Check: read (the system-service boundary is compiled through `test/sdkcheck.sh`; host tests cannot
 call the PS4 installer). Source: concurrency audit of existing install/uninstall helper threads.
 
+### P4N-17: transfer cancellation and stop signals are ordered atomics
+Drive/links cancellation, worker-quit, per-transfer stop and HTTP cancellation observations must use
+atomic loads/stores (or stronger synchronization), never plain shared-word or `volatile` accesses.
+Mutexes remain the owner of queues, progress and byte accounting; atomics only publish one-way stop
+signals across worker, network and owner threads. Clearing cancellation before a new job and setting
+it from a panel/stop action must both be ordered publications.
+Check: test through the existing concurrent Drive/links integration harnesses (`test/drive_test.c`,
+`test/links_test.c`); read for the ownership split between byte/progress state and stop signals.
+Source: transfer-thread cancellation audit.
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,

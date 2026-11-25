@@ -88,7 +88,7 @@ static void entropy(uint8_t *p, size_t n) {
 
 typedef struct {
     int fd, stall;
-    volatile int *cancel;
+    int *cancel;
     int tls, any;
     br_ssl_client_context cc;
     br_x509_minimal_context xc;
@@ -96,11 +96,13 @@ typedef struct {
     unsigned char iobuf[BR_SSL_BUFSIZE_BIDI];
 } conn_t;
 
+static int cancel_seen(int *cancel) { return cancel && __atomic_load_n(cancel, __ATOMIC_ACQUIRE); }
+
 /* Waits until fd can be read (or written) for at most IO_SECONDS, a second at a time so
  * a cancel is seen. 0 when ready. */
 static int wait_fd(conn_t *c, int write) {
     for (int i = 0; i < (c->stall > 0 ? c->stall : IO_SECONDS); i++) {
-        if (c->cancel && *c->cancel)
+        if (cancel_seen(c->cancel))
             return -1;
         fd_set fs;
         FD_ZERO(&fs);
@@ -151,7 +153,7 @@ static const char *tls_error(int e, int any) {
 static void conn_err(conn_t *c, const char *what, char *err, size_t n) {
     int e = c->tls ? br_ssl_engine_last_error(&c->cc.eng) : 0;
     const char *t = tls_error(e, c->any);
-    if (c->cancel && *c->cancel)
+    if (cancel_seen(c->cancel))
         snprintf(err, n, "cancelled");
     else if (t)
         snprintf(err, n, "%s: %s", what, t);
@@ -161,7 +163,7 @@ static void conn_err(conn_t *c, const char *what, char *err, size_t n) {
         snprintf(err, n, "%s: the connection was lost", what);
 }
 
-static conn_t *conn_open(const http_url_t *u, int any, volatile int *cancel, int stall, char *err, size_t n) {
+static conn_t *conn_open(const http_url_t *u, int any, int *cancel, int stall, char *err, size_t n) {
     struct in_addr addr;
     if (resolve(u->host, &addr)) {
         snprintf(err, n, TR("%s could not be found: is the console online?", "%s no se encontró: ¿está la consola conectada?"),
@@ -187,7 +189,7 @@ static conn_t *conn_open(const http_url_t *u, int any, volatile int *cancel, int
     if (rc && errno == EINPROGRESS) {
         /* a second at a time: a cancel (PS4Mount stopping) is not held up by it */
         rc = -1;
-        for (int i = 0; i < CONNECT_SECONDS && !(cancel && *cancel); i++) {
+        for (int i = 0; i < CONNECT_SECONDS && !(cancel_seen(cancel)); i++) {
             fd_set fs;
             FD_ZERO(&fs);
             FD_SET(fd, &fs);
@@ -608,7 +610,7 @@ int http_request(const http_req_t *q, http_resp_t *r, char *err, size_t n) {
             conn_close(c);
         /* a kept connection the server had closed fails before any answer: once more on a
          * new one (nothing of the body went to the sink) */
-        if (rc && reused && !answered && !(q->cancel && *q->cancel)) {
+        if (rc && reused && !answered && !(cancel_seen(q->cancel))) {
             http_resp_free(r);
             memset(r, 0, sizeof(*r));
             r->length = UINT64_MAX;

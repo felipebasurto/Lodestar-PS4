@@ -69,7 +69,11 @@ static pthread_cond_t g_idle_cv = PTHREAD_COND_INITIALIZER;
 #endif
 static pthread_t g_thread;
 static int g_started, g_quit;
-static volatile int g_cancel;
+static int g_cancel;
+
+static int flag_read(int *flag) { return __atomic_load_n(flag, __ATOMIC_ACQUIRE); }
+static void flag_write(int *flag, int value) { __atomic_store_n(flag, value, __ATOMIC_RELEASE); }
+static int transfer_stopping(void) { return flag_read(&g_cancel) || flag_read(&g_quit); }
 
 static char g_state_path[PATH_MAX], g_session_path[PATH_MAX], g_client_path[PATH_MAX], g_queue_path[PATH_MAX];
 /* the user's own OAuth client (Google Cloud, "TVs and limited input devices"): none ships
@@ -209,11 +213,11 @@ static int pause_s(int s) {
     g_retry_until = time(NULL) + s;
     pthread_mutex_unlock(&g_mu);
     for (int i = 0; i < s; i++) {
-        if (g_cancel || g_quit)
+        if (transfer_stopping())
             return -1;
         sleep(1);
     }
-    return g_cancel || g_quit ? -1 : 0;
+    return transfer_stopping() ? -1 : 0;
 }
 
 /* Google's own explanation in an error answer: {"error":{"message":..}} or
@@ -477,7 +481,7 @@ static int api_stall(const char *method, const char *url, const char *ctype, con
         /* A failure before http_request still returns a response the caller can free. */
         memset(r, 0, sizeof(*r));
         r->length = UINT64_MAX;
-        if (g_cancel || g_quit) {
+        if (transfer_stopping()) {
             snprintf(err, n, "%s", TR("cancelled", "cancelado"));
             return -1;
         }
@@ -521,7 +525,7 @@ static int api_stall(const char *method, const char *url, const char *ctype, con
         if (pause_s(g_drive_retry_seconds << t))
             break;
     }
-    if (g_cancel || g_quit)
+    if (transfer_stopping())
         snprintf(err, n, "%s", TR("cancelled", "cancelado"));
     return -1;
 }
@@ -988,12 +992,12 @@ static int upload_file(const drive_file_t *f, const char *parent, const char *ti
             http_resp_free(&r);
             break;
         }
-        if (done || rc == 0 || g_cancel || g_quit)
+        if (done || rc == 0 || transfer_stopping())
             break;
         if (fails && fails < TRIES && pause_s(g_drive_retry_seconds << fails))
             break;
     }
-    if (g_cancel || g_quit)
+    if (transfer_stopping())
         snprintf(err, n, "%s", TR("cancelled", "cancelado"));
     /* kept after a cut, a cancel or a stop: the next upload of this pkg goes on from there */
     if (!rc || drop)
@@ -1093,7 +1097,7 @@ static void run_upload(const char *tid) {
 fail:
     if (rc) {
         set_result(0, TR("%s was not uploaded: %s", "%s no se subió: %s"), title, err);
-        if (g_host.notify && !g_cancel)
+        if (g_host.notify && !flag_read(&g_cancel))
             g_host.notify(g_result);
     }
 out:
@@ -1136,6 +1140,9 @@ typedef struct {
     size_t at, want;
 } piece_t;
 
+#define dl_stop_read(d) __atomic_load_n(&(d)->stop, __ATOMIC_ACQUIRE)
+#define dl_stop_write(d, v) __atomic_store_n(&(d)->stop, v, __ATOMIC_RELEASE)
+
 static uint64_t dl_have_locked(const dl_t *d) {
     uint64_t w = d->written * g_drive_block;
     return (w < d->f->size ? w : d->f->size) + d->inflight;
@@ -1153,23 +1160,23 @@ static int piece_sink(void *ctx, const uint8_t *p, size_t len) {
     uint64_t h = dl_have_locked(d);
     pthread_mutex_unlock(&d->mu);
     progress(h);
-    return g_cancel || g_quit || d->stop;
+    return transfer_stopping() || dl_stop_read(d);
 }
 
 /* Writes the blocks that are next in order (with d->mu held). */
 static void dl_flush_locked(dl_t *d) {
     for (;;) {
         int s = (int)(d->written % (uint64_t)d->slots);
-        if (d->written >= d->nblocks || !d->ready[s] || d->stop)
+        if (d->written >= d->nblocks || !d->ready[s] || dl_stop_read(d))
             return;
         size_t len = d->len[s], o = 0;
         off_t at = (off_t)(d->written * g_drive_block);
         while (o < len) {
             ssize_t w = pwrite(d->fd, d->buf[s] + o, len - o, at + (off_t)o);
             if (w <= 0) {
-                d->stop = 1;
                 snprintf(d->err, sizeof(d->err), TR("write failed (%s): is the drive full?", "falló la escritura (%s): ¿está llena la unidad?"),
                          strerror(errno));
+                dl_stop_write(d, 1);
                 pthread_cond_broadcast(&d->cv);
                 return;
             }
@@ -1190,14 +1197,14 @@ static void *dl_worker(void *arg) {
     for (;;) {
         pthread_mutex_lock(&d->mu);
         /* no block further ahead than the slots can hold */
-        while (!d->stop && !g_cancel && !g_quit && d->next < d->nblocks && d->next >= d->written + (uint64_t)d->slots) {
+        while (!dl_stop_read(d) && !transfer_stopping() && d->next < d->nblocks && d->next >= d->written + (uint64_t)d->slots) {
             /* a second at a time: a cancel or a stop sets a flag, it does not signal */
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
             ts.tv_sec += 1;
             pthread_cond_timedwait(&d->cv, &d->mu, &ts);
         }
-        if (d->stop || g_cancel || g_quit || d->next >= d->nblocks) {
+        if (dl_stop_read(d) || transfer_stopping() || d->next >= d->nblocks) {
             pthread_mutex_unlock(&d->mu);
             http_keep_free(keep);
             return NULL;
@@ -1211,14 +1218,14 @@ static void *dl_worker(void *arg) {
         snprintf(url, sizeof(url), "%s/files/%s?alt=media", g_ep.api, d->f->id);
         http_resp_t r;
         int ok = 0, gone = 0;
-        while (!ok && !d->stop && !g_cancel && !g_quit) {
+        while (!ok && !dl_stop_read(d) && !transfer_stopping()) {
             snprintf(range, sizeof(range), "Range: bytes=%llu-%llu\r\n", (unsigned long long)(from + pc.at),
                      (unsigned long long)(to - 1));
             size_t before = pc.at;
             /* a connection that stops sending holds every block after it (they are written in
              * order): after DL_STALL seconds without a byte it is opened again from there */
             int q = api_stall("GET", url, NULL, NULL, 0, range, piece_sink, &pc, DL_STALL, keep, &r, err, sizeof(err));
-            if (q && pc.at < pc.want && !g_cancel && !g_quit && !d->stop)
+            if (q && pc.at < pc.want && !transfer_stopping() && !dl_stop_read(d))
                 printf("[drive] block %llu: %s at %zu of %zu bytes, opening it again\n", (unsigned long long)b, err, pc.at, pc.want);
             /* the status was parsed even when the body transfer failed: a 200 that filled
              * the block is the whole file, not the part asked for */
@@ -1235,18 +1242,18 @@ static void *dl_worker(void *arg) {
             }
             http_resp_free(&r);
             ok = pc.at == pc.want;
-            if (ok || g_cancel || g_quit)
+            if (ok || transfer_stopping())
                 break;
             pthread_mutex_lock(&d->mu);
             /* a piece that moved on is not a failure: the connection dropped, it goes on */
             int fails = pc.at > before ? d->fails : ++d->fails;
             if (gone || fails >= TRIES * 2) {
-                d->stop = 1;
                 snprintf(d->err, sizeof(d->err), "%s", gone ? TR("the file is no longer in Drive", "el archivo ya no está en Drive") : err);
+                dl_stop_write(d, 1);
                 pthread_cond_broadcast(&d->cv);
             }
             pthread_mutex_unlock(&d->mu);
-            if (!d->stop && pc.at == before && pause_s(g_drive_retry_seconds << (fails < 5 ? fails : 5)))
+            if (!dl_stop_read(d) && pc.at == before && pause_s(g_drive_retry_seconds << (fails < 5 ? fails : 5)))
                 break;
         }
         pthread_mutex_lock(&d->mu);
@@ -1256,7 +1263,7 @@ static void *dl_worker(void *arg) {
             dl_flush_locked(d);
         } else {
             d->inflight -= pc.at;
-            d->stop = 1; /* in order: a block that cannot come stops the file (it resumes later) */
+            dl_stop_write(d, 1); /* in order: a block that cannot come stops the file (it resumes later) */
             pthread_cond_broadcast(&d->cv);
         }
         pthread_mutex_unlock(&d->mu);
@@ -1325,7 +1332,7 @@ static int download_file(const remote_file_t *f, const char *part, char *err, si
         pthread_join(th[i], NULL);
     if (d.written < d.nblocks)
         rc = -1;
-    if (g_cancel || g_quit)
+    if (transfer_stopping())
         snprintf(err, n, "%s", TR("cancelled", "cancelado"));
     else if (rc)
         snprintf(err, n, "%s", d.err[0] ? d.err : TR("the download stopped", "la descarga se detuvo"));
@@ -1534,7 +1541,7 @@ static void run_download(const char *tid, const char *dest) {
 fail:
     if (rc) {
         set_result(0, TR("%s was not downloaded: %s", "%s no se descargó: %s"), title, err);
-        if (g_host.notify && !g_cancel)
+        if (g_host.notify && !flag_read(&g_cancel))
             g_host.notify(g_result);
     }
     mem_free(rem);
@@ -1764,7 +1771,7 @@ static void revoke_token(const char *token) {
 static void *worker(void *arg) {
     (void)arg;
     pthread_mutex_lock(&g_mu);
-    while (!g_quit) {
+    while (!flag_read(&g_quit)) {
         if (g_revoke[0]) {
             char t[512];
             snprintf(t, sizeof(t), "%s", g_revoke);
@@ -1793,7 +1800,7 @@ static void *worker(void *arg) {
         memmove(g_jobs, g_jobs + 1, sizeof(g_jobs[0]) * (size_t)--g_njobs);
         g_busy = 1;
         g_op = j.op;
-        g_cancel = 0;
+        flag_write(&g_cancel, 0);
         snprintf(g_cur_tid, sizeof(g_cur_tid), "%s", j.tid);
         snprintf(g_cur_dest, sizeof(g_cur_dest), "%s", j.dest);
         g_cur_name[0] = g_cur_file[0] = 0;
@@ -1830,13 +1837,13 @@ static void *worker(void *arg) {
         for (int i = 0; i < g_njobs; i++)
             more |= g_jobs[i].op != OP_LOGIN && g_jobs[i].op != OP_LIST;
         /* the list once a batch is over: the panel shows what Drive has now */
-        if (list_after && !more && g_refresh[0] && !g_quit)
+        if (list_after && !more && g_refresh[0] && !flag_read(&g_quit))
             queue_locked(OP_LIST, "", "");
         g_busy = 0;
-        g_cancel = 0;
+        flag_write(&g_cancel, 0);
         /* done, failed for good or cancelled: out of the saved queue; cut by PS4Mount
          * stopping: it stays there, for the next one */
-        if (!g_quit && (j.op == OP_UPLOAD || j.op == OP_DOWNLOAD))
+        if (!flag_read(&g_quit) && (j.op == OP_UPLOAD || j.op == OP_DOWNLOAD))
             save_queue_locked();
         idle_signal();
     }
@@ -1879,7 +1886,7 @@ void drive_start(const char *state_dir, const drive_endpoints_t *ep, const drive
     if (g_client_id[0])
         load_state();
     pthread_mutex_unlock(&g_mu);
-    g_quit = 0;
+    flag_write(&g_quit, 0);
     pthread_attr_t at;
     pthread_attr_init(&at);
     pthread_attr_setstacksize(&at, 1 << 20);
@@ -1912,8 +1919,8 @@ void drive_stop(void) {
     if (!g_started)
         return;
     pthread_mutex_lock(&g_mu);
-    g_quit = 1;
-    g_cancel = 1;
+    flag_write(&g_quit, 1);
+    flag_write(&g_cancel, 1);
     pthread_cond_signal(&g_cv);
     pthread_mutex_unlock(&g_mu);
     pthread_join(g_thread, NULL);
@@ -2043,7 +2050,7 @@ int drive_disconnect(char *msg, size_t n) {
     if (ready(msg, n, 0))
         return -1;
     pthread_mutex_lock(&g_mu);
-    g_cancel = 1;
+    flag_write(&g_cancel, 1);
     g_njobs = 0;
     g_login = 0;
     idle_signal();
@@ -2131,7 +2138,7 @@ int drive_cancel(char *msg, size_t n) {
         if (g_jobs[i].op == OP_LIST || g_jobs[i].op == OP_LOGIN)
             g_jobs[k++] = g_jobs[i];
     g_njobs = k;
-    g_cancel = g_busy && g_op != OP_LIST;
+    flag_write(&g_cancel, g_busy && g_op != OP_LIST);
     idle_signal();
     save_queue_locked(); /* the running one goes from it when it ends */
     pthread_mutex_unlock(&g_mu);
@@ -2197,7 +2204,7 @@ int drive_set_client(const char *id, const char *secret, char *msg, size_t n) {
     snprintf(g_client_secret, sizeof(g_client_secret), "%s", secret);
     if (changed) {
         /* an account signed in with another client does not go with this one */
-        g_cancel = 1;
+        flag_write(&g_cancel, 1);
         g_njobs = 0;
         g_login = 0;
         g_login_error[0] = 0;
