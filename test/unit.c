@@ -1343,34 +1343,50 @@ static void test_scanreq(void) {
     scanreq_t q;
     scanreq_init(&q);
     CHECK(scanreq_due(&q, 0)); /* the first scan is due at start */
-    int manual = -1;
-    unsigned seq = scanreq_begin(&q, &manual);
-    CHECK(manual == 0);
+    int manual = -1, hard = -1;
+    unsigned seq = scanreq_begin(&q, &manual, &hard);
+    CHECK(manual == 0 && hard == 0);
     scanreq_finish(&q, seq, 10, 10);
     CHECK(!scanreq_due(&q, 19) && scanreq_due(&q, 20));
 
     scanreq_request(&q, 1);
     CHECK(scanreq_due(&q, 1));
-    seq = scanreq_begin(&q, &manual);
+    seq = scanreq_begin(&q, &manual, &hard);
     CHECK(manual == 1);
-    seq = scanreq_begin(&q, &manual);
+    seq = scanreq_begin(&q, &manual, &hard);
     CHECK(manual == 0); /* consumed by one epoch only */
 
     scanreq_init(&q);
     scanreq_request(&q, 1);
-    seq = scanreq_begin(&q, &manual);
+    seq = scanreq_begin(&q, &manual, &hard);
     scanreq_request(&q, 0); /* an upload finishes while the scan is still walking */
     scanreq_finish(&q, seq, 30, 10);
     CHECK(scanreq_due(&q, 30)); /* not overwritten by routine scheduling */
 
     scanreq_init(&q);
     scanreq_request(&q, 1);
-    seq = scanreq_begin(&q, &manual);
-    scanreq_keep_manual(&q, manual); /* app.db unreadable: the scan never ran */
+    seq = scanreq_begin(&q, &manual, &hard);
+    scanreq_keep_request(&q, manual, hard); /* app.db unreadable: the scan never ran */
     scanreq_finish(&q, seq, 40, 10);
     CHECK(!scanreq_due(&q, 41)); /* no immediate retry loop */
-    seq = scanreq_begin(&q, &manual);
+    seq = scanreq_begin(&q, &manual, &hard);
     CHECK(manual == 1); /* but the next scheduled scan is still fresh/manual */
+
+    scanreq_init(&q);
+    scanreq_request_hard(&q);
+    CHECK(scanreq_due(&q, 1));
+    seq = scanreq_begin(&q, &manual, &hard);
+    CHECK(manual == 1 && hard == 1); /* owner invalidates inside this epoch */
+    seq = scanreq_begin(&q, &manual, &hard);
+    CHECK(manual == 0 && hard == 0); /* consumed once */
+
+    scanreq_init(&q);
+    scanreq_request_hard(&q);
+    seq = scanreq_begin(&q, &manual, &hard);
+    scanreq_keep_request(&q, manual, hard); /* app.db unreadable: the epoch never ran */
+    scanreq_finish(&q, seq, 50, 10);
+    seq = scanreq_begin(&q, &manual, &hard);
+    CHECK(manual == 1 && hard == 1); /* hard invalidation is not lost either */
 }
 
 int main(void) {

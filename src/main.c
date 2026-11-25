@@ -3783,6 +3783,12 @@ static void scan_request(int manual) {
     pthread_mutex_unlock(&g_scanreq_mu);
 }
 
+static void scan_request_hard(void) {
+    pthread_mutex_lock(&g_scanreq_mu);
+    scanreq_request_hard(&g_scanreq);
+    pthread_mutex_unlock(&g_scanreq_mu);
+}
+
 static int scan_due(time_t now) {
     pthread_mutex_lock(&g_scanreq_mu);
     int due = scanreq_due(&g_scanreq, now);
@@ -3790,16 +3796,16 @@ static int scan_due(time_t now) {
     return due;
 }
 
-static unsigned scan_begin(int *manual) {
+static unsigned scan_begin(int *manual, int *hard) {
     pthread_mutex_lock(&g_scanreq_mu);
-    unsigned seq = scanreq_begin(&g_scanreq, manual);
+    unsigned seq = scanreq_begin(&g_scanreq, manual, hard);
     pthread_mutex_unlock(&g_scanreq_mu);
     return seq;
 }
 
-static void scan_keep_manual(int manual) {
+static void scan_keep_request(int manual, int hard) {
     pthread_mutex_lock(&g_scanreq_mu);
-    scanreq_keep_manual(&g_scanreq, manual);
+    scanreq_keep_request(&g_scanreq, manual, hard);
     pthread_mutex_unlock(&g_scanreq_mu);
 }
 
@@ -4298,7 +4304,9 @@ static void release_dlc_mounts(void) {
     mem_free(list);
 }
 
-static int scan_all(void) {
+static void rescan_invalidate(void);
+
+static int scan_all(int hard) {
     static int seen[NROOTS], first = 1;
     static time_t nas_scanned;
     char root[PATH_MAX];
@@ -4309,6 +4317,8 @@ static int scan_all(void) {
         printf("[scan] the system's app.db could not be read: the scan waits\n");
         return 0;
     }
+    if (hard)
+        rescan_invalidate();
     release_stale();
     if (!g_cfg.organize || nas_active()) {
         /* Pkgs are used where they are: bring every catalog up to date first, then group
@@ -4866,9 +4876,9 @@ static void handle_klog_line(const char *line) {
 
 void app_rescan(void) { scan_request(1); }
 
-/* The panel's own "scan for games": every pkg is read again, even when its file kept the
- * same size and time (a share that replaces a pkg in place looks unchanged otherwise). */
-void app_rescan_hard(void) {
+/* Owner-side invalidation of a hard scan epoch: every pkg is read again, even when its file
+ * kept the same size and time (a share that replaces a pkg in place looks unchanged otherwise). */
+static void rescan_invalidate(void) {
     title_cache_forget();
     /* the updates left out are tried again, too */
     DIR *d = opendir(STATE_DIR);
@@ -4883,8 +4893,10 @@ void app_rescan_hard(void) {
     }
     if (d)
         closedir(d);
-    app_rescan();
 }
+
+/* The panel's own "scan for games" is an intent: the owner invalidates inside the scan epoch. */
+void app_rescan_hard(void) { scan_request_hard(); }
 void app_stop(void) { g_stop = 1; }
 
 static void json_str(buf_t *b, const char *s) {
@@ -7727,8 +7739,8 @@ int main(void) {
                 printf("[main] first start: nobody at the panel, the default settings are saved\n");
                 config_save();
             }
-            int manual = 0;
-            unsigned scan_seq = scan_begin(&manual);
+            int manual = 0, hard = 0;
+            unsigned scan_seq = scan_begin(&manual, &hard);
             g_scan_manual_active = manual;
             int scanned = 1;
             if (g_setup) {
@@ -7737,7 +7749,7 @@ int main(void) {
                                     "Guarda primero los ajustes en el panel: hasta entonces no se añade ningún juego"));
             } else if (g_reg_mode != REG_NONE) {
                 migrate_organized(); /* organize off: the games it had organized, back in place */
-                scanned = scan_all();
+                scanned = scan_all(hard);
                 /* After a boot the games are mounted by this first scan: one started before
                  * says its data is corrupted. Saying when they are there tells when to start. */
                 static int ready_said;
@@ -7754,7 +7766,7 @@ int main(void) {
                           "El firmware %s aún no es compatible: no se añaden juegos"),
                        g_fw_text);
             if (!scanned)
-                scan_keep_manual(manual);
+                scan_keep_request(manual, hard);
             g_scan_manual_active = 0;
             scan_finish(scan_seq);
             install_cleanup();

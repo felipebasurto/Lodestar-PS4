@@ -35,7 +35,11 @@ scan. Those requests cross the owner boundary through one synchronized scan-requ
 A request that arrives while a scan is running must not be overwritten by that scan's normal
 end-of-scan scheduling; it causes another scan. A manual request is consumed by one scan epoch
 and is kept for the next scheduled epoch when the scan never ran because the system database
-was unreadable. The scan body uses its epoch snapshot, not a mutable global flag.
+was unreadable. The scan body uses its epoch snapshot, not a mutable global flag. The panel's
+fresh scan may also carry a hard-invalidation intent: the owner clears the title cache and
+left-out update markers only inside that epoch, after the system database is readable and
+before the scan body uses them. The HTTP caller publishes the intent; it never clears those
+owner data structures itself.
 Check: test for the ordering machine (`test/unit.c` › `test_scanreq`); read for mutex use in
 `main.c`. Source: existing cross-thread `app_rescan()` callers, made explicit.
 
@@ -65,7 +69,9 @@ body quota cannot be reserved the request is answered `503` without entering the
 
 Only routes whose state is static or internally synchronized may complete in a worker in
 this first matrix: the two HTML pages, `/api/log`, Drive status/actions, links
-status/actions, `/api/upload`, `/api/uploads`, `/api/nas/scan` and `/api/nas/shares`.
+status/actions, `/api/upload`, `/api/uploads`, `/api/rescan`, `/api/nas/scan` and
+`/api/nas/shares`. `/api/rescan` is worker-safe only because its cache/marker invalidation
+is part of the synchronized scan intent consumed later by the owner epoch.
 The two NAS probe routes may connect to other machines but do not use the mounted backend:
 scan uses fresh sockets, share listing creates its own backend context, their output arrays
 are local, and the saved-login fallback is copied through the configuration mutex. SMB context

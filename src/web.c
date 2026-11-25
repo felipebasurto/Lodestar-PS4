@@ -244,6 +244,8 @@ int web_route_worker_safe(const char *path, int post) {
             return 1;
         if (post && !strncmp(path, "/api/upload", 11) && (path[11] == 0 || path[11] == '?'))
             return 1;
+        if (post && !strcmp(path, "/api/rescan"))
+            return 1;
         return 0;
     }
     return 1; /* pages and unknown paths: static data or the fixed 404 */
