@@ -38,3 +38,13 @@ and is kept for the next scheduled epoch when the scan never ran because the sys
 was unreadable. The scan body uses its epoch snapshot, not a mutable global flag.
 Check: test for the ordering machine (`test/unit.c` › `test_scanreq`); read for mutex use in
 `main.c`. Source: existing cross-thread `app_rescan()` callers, made explicit.
+
+### WEBAPI-5: transfer threads see configuration through narrow synchronized accessors
+The main loop may save settings while Drive, links or upload completion threads are active.
+Those threads must not read `config_t` or the active language through shared words directly:
+configuration fields reachable from their host callbacks pass through small mutex-protected
+accessors, whole-config publication happens under the same mutex, and the active language is
+published/loaded atomically. Main-loop-only users may keep reading the owner state directly.
+Check: test for the language boundary (`test/unit.c` › `test_lang`); read for the narrow
+configuration accessors and for no direct `g_cfg` use in transfer-thread callback paths.
+Source: existing Drive/links host callback audit.

@@ -11,6 +11,10 @@ enum { LANG_EN, LANG_ES, LANG_COUNT };
 
 extern int g_lang;
 
+/* Atomically published active language (transfer threads also localize notifications). */
+void lang_set(int lang);
+int lang_current(void);
+
 /* TR("English", "Español"): the text in g_lang. Both texts take the same arguments in
  * the same order (test/policy.sh checks the conversions). */
 #define TR(...) lang_pick((const char *const[]){__VA_ARGS__}, sizeof((const char *const[]){__VA_ARGS__}) / sizeof(char *))

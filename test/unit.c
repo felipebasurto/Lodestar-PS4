@@ -495,7 +495,7 @@ static void test_check(void) {
     /* the same refusal in Spanish, with the same argument in it */
     g_lang = LANG_ES;
     CHECK(pkg_check(p, 0x13520001, &c) == 0 && !c.ok && strstr(c.problem, "no un juego") && strstr(c.problem, "NPXS00001"));
-    g_lang = LANG_EN;
+    lang_set(LANG_EN);
 
     make_pkg(p, cid, "gdc", 0, 1, 0x4000, 0x4000);
     CHECK(pkg_check(p, 0x13520001, &c) == 0 && !c.ok && c.kind == PKG_KIND_OTHER);
@@ -706,11 +706,11 @@ static void test_autorun(void) {
 
 static void test_lang(void) {
     printf("languages\n");
-    CHECK(g_lang == LANG_EN && !strcmp(TR("Yes", "Sí"), "Yes"));
-    g_lang = LANG_ES;
+    CHECK(lang_current() == LANG_EN && !strcmp(TR("Yes", "Sí"), "Yes"));
+    lang_set(LANG_ES);
     CHECK(!strcmp(TR("Yes", "Sí"), "Sí"));
     CHECK(!strcmp(TR("Only English"), "Only English")); /* a language a text lacks: English */
-    g_lang = LANG_COUNT;                                 /* one with no column anywhere */
+    lang_set(LANG_COUNT);                            /* one with no column anywhere */
     CHECK(!strcmp(TR("Yes", "Sí"), "Yes"));
     g_lang = LANG_EN;
     CHECK(lang_from_console(3) == LANG_ES && lang_from_console(20) == LANG_ES);

@@ -158,6 +158,37 @@ typedef struct {
 #define DEFAULT_SCAN_PATH "PS4Mount"
 
 static config_t g_cfg = {1, 5, 1, DLC_EXTERNAL, {DEFAULT_SCAN_PATH}, 1, 5, 1, 1, -1, 0, NAS_NFS, 0, "", "", "", "", "", 1, 1, 1, 0};
+
+/* WEBAPI-5: the whole config is main-loop state, but Drive/links callbacks need these few
+ * fields from their own threads. Keep the mutex confined to copying a scalar/path; scans and
+ * network work never run under it. */
+static pthread_mutex_t g_cfg_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static void config_publish(const config_t *c) {
+    pthread_mutex_lock(&g_cfg_mu);
+    g_cfg = *c;
+    pthread_mutex_unlock(&g_cfg_mu);
+}
+
+static int cfg_organize(void) {
+    pthread_mutex_lock(&g_cfg_mu);
+    int v = g_cfg.organize;
+    pthread_mutex_unlock(&g_cfg_mu);
+    return v;
+}
+
+static int cfg_internal(void) {
+    pthread_mutex_lock(&g_cfg_mu);
+    int v = g_cfg.internal;
+    pthread_mutex_unlock(&g_cfg_mu);
+    return v;
+}
+
+static void cfg_scan_path(int i, char *out, size_t n) {
+    pthread_mutex_lock(&g_cfg_mu);
+    snprintf(out, n, "%s", i >= 0 && i < MAX_SCAN_PATHS ? g_cfg.paths[i] : "");
+    pthread_mutex_unlock(&g_cfg_mu);
+}
 #define NAS_RESCAN_MAX 1440 /* minutes: once a day */
 static int g_setup; /* a first start: no game is added until the settings are saved (first_start) */
 /* A first start with nobody at the panel for this long goes on with the default settings:
@@ -199,7 +230,7 @@ static void apply_lang(void) {
     static int console = -2;
     if (console == -2)
         console = console_language();
-    g_lang = g_cfg.lang >= 0 ? g_cfg.lang : lang_from_console(console);
+    lang_set(g_cfg.lang >= 0 ? g_cfg.lang : lang_from_console(console));
 }
 
 /* sceKernelSendNotificationRequest's request, the OrbisNotificationRequest layout the
@@ -576,12 +607,12 @@ static int is_nas(const char *root) { return !strcmp(root, NAS_ROOT_PATH); }
 
 /* Pkgs used where they are: with organizing off everywhere, and always on a share, which
  * is read-only and cannot be renamed into ps4/<TITLE_ID>/. */
-static int in_place(const char *root) { return !g_cfg.organize || is_nas(root); }
+static int in_place(const char *root) { return !cfg_organize() || is_nas(root); }
 
 static int root_present(const char *root) {
     if (is_nas(root))
         return nas_active();
-    return is_internal(root) ? g_cfg.internal : is_mountpoint(root);
+    return is_internal(root) ? cfg_internal() : is_mountpoint(root);
 }
 
 /* "usb0", "ext0", "internal storage", "NAS" */
@@ -3429,10 +3460,14 @@ static void scan_dir(char *out, size_t n, const char *root, int i) {
     else if (is_internal(root))
         /* PS4Mount's own folder: /data/pkg holds the pkgs people install the usual way */
         snprintf(out, n, "%s", i ? "" : INTERNAL_ROOT "/" DEFAULT_SCAN_PATH); /* never /data itself */
-    else if (g_cfg.paths[i][0])
-        snprintf(out, n, "%s/%s", root, g_cfg.paths[i]);
-    else
-        snprintf(out, n, "%s", root);
+    else {
+        char configured[128];
+        cfg_scan_path(i, configured, sizeof(configured));
+        if (configured[0])
+            snprintf(out, n, "%s/%s", root, configured);
+        else
+            snprintf(out, n, "%s", root);
+    }
 }
 
 static int has_pkg(const char *dir) {
@@ -4878,7 +4913,7 @@ static int find_root(const char *tid, char *root, size_t n) {
 void app_games_json(buf_t *out) {
     if (g_setup)
         g_setup_seen = time(NULL); /* someone is at the panel: the defaults wait */
-    buf_printf(out, "{\"lang\":\"%s\",\"setup\":%s,\"version\":", lang_tag(g_lang), g_setup ? "true" : "false");
+    buf_printf(out, "{\"lang\":\"%s\",\"setup\":%s,\"version\":", lang_tag(lang_current()), g_setup ? "true" : "false");
     json_str(out, VERSION);
     /* the drives in use, with room left: where the pkgs are and what a send needs */
     buf_printf(out, ",\"drives\":[");
@@ -6006,7 +6041,7 @@ static void config_load(void) {
     if (ver < 3 && !dlc_mode_seen)
         c.dlc_mode = c.dlc ? DLC_INTERNAL : DLC_OFF;
     c.dlc = c.dlc_mode != DLC_OFF;
-    g_cfg = c;
+    config_publish(&c);
     printf("[config] batch=%d batch_size=%d dlc=%d dlc_mode=%s restore_batch=%d organize=%d folders=%d\n",
            g_cfg.batch, g_cfg.batch_size, g_cfg.dlc, dlc_mode_name(g_cfg.dlc_mode), g_cfg.restore_batch,
            g_cfg.organize, g_cfg.npaths);
@@ -6024,7 +6059,7 @@ void app_config_json(buf_t *out) {
                g_cfg.batch ? "true" : "false", g_cfg.batch_size, g_cfg.dlc ? "true" : "false",
                dlc_mode_name(g_cfg.dlc_mode), g_cfg.dlc_big ? "true" : "false", g_cfg.internal ? "true" : "false",
                g_cfg.organize ? "true" : "false", g_cfg.restore_batch, MAX_RESTORE_BATCH,
-               g_cfg.lang >= 0 ? lang_tag(g_cfg.lang) : "auto", lang_tag(g_lang), g_cfg.klog ? "true" : "false",
+               g_cfg.lang >= 0 ? lang_tag(g_cfg.lang) : "auto", lang_tag(lang_current()), g_cfg.klog ? "true" : "false",
                g_cfg.autorun ? "true" : "false", pf ? "true" : "false");
     json_str(out, pf ? pf : "");
     buf_printf(out,
@@ -6274,7 +6309,7 @@ int app_config_set(const char *body, char *msg, size_t cap) {
                                     "No se guardó: no se pudo actualizar la lista de AutoRun de GoldHEN"));
         return -1;
     }
-    g_cfg = c;
+    config_publish(&c);
     apply_lang();
     config_save();
     printf("[config] saved: batch=%d batch_size=%d dlc=%d restore_batch=%d organize=%d folders=%d\n", c.batch,
@@ -6777,7 +6812,7 @@ static void drive_add_file(drive_file_t *files, int *nf, int max, const char *pa
 static int drive_game_files(const char *tid, drive_file_t *files, int max, char *name, size_t nn) {
     char root[PATH_MAX], p[PATH_MAX];
     int nf = 0;
-    if (!g_cfg.organize || nas_active()) {
+    if (!cfg_organize() || nas_active()) {
         char app[PATH_MAX] = "", patch[PATH_MAX] = "";
         pthread_mutex_lock(&g_cat_lock);
         for (int i = 0; i < NROOTS && !app[0]; i++) {
