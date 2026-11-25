@@ -101,6 +101,17 @@ foreign or unknown layers are never force-unmounted. Mount and detach postcondit
 `specs/mount.md` and their decision tables are host-testable.
 Check: test (security/data loss). Test: `test/unit.c` › `test_mountplan`. Source: mount ownership rewrite 2026-11-25.
 
+### P4N-15: one scan pass evaluates one package-file fingerprint epoch
+Within one `scan_root` pass, a title's package-file fingerprint is computed once and reused
+when the same title is kept mounted. The fingerprint includes app/update marker state and
+every visible add-on, so recomputing it a few lines later is pure repeated `stat` work,
+especially costly on NAS libraries. A file mutation observed after classification belongs
+to the next scan epoch; it does not make the current pass half-old and half-new. Persistent
+cache lookup semantics and invalidation outside the pass are unchanged.
+Check: read (the scan loop is system-facing and compiled through `test/sdkcheck.sh`; the
+fingerprint format itself remains covered by `test/titlecache_test.c`).
+Source: performance audit of scan_root repeated fingerprinting.
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,

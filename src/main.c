@@ -1191,8 +1191,7 @@ static void info_from_src(const title_src_t *t, title_info_t *e) {
 
 /* What tid is, read from its pkgs only when its files changed since the last look (or it
  * was never looked at). NULL when the drive has no such game. */
-static const title_info_t *title_info(const char *root, const char *tid) {
-    uint64_t fp = title_files_fp(root, tid);
+static const title_info_t *title_info_fp(const char *root, const char *tid, uint64_t fp) {
     if (!fp)
         return NULL;
     /* the games are kept per drive, not per path: a share mounted under another name in
@@ -1210,6 +1209,10 @@ static const title_info_t *title_info(const char *root, const char *tid) {
         info_from_src(&src, e);
     src_close(&src);
     return e;
+}
+
+static const title_info_t *title_info(const char *root, const char *tid) {
+    return title_info_fp(root, tid, title_files_fp(root, tid));
 }
 
 static void write_meta(pkg_t *pkg, const char *meta_dir, int *rc) {
@@ -3597,6 +3600,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         notify_kind(NOTIFY_DRIVE, TR("%s: %d new package(s) found", "%s: %d pkg(s) nuevo(s) encontrado(s)"), label, moved);
     static title_t titles[MAX_TITLES];
     static char tids[MAX_TITLES][10];
+    static uint64_t fps[MAX_TITLES];
     int count = 0, pending = 0;
     int nt = titles_on_root(root, tids, MAX_TITLES);
     if (reconnected)
@@ -3610,7 +3614,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             pump_now(); /* the panel answers while a library is walked */
         activity_set("scanning", label, NULL, NULL, k, nt, 0, 0);
         const char *tid = tids[k];
-        const title_info_t *info = title_info(root, tid);
+        uint64_t fp = title_files_fp(root, tid);
+        const title_info_t *info = title_info_fp(root, tid, fp);
         if (!info)
             continue;
         if (reconnected) {
@@ -3618,6 +3623,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", tid);
             unlink(rm); /* reconnecting the USB drive brings removed games back */
         }
+        fps[count] = fp;
         title_t *t = &titles[count++];
         snprintf(t->tid, sizeof(t->tid), "%s", tid);
         snprintf(t->name, sizeof(t->name), "%s", info->name);
@@ -3647,7 +3653,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             pump_now();
         title_t *t = &titles[i];
         const title_info_t *info;
-        if (t->state != 0 || !(info = title_info(root, t->tid)))
+        if (t->state != 0 || !(info = title_info_fp(root, t->tid, fps[i])))
             continue;
         enforce_patch_sfo(info->title_id, info->has_patch, info->patch_path, info->sfo_len, info->sfo_sha);
         manage_info(info);
