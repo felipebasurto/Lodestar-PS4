@@ -182,6 +182,20 @@ static uint8_t *read_body(int fd, const char *pre, size_t pre_len, size_t len, l
     return b;
 }
 
+
+/* WEBAPI-1 boundary: one parsed request owns the bytes that application dispatch uses.
+ * raw is the header block plus whatever body bytes arrived with it. Large streaming bodies
+ * remain outside raw and are read only by their explicit streaming route. */
+typedef struct {
+    char raw[8192];
+    char method[8], path[1024];
+    char *body;
+    size_t have;
+    unsigned long long length;
+    long long deadline;
+    int post;
+} web_req_t;
+
 /* dest=<usb0..usb7, ext0, ext1, internal> of a query: letters and digits only. */
 static int dest_param(const char *path, char *dest, size_t n) {
     const char *p = strstr(path, "dest=");
@@ -340,15 +354,17 @@ void web_serve(int listen_fd) {
         web_handle(fd);
 }
 
-void web_handle(int fd) {
+static void web_dispatch(int fd, web_req_t *r);
+
+/* 0: r is ready for dispatch; 1: close without more work; -1: malformed request. */
+static int web_read_request(int fd, web_req_t *r) {
     struct timeval tv = {5, 0};
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     long long deadline = now_ms() + REQ_MS;
-    char req[8192];
-    ssize_t n = read(fd, req, sizeof(req) - 1);
+    char *req = r->raw;
+    ssize_t n = read(fd, req, sizeof(r->raw) - 1);
     if (n <= 0) {
-        close(fd);
-        return;
+        return 1;
     }
     req[n] = 0;
     /* https://: a TLS handshake. There is no certificate to answer it (a made-up one would
@@ -356,38 +372,37 @@ void web_handle(int fd) {
      * go back to http:// quickly. */
     if ((unsigned char)req[0] == 0x16) {
         printf("[web] an https:// request: the panel is http:// only\n");
-        close(fd);
-        return;
+        return 1;
     }
     char *body;
-    while (!(body = strstr(req, "\r\n\r\n")) && (size_t)n < sizeof(req) - 1 && now_ms() < deadline) {
-        ssize_t m = read(fd, req + n, sizeof(req) - 1 - (size_t)n);
+    while (!(body = strstr(req, "\r\n\r\n")) && (size_t)n < sizeof(r->raw) - 1 && now_ms() < deadline) {
+        ssize_t m = read(fd, req + n, sizeof(r->raw) - 1 - (size_t)n);
         if (m <= 0)
             break;
         n += m;
         req[n] = 0;
     }
     if (!body)
-        goto bad_request;
+        return -1;
     unsigned long long length = 0;
     int have_length = 0;
     for (const char *h = strchr(req, '\n'); h && h < body;) {
         h++;
         if (!strncasecmp(h, "Transfer-Encoding:", 18))
-            goto bad_request; /* this server only reads bodies with a declared length */
+            return -1; /* this server only reads bodies with a declared length */
         if (!strncasecmp(h, "Content-Length:", 15)) {
             const char *v = h + 15;
             while (*v == ' ' || *v == '\t')
                 v++;
             if (have_length || *v < '0' || *v > '9')
-                goto bad_request;
+                return -1;
             char *end;
             errno = 0;
             length = strtoull(v, &end, 10);
             while (*end == ' ' || *end == '\t')
                 end++;
             if (errno == ERANGE || *end != '\r' || end[1] != '\n')
-                goto bad_request;
+                return -1;
             have_length = 1;
         }
         h = strchr(h, '\n');
@@ -396,23 +411,22 @@ void web_handle(int fd) {
     size_t have = (size_t)(req + n - body);
     if (length < have)
         have = (size_t)length;
-    char method[8] = "", path[1024] = "", tid[10], msg[256];
+    char method[8] = "", path[1024] = "";
     sscanf(req, "%7s %1023s", method, path);
     int post = !strcmp(method, "POST");
     /* every POST changes something (a mount, a setting, the payload itself): the panel's
      * own requests only, so a page of another site cannot drive the console */
     if (post && !may_write(fd, req)) {
         reply(fd, "403 Forbidden", "text/plain", "forbidden\n", 10);
-        close(fd);
-        return;
+        return 1;
     }
 
     int form = post && (!strcmp(path, "/api/config") || !strncmp(path, "/api/restore", 12) ||
                         !strcmp(path, "/api/drive/client") || !strncmp(path, "/api/drive/client?", 18) ||
                         !strcmp(path, "/api/nas/shares"));
     if (form) {
-        if (length >= (size_t)(req + sizeof(req) - body))
-            goto bad_request;
+        if (length >= (size_t)(req + sizeof(r->raw) - body))
+            return -1;
         while (have < length && now_ms() < deadline) {
             ssize_t m = read(fd, body + have, (size_t)length - have);
             if (m <= 0)
@@ -420,10 +434,44 @@ void web_handle(int fd) {
             have += (size_t)m;
         }
         if (have != length || memchr(body, 0, have))
-            goto bad_request;
+            return -1;
         body[have] = 0;
     }
 
+
+    snprintf(r->method, sizeof(r->method), "%s", method);
+    snprintf(r->path, sizeof(r->path), "%s", path);
+    r->body = body;
+    r->have = have;
+    r->length = length;
+    r->deadline = deadline;
+    r->post = post;
+    return 0;
+}
+
+void web_handle(int fd) {
+    web_req_t r;
+    int rr = web_read_request(fd, &r);
+    if (rr > 0) {
+        close(fd);
+        return;
+    }
+    if (rr < 0) {
+        reply(fd, "400 Bad Request", "text/plain", "bad request\n", 12);
+        close(fd);
+        return;
+    }
+    web_dispatch(fd, &r);
+}
+
+static void web_dispatch(int fd, web_req_t *r) {
+    const char *req = r->raw, *path = r->path;
+    char *body = r->body;
+    size_t have = r->have;
+    unsigned long long length = r->length;
+    long long deadline = r->deadline;
+    int post = r->post;
+    char tid[10], msg[256];
     if (!strcmp(path, "/") || !strcmp(path, "/index.html") || !strncmp(path, "/?", 2)) { /* /?app=1: the panel app */
         reply(fd, "200 OK", "text/html; charset=utf-8", index_html, sizeof(index_html));
     } else if (!strcmp(path, "/legacy") || !strcmp(path, "/legacy.html")) {
@@ -570,10 +618,5 @@ void web_handle(int fd) {
     } else {
         reply(fd, "404 Not Found", "text/plain", "not found\n", 10);
     }
-    close(fd);
-    return;
-
-bad_request:
-    reply(fd, "400 Bad Request", "text/plain", "bad request\n", 12);
     close(fd);
 }
