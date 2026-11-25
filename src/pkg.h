@@ -69,7 +69,7 @@ typedef struct {
     uint64_t pkg_size, pfs_offset, pfs_size;
     uint8_t digest[32];
     int nentries;
-    pkg_entry_t entries[PKG_MAX_ENTRIES];
+    pkg_entry_t *entries; /* exactly nentries, owned until pkg_close */
     uint8_t dk3[32];
     int have_dk3, dk3_tried;
 } pkg_t;
@@ -84,10 +84,10 @@ int pkg_fake_key(pkg_t *pkg);
 uint8_t *pkg_entry(pkg_t *pkg, uint32_t id, size_t *len);
 
 typedef struct {
-    char key[64];
+    char key[32];
     int is_int;
     uint32_t ival;
-    char sval[512];
+    char sval[96];
 } sfo_item_t;
 
 typedef struct {

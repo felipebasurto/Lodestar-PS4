@@ -98,8 +98,11 @@ int pkg_open(pkg_t *pkg, const char *path) {
     uint32_t count = be32(pkg->header + 0x10), table = be32(pkg->header + 0x18);
     if (count > PKG_MAX_ENTRIES)
         goto fail;
+    pkg->entries = count ? malloc(count * sizeof(*pkg->entries)) : NULL;
+    if (count && !pkg->entries)
+        goto fail;
     uint8_t *tbl = malloc(count * 32u);
-    if (!tbl || read_at(pkg->fd, tbl, count * 32u, table)) {
+    if ((count && !tbl) || read_at(pkg->fd, tbl, count * 32u, table)) {
         free(tbl);
         goto fail;
     }
@@ -118,6 +121,9 @@ int pkg_open(pkg_t *pkg, const char *path) {
 fail:
     close(pkg->fd);
     pkg->fd = -1;
+    free(pkg->entries);
+    pkg->entries = NULL;
+    pkg->nentries = 0;
     return -1;
 }
 
@@ -125,6 +131,9 @@ void pkg_close(pkg_t *pkg) {
     if (pkg->fd >= 0)
         close(pkg->fd);
     pkg->fd = -1;
+    free(pkg->entries);
+    pkg->entries = NULL;
+    pkg->nentries = 0;
 }
 
 uint8_t *pkg_entry(pkg_t *pkg, uint32_t id, size_t *len) {

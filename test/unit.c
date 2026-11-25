@@ -324,6 +324,16 @@ static void test_sfo(void) {
     CHECK(t && !t->is_int && !strcmp(t->sval, "Title"));
     CHECK(a && a->is_int && a->ival == 0x1234);
     CHECK(!sfo_get(&s, "CATEGORY"));
+    /* decision strings are bounded: a long unknown/title value is truncated evidence,
+     * never an unbounded allocation or a missing terminator */
+    n = make_sfo(d);
+    d[20 + 4] = 120; /* TITLE's value length, including its NUL */
+    memset(d + (size_t)d[12], 'a', 119);
+    d[(size_t)d[12] + 119] = 0;
+    n = (size_t)d[12] + 120;
+    CHECK(sfo_parse(d, n, &s) == 0);
+    t = sfo_get(&s, "TITLE");
+    CHECK(t && strlen(t->sval) == sizeof(t->sval) - 1);
     d[1] = 'X'; /* not an SFO */
     CHECK(sfo_parse(d, n, &s) != 0);
 }
@@ -332,6 +342,34 @@ static void touch(const char *path) {
     FILE *f = fopen(path, "w");
     if (f)
         fclose(f);
+}
+
+/* PKG-1 (specs/pkg.md): the reader keeps the entries a pkg really has; the worst-case
+ * entry cap does not make every open pkg carry a fixed 512-entry table. */
+static void test_pkg_reader(void) {
+    printf("pkg reader memory\n");
+    char root[] = "/tmp/ps4mount-pkgreader-XXXXXX", p[256];
+    if (!mkdtemp(root)) {
+        CHECK(0);
+        return;
+    }
+    snprintf(p, sizeof(p), "%s/x.pkg", root);
+    make_pkg(p, "UP0000-CUSA00001_00-TESTGAME00000000", "gd", 0x09008000, 1, 0x100000, 0x100000);
+    pkg_t pkg;
+    CHECK(pkg_open(&pkg, p) == 0);
+    CHECK(pkg.nentries == 2 && pkg.entries != NULL);
+    size_t len = 0;
+    uint8_t *sfo = pkg_entry(&pkg, 0x1000, &len);
+    CHECK(sfo != NULL && len > 20);
+    mem_free(sfo);
+    pkg_close(&pkg);
+    CHECK(pkg.entries == NULL && pkg.nentries == 0);
+    /* memory regression bounds: the measured library has 11..54 entries; these objects
+     * used to reserve 512 entries (pkg) and 512-byte strings (sfo) for every parse */
+    CHECK(sizeof(pkg_t) < 8192);
+    CHECK(sizeof(sfo_t) < 20480);
+    unlink(p);
+    rmdir(root);
 }
 
 static void test_check(void) {
@@ -993,6 +1031,7 @@ int main(void) {
     test_bgft_task();
     test_bgft_info();
     test_bgft_scan();
+    test_pkg_reader();
     test_check();
     test_lang();
     test_license();
