@@ -2,9 +2,9 @@
 
 Governs: `src/emu.h`, `emu_sync` and its helpers in `src/main.c`, and the skips of
 `<drive>/PS4Mount/emulators` in `src/catalog.c` and `add_subdirs` (`src/main.c`).
-Sources: PS4SX2's README (it reads ISO/BIN/CHD only from `/data/PS4SX2/roms`, and BIOS, memory cards and
-covers from folders next to it), user (2026-11-24: "tambien quiero poder usar emuladores", and "no volverme
-loco con settings innecesarias").
+Sources: PS4SX2's README (its package is shown as PS4SX2, but it reads games from `/data/PCSX2/games/`, BIOS
+from `/data/PCSX2/bios/`, and settings beside them), user (2026-11-24: "tambien quiero poder usar emuladores",
+and "no volverme loco con settings innecesarias").
 
 ## Purpose
 
@@ -14,8 +14,11 @@ There is no setting: the folder names are the setting.
 
 ```
 <drive>/PS4Mount/emulators/<App>/<Folder>   is shown as   /data/<App>/<Folder>
-e.g. /mnt/usb0/PS4Mount/emulators/PS4SX2/roms  ->  /data/PS4SX2/roms
+e.g. /mnt/usb0/PS4Mount/emulators/PCSX2/games  ->  /data/PCSX2/games
 ```
+
+`<App>` is the folder the emulator itself uses under `/data`, not necessarily the name shown on the home
+screen: PS4SX2 uses `PCSX2`.
 
 Nothing here is tested on a console: whether an app sees a mount made by the payload is not known until
 someone tries it. The log says what was mounted and what was not, and why.
