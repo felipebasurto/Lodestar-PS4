@@ -130,7 +130,7 @@ echo "== drive audit (tools/driveaudit.py)"
 python3 -I test/driveaudit_test.py
 
 echo "== Google Drive backups"
-$CC $FLAGS $BRF -o "$B/drive_test" test/drive_test.c src/drive.c src/https.c src/json.c src/lang.c src/build.c src/mem.c src/crypto.c "$BR/libbearssl.a" -lpthread
+$CC $FLAGS $BRF -DDRIVE_TEST_HOOKS -o "$B/drive_test" test/drive_test.c src/drive.c src/https.c src/json.c src/lang.c src/build.c src/mem.c src/crypto.c "$BR/libbearssl.a" -lpthread
 "$B/drive_test"
 
 echo "== downloads from links"

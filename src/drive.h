@@ -53,6 +53,11 @@ void drive_stop(void);
 /* 1 while an upload or a download runs or waits (the console is kept out of rest mode). */
 int drive_active(void);
 
+#ifdef DRIVE_TEST_HOOKS
+/* Host-test synchronization: returns when no login, queued job or running job remains. */
+void drive_test_wait_idle(void);
+#endif
+
 /* {"configured":..,"connected":..,"email":..,"login":{..},"job":{..},"games":[..]} */
 void drive_status_json(buf_t *out);
 

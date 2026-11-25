@@ -482,24 +482,8 @@ static buf_t status(void) {
     return b;
 }
 
-/* Waits until the thread is idle with nothing queued (at most 20 s). */
-static void wait_idle(void) {
-    for (int i = 0; i < 400; i++) {
-        usleep(50000);
-        buf_t b = status();
-        jv_t v = jv_of((char *)b.data, b.len - 1), job, q, x;
-        int busy = !jv_get(v, "job", &job) && !jv_get(job, "busy", &x) && x.n == 4;
-        int queued = !jv_get(job, "queued", &q) && !jv_index(q, 0, &x);
-        int login = 0;
-        jv_t l;
-        if (!jv_get(v, "login", &l) && !jv_get(l, "active", &x))
-            login = x.n == 4;
-        buf_free(&b);
-        if (!busy && !queued && !login)
-            return;
-    }
-    printf("  (timed out waiting for the Drive thread)\n");
-}
+/* Waits until the thread is idle with nothing queued, including internal list jobs. */
+static void wait_idle(void) { drive_test_wait_idle(); }
 
 static void result(char *out, size_t n, int *ok) {
     buf_t b = status();

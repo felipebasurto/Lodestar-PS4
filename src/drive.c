@@ -61,6 +61,12 @@ typedef struct {
 
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_cv = PTHREAD_COND_INITIALIZER;
+#ifdef DRIVE_TEST_HOOKS
+static pthread_cond_t g_idle_cv = PTHREAD_COND_INITIALIZER;
+#define idle_signal() pthread_cond_broadcast(&g_idle_cv)
+#else
+#define idle_signal() ((void)0)
+#endif
 static pthread_t g_thread;
 static int g_started, g_quit;
 static volatile int g_cancel;
@@ -401,6 +407,7 @@ static void login_poll(void) {
         pthread_mutex_lock(&g_mu);
         g_login = 0;
         g_njobs = 0; /* what waited for the code cannot go on without it */
+        idle_signal();
         snprintf(g_login_error, sizeof(g_login_error), "%s",
                  TR("The code expired: press Connect again", "El código caducó: pulsa Conectar otra vez"));
         pthread_mutex_unlock(&g_mu);
@@ -445,6 +452,8 @@ static void login_poll(void) {
         else
             google_error(&r, g_login_error, sizeof(g_login_error));
     }
+    if (!g_login && !g_refresh[0])
+        idle_signal();
     g_login_next = time(NULL) + g_login_interval;
     int done = !g_login && g_refresh[0];
     pthread_mutex_unlock(&g_mu);
@@ -1773,6 +1782,7 @@ static void *worker(void *arg) {
         }
         /* while a code is shown, only the sign-in itself runs */
         if (!g_njobs || (g_login && g_jobs[0].op != OP_LOGIN)) {
+            idle_signal();
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
             ts.tv_sec += 1;
@@ -1828,6 +1838,7 @@ static void *worker(void *arg) {
          * stopping: it stays there, for the next one */
         if (!g_quit && (j.op == OP_UPLOAD || j.op == OP_DOWNLOAD))
             save_queue_locked();
+        idle_signal();
     }
     pthread_mutex_unlock(&g_mu);
     return NULL;
@@ -1873,8 +1884,8 @@ void drive_start(const char *state_dir, const drive_endpoints_t *ep, const drive
     pthread_attr_init(&at);
     pthread_attr_setstacksize(&at, 1 << 20);
     if (!pthread_create(&g_thread, &at, worker, NULL)) {
-        g_started = 1;
         pthread_mutex_lock(&g_mu);
+        g_started = 1;
         int resumed = 0;
         if (g_refresh[0]) {
             queue_locked(OP_LIST, "", "");
@@ -1906,10 +1917,11 @@ void drive_stop(void) {
     pthread_cond_signal(&g_cv);
     pthread_mutex_unlock(&g_mu);
     pthread_join(g_thread, NULL);
-    g_started = 0;
     pthread_mutex_lock(&g_mu);
+    g_started = 0;
     g_njobs = 0;
     g_login = 0;
+    idle_signal();
     mem_free(g_remote);
     g_remote = NULL;
     g_nremote = 0;
@@ -1929,6 +1941,17 @@ int drive_active(void) {
     pthread_mutex_unlock(&g_mu);
     return a;
 }
+
+#ifdef DRIVE_TEST_HOOKS
+/* Test boundary: waits for the whole internal queue, including OP_LIST jobs that the
+ * panel's user-transfer queue deliberately does not show. */
+void drive_test_wait_idle(void) {
+    pthread_mutex_lock(&g_mu);
+    while (g_started && (g_busy || g_njobs || g_login))
+        pthread_cond_wait(&g_idle_cv, &g_mu);
+    pthread_mutex_unlock(&g_mu);
+}
+#endif
 
 void drive_status_json(buf_t *out) {
     pthread_mutex_lock(&g_mu);
@@ -2023,6 +2046,7 @@ int drive_disconnect(char *msg, size_t n) {
     g_cancel = 1;
     g_njobs = 0;
     g_login = 0;
+    idle_signal();
     snprintf(g_revoke, sizeof(g_revoke), "%s", g_refresh);
     pthread_cond_signal(&g_cv);
     pthread_mutex_unlock(&g_mu);
@@ -2108,6 +2132,7 @@ int drive_cancel(char *msg, size_t n) {
             g_jobs[k++] = g_jobs[i];
     g_njobs = k;
     g_cancel = g_busy && g_op != OP_LIST;
+    idle_signal();
     save_queue_locked(); /* the running one goes from it when it ends */
     pthread_mutex_unlock(&g_mu);
     snprintf(msg, n, "%s", TR("Cancelled", "Cancelado"));
@@ -2176,6 +2201,7 @@ int drive_set_client(const char *id, const char *secret, char *msg, size_t n) {
         g_njobs = 0;
         g_login = 0;
         g_login_error[0] = 0;
+        idle_signal();
     }
     pthread_mutex_unlock(&g_mu);
     if (changed)
@@ -2200,6 +2226,7 @@ int drive_forget_client(char *msg, size_t n) {
     memset(g_client_secret, 0, sizeof(g_client_secret));
     g_login = 0;
     g_login_error[0] = 0;
+    idle_signal();
     pthread_mutex_unlock(&g_mu);
     unlink(g_client_path);
     snprintf(msg, n, "%s", TR("Google client removed from the console", "Cliente de Google borrado de la consola"));
