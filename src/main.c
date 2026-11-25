@@ -52,6 +52,7 @@
 #include "crypto.h"
 #include "db.h"
 #include "delete.h"
+#include "dlcvec.h"
 #include "drive.h"
 #include "links.h"
 #include "fw.h"
@@ -673,10 +674,15 @@ typedef struct {
     char name[128], ver[8], marker[PATH_MAX + 160];
     char update_issue[256]; /* why patch.pkg was ignored, empty when used or absent */
     dlc_src_t *dlc;
-    int ndlc;
+    int ndlc, dlc_cap;
     char dlc_tids[MAX_DLC_TIDS][10]; /* add-on title IDs: /user/addcont/<TID> folders */
     int ndlc_tids;
 } title_src_t;
+
+/* dlcvec starts at ten slots because that still fits one 16 KiB mapping with mem_alloc's
+ * header. If this layout grows, choose the initial capacity again instead of silently
+ * crossing the page boundary. */
+_Static_assert(10 * sizeof(dlc_src_t) <= 16320, "initial add-on allocation must fit one mapped page");
 
 /* title_info_t is title_src_t without the open pkgs (titlecache.h) */
 _Static_assert(MAX_DLC_TIDS == TITLE_DLC_TIDS, "the cache keeps the add-on title IDs of a game");
@@ -718,6 +724,26 @@ static void src_close(title_src_t *t) {
     mem_free(t->dlc);
     t->dlc = NULL;
     t->ndlc = 0;
+    t->dlc_cap = 0;
+}
+
+/* The next zeroed add-on slot of t, growing its array only when the slots already reserved
+ * are full. MAX_DLC and allocation failure both return NULL; the caller distinguishes them
+ * because the first is an input bound and the second is unknown work left undone. */
+static dlc_src_t *dlc_next(title_src_t *t) {
+    int ncap = dlcvec_next_cap(t->ndlc, t->dlc_cap, MAX_DLC);
+    if (ncap < 0)
+        return NULL;
+    if (ncap != t->dlc_cap) {
+        dlc_src_t *n = mem_realloc(t->dlc, (size_t)ncap * sizeof(*n));
+        if (!n)
+            return NULL;
+        t->dlc = n;
+        t->dlc_cap = ncap;
+    }
+    dlc_src_t *a = &t->dlc[t->ndlc];
+    memset(a, 0, sizeof(*a));
+    return a;
 }
 
 static int dlc_cmp(const void *a, const void *b) {
@@ -744,15 +770,13 @@ static void dlc_open(title_src_t *t) {
         while ((f = readdir(l))) {
             if (f->d_name[0] == '.' || strlen(f->d_name) != 16)
                 continue;
-            /* one bounded mapped array (zeroed), never the host's few MB of heap. A list that
-             * could not be had would read as "no add-ons" and register the game again */
-            if (!t->dlc && !(t->dlc = mem_alloc(MAX_DLC * sizeof(*t->dlc)))) {
+            if (t->ndlc == MAX_DLC)
+                break;
+            dlc_src_t *a = dlc_next(t);
+            if (!a) {
                 printf("[scan] %s: no memory for its add-ons\n", t->dir);
                 break;
             }
-            if (t->ndlc == MAX_DLC)
-                break;
-            dlc_src_t *a = &t->dlc[t->ndlc];
             snprintf(a->path, sizeof(a->path), "%s/%s/ac.pkg", sub, f->d_name);
             if (!exists(a->path))
                 continue;
@@ -825,13 +849,11 @@ static void dlc_open_catalog(title_src_t *t, const catalog_t *c, const cat_game_
         snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", p->content_id);
         if (dup || exists(rm)) /* removed: deleted on the console */
             continue;
-        /* one bounded mapped array (zeroed), never the host's few MB of heap. A list that
-         * could not be had would read as "no add-ons" and register the game again */
-        if (!t->dlc && !(t->dlc = mem_alloc(MAX_DLC * sizeof(*t->dlc)))) {
+        dlc_src_t *a = dlc_next(t);
+        if (!a) {
             printf("[scan] %s: no memory for its add-ons\n", t->dir);
             break;
         }
-        dlc_src_t *a = &t->dlc[t->ndlc];
         snprintf(a->path, sizeof(a->path), "%s", p->path);
         /* the catalog checked the category and the fake key when it first read the pkg;
          * checking the key again on every scan would cost an RSA operation per add-on */

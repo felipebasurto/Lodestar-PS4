@@ -24,6 +24,18 @@ wrong types into valid values.
 Check: test. Test: `test/unit.c` › `test_pkg_meta`.
 Source: existing registration behavior.
 
+### REG-3: registration-time add-on arrays grow by demand within the fixed cap
+The transient `dlc_src_t` array of a title is owned by that `title_src_t` and released by
+`src_close`. It must not reserve `MAX_DLC` descriptors when the first add-on is seen: the
+first allocation is bounded to one mapped page for the current descriptor stride, growth is
+doubling and capped at `MAX_DLC`, and each candidate slot is explicitly zeroed before use.
+Allocation failure is logged and leaves the remaining add-ons unprocessed; it is never
+interpreted as proof that they are absent or deleted. The ownership/copying rule must remain
+safe because open `pkg_t` values are plain movable descriptors, not self-referential objects.
+Check: test (memory ownership and boundary arithmetic). Test: `test/unit.c` › `test_dlcvec`;
+compile boundary `test/sdkcheck.sh`.
+Source: rewrite memory audit 2026-11-25.
+
 ## Non-goals
 
 - Changing the external param.sfo parser rules in `specs/pkg.md`.

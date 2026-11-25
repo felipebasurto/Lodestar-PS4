@@ -12,6 +12,7 @@
 #include "bgftinfo.h"
 #include "bgftscan.h"
 #include "delete.h"
+#include "dlcvec.h"
 #include "build.h"
 #include "check.h"
 #include "crypto.h"
@@ -989,6 +990,17 @@ static void write_bin(const char *path, const void *data, size_t len) {
     }
 }
 
+static void test_dlcvec(void) {
+    printf("registration add-on array growth\n");
+    CHECK(dlcvec_next_cap(0, 0, 64) == 10); /* ten 1600-byte descriptors still fit one page */
+    CHECK(dlcvec_next_cap(9, 10, 64) == 10);
+    CHECK(dlcvec_next_cap(10, 10, 64) == 20);
+    CHECK(dlcvec_next_cap(20, 20, 64) == 40);
+    CHECK(dlcvec_next_cap(40, 40, 64) == 64);
+    CHECK(dlcvec_next_cap(64, 64, 64) == -1);
+    CHECK(dlcvec_next_cap(3, 0, 4) == 4); /* a smaller caller cap is never crossed */
+}
+
 /* P4N-13 integration (specs/ps4-native.md): one directory load answers title, URL and error
  * queries for every task, including a malformed legacy task, without rereading PDB files. */
 static void test_bgft_scan(void) {
@@ -1321,6 +1333,7 @@ int main(void) {
     test_ac_pdb();
     test_bgft_task();
     test_bgft_info();
+    test_dlcvec();
     test_bgft_scan();
     test_pkg_reader();
     test_check();
