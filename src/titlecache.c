@@ -104,6 +104,23 @@ static int g_n;
 static unsigned long g_clock;
 static int g_loading; /* the entries come from the file: nothing to write back */
 
+
+int title_marker_tail(const char *marker, const char *dir, char *out, size_t cap) {
+    size_t n = strlen(dir);
+    if (strncmp(marker, dir, n) || marker[n] != '\n')
+        return -1;
+    const char *tail = marker + n + 1;
+    if (strlen(tail) >= cap)
+        return -1;
+    snprintf(out, cap, "%s", tail);
+    return 0;
+}
+
+int title_marker_full(char *out, size_t cap, const char *dir, const char *tail) {
+    int n = snprintf(out, cap, "%s\n%s", dir, tail);
+    return n < 0 || (size_t)n >= cap ? -1 : 0;
+}
+
 uint64_t title_fp_start(void) { return 0xcbf29ce484222325ull; }
 
 /* FNV-1a over the path and the bytes of size and mtime. */
@@ -251,12 +268,17 @@ int title_cache_save(const char *file, const char *root) {
             continue;
         title_info_t *t = &e->info;
         char dir[PATH_MAX * 2], app[PATH_MAX * 2], patch[PATH_MAX * 2], issue[512];
-        char marker[(PATH_MAX + 160) * 2], name[256];
+        char marker_full[PATH_MAX + 160], marker[(PATH_MAX + 160) * 2], name[256];
         esc_text(dir, sizeof(dir), t->dir);
         esc_text(app, sizeof(app), t->app_path);
         esc_text(patch, sizeof(patch), t->patch_path);
         esc_text(issue, sizeof(issue), t->update_issue);
-        esc_text(marker, sizeof(marker), t->marker);
+        if (title_marker_full(marker_full, sizeof(marker_full), t->dir, t->marker_tail)) {
+            fclose(f);
+            unlink(tmp);
+            return -1; /* a damaged entry is not written as if it were evidence */
+        }
+        esc_text(marker, sizeof(marker), marker_full);
         esc_text(name, sizeof(name), t->name);
         char tids[1 + TITLE_DLC_TIDS * 11], sha[65], dlcs[TITLE_DLC_MAX * 64];
         tids[0] = 0;
@@ -325,6 +347,9 @@ static int load_line(char *line) {
     unsigned char sha[32];
     if (unhex(f[17], sha, sizeof(sha)))
         return -1;
+    char marker_tail[160];
+    if (title_marker_tail(f[15], f[3], marker_tail, sizeof(marker_tail)))
+        return -1;
     title_info_t *t = title_cache_add(f[0], f[1], (uint64_t)fp);
     if (!t)
         return -1;
@@ -340,7 +365,7 @@ static int load_line(char *line) {
     t->app_size = strtoull(f[12], NULL, 10);
     t->patch_size = strtoull(f[13], NULL, 10);
     snprintf(t->update_issue, sizeof(t->update_issue), "%s", f[14]);
-    snprintf(t->marker, sizeof(t->marker), "%s", f[15]);
+    snprintf(t->marker_tail, sizeof(t->marker_tail), "%s", marker_tail);
     t->sfo_len = (uint32_t)sfo;
     memcpy(t->sfo_sha, sha, sizeof(sha));
     for (int k = 0; k < (int)ntids; k++) {

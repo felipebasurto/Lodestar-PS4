@@ -1167,7 +1167,8 @@ static void info_from_src(const title_src_t *t, title_info_t *e) {
     snprintf(e->ver, sizeof(e->ver), "%s", t->ver);
     snprintf(e->content_id, sizeof(e->content_id), "%s", t->app.content_id);
     snprintf(e->update_issue, sizeof(e->update_issue), "%s", t->update_issue);
-    snprintf(e->marker, sizeof(e->marker), "%s", t->marker);
+    if (title_marker_tail(t->marker, t->dir, e->marker_tail, sizeof(e->marker_tail)))
+        e->marker_tail[0] = 0; /* impossible for a generated marker; it simply never matches */
     const pkg_meta_t *eff = t->has_patch ? &t->patch_meta : &t->app_meta;
     e->system_ver = eff->system_ver_valid ? eff->system_ver : 0;
     snprintf(e->game_ver, sizeof(e->game_ver), "%s", t->app_meta.app_ver_valid ? t->app_meta.app_ver : "");
@@ -2664,13 +2665,14 @@ static int title_state(const title_info_t *t) {
             printf("[scan] %s: %s is already served from another drive, this copy is not used\n", t->dir, tid);
         return -1;
     }
-    char app_url[PATH_MAX + 8];
+    char app_url[PATH_MAX + 8], marker[PATH_MAX + 160];
     pkg_url(tid, "app", t->app_path, app_url, sizeof(app_url));
+    int have_marker = !title_marker_full(marker, sizeof(marker), t->dir, t->marker_tail);
     /* folders set up by 0.3.1 and older lack the internal folder: registered again */
     const char *why = !db_is_registered(tid)                ? "not registered"
                       : !title_bgft_names(tid, app_url)      ? "no game task naming its pkg"
                       : title_bgft_error(tid)                ? "its game task holds an error"
-                      : !marker_matches(tid, t->marker)     ? "its pkgs changed"
+                      : !have_marker || !marker_matches(tid, marker) ? "its pkgs changed"
                       : !hold_ready("app", tid, "app.pkg", t->app_path) ? "game link"
                       : t->has_patch && !hold_ready("patch", tid, "patch.pkg", t->patch_path) ? "update link"
                       : !dlc_ready(t)                        ? "add-ons"

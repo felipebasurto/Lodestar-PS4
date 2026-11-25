@@ -27,9 +27,10 @@ typedef struct {
     uint32_t system_ver;
     uint64_t app_size, patch_size;
     char update_issue[256];
-    /* the marker of the registration: folder, digest of the update (or "nopatch") and,
-     * with add-ons, the digest of all of them */
-    char marker[PATH_MAX + 160];
+    /* the registration marker after its first "<dir>\n" line: digest of the update (or
+     * "nopatch") and, with add-ons, the digest of all of them. Joined with dir when the
+     * historical full text is written or compared. */
+    char marker_tail[160];
     char dlc_tids[TITLE_DLC_TIDS][10];
     int ndlc_tids;
     /* the update's param.sfo, to tell whether the system's copy is still the one */
@@ -46,6 +47,11 @@ size_t title_cache_dlc_pool_bytes(void);
 /* 64-bit hash of a game's files: starts empty and takes each path with its size and mtime. */
 uint64_t title_fp_start(void);
 uint64_t title_fp_add(uint64_t h, const char *path, uint64_t size, int64_t mtime);
+
+/* Splits the historical full marker into the suffix kept by title_info_t, checking that its
+ * first line is exactly dir. Joins dir and that suffix back into the full external form. */
+int title_marker_tail(const char *marker, const char *dir, char *out, size_t cap);
+int title_marker_full(char *out, size_t cap, const char *dir, const char *tail);
 
 /* The entry of tid on root, when its files hash to fp. NULL when it has to be read. */
 const title_info_t *title_cache_find(const char *root, const char *tid, uint64_t fp);

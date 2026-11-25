@@ -15,3 +15,13 @@ single object mappings. The persisted cache format and lookup semantics are unch
 Check: test (memory ownership and regression of the page-per-descriptor waste). Test:
 `test/titlecache_test.c` › pool scaling case.
 Source: rewrite memory audit 2026-11-25.
+
+### TCACHE-2: registration markers are stored without duplicating the game directory
+The cache may keep the registration marker's decision suffix (update/add-on digests), but not a
+second copy of the game directory already stored in `dir`. The external `.src` marker format and
+the persisted cache format remain the full historical text: `<dir>\n<patch-or-nopatch>\n` plus
+the optional add-on digest line. Loading accepts that historical full form; saving writes it back.
+A cached entry whose marker's first line is not exactly its directory is damaged and ignored.
+Check: test (external cache format and memory representation). Test: `test/titlecache_test.c` ›
+marker round-trip case.
+Source: rewrite memory audit 2026-11-25.

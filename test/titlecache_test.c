@@ -34,8 +34,8 @@ static void fill(title_info_t *t, const char *tid, const char *name) {
     snprintf(t->patch_path, sizeof(t->patch_path), "/mnt/usb0/ps4mount/nas-1/%s - UPDATE.pkg", name);
     t->patch_size = 1234567;
     snprintf(t->update_issue, sizeof(t->update_issue), "Update ignored: %s", name);
-    /* two lines, as src_open_paths makes it */
-    snprintf(t->marker, sizeof(t->marker), "%s\n0123456789abcdef\n", t->dir);
+    /* the full marker is <dir>\n<this suffix>; the cache keeps only the suffix */
+    snprintf(t->marker_tail, sizeof(t->marker_tail), "0123456789abcdef\n");
     t->sfo_len = 1344;
     for (int i = 0; i < 32; i++)
         t->sfo_sha[i] = (unsigned char)i;
@@ -96,7 +96,13 @@ int main(void) {
     got = title_cache_find("/mnt/usb0", "CUSA00001", a);
     CHECK(got != NULL);
     if (got) {
-        CHECK(!strcmp(got->marker, "/mnt/usb0/ps4mount/nas-1/Terminator 2D - GAME.pkg\n0123456789abcdef\n"));
+        CHECK(!strcmp(got->marker_tail, "0123456789abcdef\n"));
+        char full[PATH_MAX + 160];
+        CHECK(title_marker_full(full, sizeof(full), got->dir, got->marker_tail) == 0);
+        CHECK(!strcmp(full, "/mnt/usb0/ps4mount/nas-1/Terminator 2D - GAME.pkg\n0123456789abcdef\n"));
+        char tail[160];
+        CHECK(title_marker_tail(full, got->dir, tail, sizeof(tail)) == 0 && !strcmp(tail, got->marker_tail));
+        CHECK(title_marker_tail("/other/dir\n0123\n", got->dir, tail, sizeof(tail)) != 0);
         CHECK(got->has_patch && got->app_size == 4294967296ull && got->patch_size == 1234567);
         CHECK(!strcmp(got->content_id, "EP0000-CUSA00001_00-TESTGAME00000000"));
         CHECK(got->system_ver == 0x09000001 && got->sfo_len == 1344 && got->sfo_sha[31] == 31);
