@@ -38,16 +38,20 @@ Check: test (keep bar 2). Test: `test/unit.c` › `test_emu`. Source: this chang
 
 ### EMU-3: only an empty folder of the console is covered
 `/data/<App>` must already exist and be a real folder (not a link), so an app that was never started is not
-given a folder. `/data/<App>/<Folder>` is mounted over when it does not exist (it is made), or exists, is a
-folder and is empty. When it already has files, or something else is mounted there, it is left as it is and
-the log says so once. Files of the console are never hidden, moved or deleted.
-Check: read. Source: this change. `emu_mount_one`.
+given a folder. `/data/<App>/<Folder>` is mounted over when a read proves it absent (`ENOENT`; it is made),
+or when it exists, is a folder and is empty. Any other read error refuses the mount. When it already has
+files, is not a folder, or something else is mounted there, it is left as it is and the log says so once.
+Files of the console are never hidden, moved or deleted. After `nmount`, the live top layer must read back
+as exactly the intended source before the operation is counted or reported as mounted; a mismatch is
+foreign/unknown state and is not unmounted blindly.
+Check: test (mount admission ordering). Test: `test/unit.c` › `test_emu`. Source: emulator planner extraction
+2026-11-25. `emu_mount_one`.
 
 ### EMU-4: a mount whose drive is gone is taken off
 Mounts of PS4Mount (a nullfs mount on `/data/...` whose source is under `/mnt/` in a `PS4Mount/emulators/`
 folder) are taken off when the source folder is gone or its drive was disconnected, and made again when it
 is back. It is done at every scan; repeating it does nothing.
-Check: read. Source: this change. `emu_sync`.
+Check: test (ownership/stale unmount ordering). Test: `test/unit.c` › `test_emu`. Source: emulator planner extraction 2026-11-25. `emu_sync`.
 
 ### EMU-5: the games searches leave the emulators folder alone
 The search for pkgs (`catalog_walk`) and the tidying of the scan folder (`adopt_dir_pkgs`) skip

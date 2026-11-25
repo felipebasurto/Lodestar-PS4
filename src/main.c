@@ -3902,47 +3902,47 @@ static int emu_mount_one(const char *src, const char *app, const char *folder) {
         return 0;
     }
     snprintf(appdir, sizeof(appdir), "/data/%s", app);
-    if (!emu_is_dir_now(appdir)) {
-        emu_said(target, TR("the app has no folder in /data yet: start it once", "la app aún no tiene carpeta en /data: ábrela una vez"));
-        return 0;
-    }
+    int appdir_exists = emu_is_dir_now(appdir);
     int top = top_layer(target, src);
-    if (top == 1)
-        return 0; /* already there */
-    if (top == -1) {
-        emu_said(target, TR("something else is mounted there", "ya hay otra cosa montada ahí"));
+    struct stat st;
+    int got = !lstat(target, &st), missing = !got && errno == ENOENT, stat_error = !got && !missing;
+    emu_step_t step = emu_mount_step(1, appdir_exists, top, missing, stat_error, got && S_ISDIR(st.st_mode),
+                                     got && S_ISDIR(st.st_mode) && emu_dir_empty(target));
+    if (step == EMU_STEP_ALREADY)
+        return 0;
+    if (step == EMU_STEP_REFUSE) {
+        if (!appdir_exists)
+            emu_said(target, TR("the app has no folder in /data yet: start it once", "la app aún no tiene carpeta en /data: ábrela una vez"));
+        else if (top < 0)
+            emu_said(target, TR("something else is mounted there", "ya hay otra cosa montada ahí"));
+        else if (stat_error)
+            emu_said(target, TR("the console's folder could not be read", "la carpeta de la consola no se pudo leer"));
+        else if (got && !S_ISDIR(st.st_mode))
+            emu_said(target, TR("it is not a folder", "no es una carpeta"));
+        else
+            emu_said(target, TR("the console's folder already has files (it is left as it is)", "la carpeta de la consola ya tiene archivos (se deja como está)"));
         return 0;
     }
-    struct stat st;
-    if (lstat(target, &st) == 0) {
-        if (!S_ISDIR(st.st_mode)) {
-            emu_said(target, TR("it is not a folder", "no es una carpeta"));
-            return 0;
-        }
-        if (!emu_dir_empty(target)) {
-            emu_said(target, TR("the console's folder already has files (it is left as it is)", "la carpeta de la consola ya tiene archivos (se deja como está)"));
-            return 0;
-        }
-    } else if (mkdir(target, 0777)) {
+    if (step == EMU_STEP_MKDIR_MOUNT && mkdir(target, 0777)) {
         printf("[emu] %s: %s\n", target, strerror(errno));
         return 0;
     }
     if (nullfs_mount(src, target))
         return 0;
+    if (top_layer(target, src) != 1) {
+        printf("[emu] %s: mount did not verify as the exact top layer; left for the next scan\n", target);
+        return 0;
+    }
     printf("[emu] %s is now %s\n", src, target);
     return 1;
 }
 
 static int emu_mount_matches(const char *from, const char *on) {
-    if (strncmp(on, "/data/", 6))
-        return 0;
-    static const char prefix[] = "/" EMU_DIR "/";
     for (int i = 0; i < 10; i++) {
         char root[32];
         root_path(i, root, sizeof(root));
-        size_t len = strlen(root);
-        if (!strncmp(from, root, len) && !strncmp(from + len, prefix, sizeof(prefix) - 1))
-            return !strcmp(from + len + sizeof(prefix) - 1, on + 6);
+        if (emu_mount_owned(root, from, on))
+            return 1;
     }
     return 0;
 }
@@ -3963,11 +3963,8 @@ static void emu_sync(void) {
         if (strcmp(list[i].f_fstypename, "nullfs") || !emu_mount_matches(from, on))
             continue;
         mounted++;
-        if (!dead_layer(on) && emu_is_dir_now(from))
-            continue;
-        /* A disconnected layer can defeat statfs; only remove it if
-         * the mount table shows no other layer on the same target. */
-        if (layers_on(on) != 1)
+        int dead = dead_layer(on);
+        if (!emu_stale_unmount_ok(emu_is_dir_now(from), dead, layers_on(on)))
             continue;
         if (unmount(on, MNT_FORCE))
             printf("[emu] %s: could not unmount %s: %s\n", on, from, strerror(errno));

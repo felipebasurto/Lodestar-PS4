@@ -1257,6 +1257,28 @@ static void test_restore_plan(void) {
 
 static void test_emu(void) {
     printf("emulators: which names are mounted over the console's folders\n");
+    CHECK(emu_mount_step(1, 1, 1, 0, 0, 0, 0) == EMU_STEP_ALREADY);
+    CHECK(emu_mount_step(1, 1, 0, 1, 0, 0, 0) == EMU_STEP_MKDIR_MOUNT);
+    CHECK(emu_mount_step(1, 1, 0, 0, 0, 1, 1) == EMU_STEP_MOUNT);
+    CHECK(emu_mount_step(1, 1, 0, 0, 0, 1, 0) == EMU_STEP_REFUSE); /* console files are never hidden */
+    CHECK(emu_mount_step(1, 1, 0, 0, 0, 0, 0) == EMU_STEP_REFUSE); /* not a real folder */
+    CHECK(emu_mount_step(1, 1, -1, 0, 0, 1, 1) == EMU_STEP_REFUSE); /* foreign mount */
+    CHECK(emu_mount_step(1, 1, 0, 0, 1, 0, 0) == EMU_STEP_REFUSE); /* unknown stat error is not absence */
+    CHECK(emu_mount_step(1, 0, 0, 1, 0, 0, 0) == EMU_STEP_REFUSE); /* start the app once first */
+    CHECK(emu_mount_step(0, 1, 0, 1, 0, 0, 0) == EMU_STEP_REFUSE);
+
+    CHECK(emu_mount_owned("/mnt/usb0", "/mnt/usb0/PS4Mount/emulators/PCSX2/games", "/data/PCSX2/games"));
+    CHECK(emu_mount_owned("/mnt/ext1", "/mnt/ext1/PS4Mount/emulators/retro/bios", "/data/retro/bios"));
+    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0/PS4Mount/emulators/PCSX2/games", "/data/PCSX2/roms"));
+    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0x/PS4Mount/emulators/PCSX2/games", "/data/PCSX2/games"));
+    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0/PS4Mount/emulators/PCSX2/games/extra", "/data/PCSX2/games"));
+    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0/PS4Mount/emulators/PCSX2/games", "/user/data/PCSX2/games"));
+
+    CHECK(emu_stale_unmount_ok(0, 0, 1));  /* source gone, single layer */
+    CHECK(emu_stale_unmount_ok(0, 1, 1));  /* disconnected/dead layer */
+    CHECK(!emu_stale_unmount_ok(1, 0, 1)); /* live source */
+    CHECK(!emu_stale_unmount_ok(0, 0, 0)); /* table cannot prove the layer count */
+    CHECK(!emu_stale_unmount_ok(0, 0, 2)); /* another layer is above or below */
     static const struct {
         const char *name;
         int ok;
