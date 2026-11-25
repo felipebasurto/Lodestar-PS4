@@ -4,6 +4,7 @@
 #include "bgftscan.h"
 
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,7 +79,9 @@ void bgftscan_load(bgftscan_t *s, const char *dir, uint32_t first, uint32_t last
     s->usable = 0;
     DIR *d = opendir(dir);
     if (!d) {
-        s->usable = 1; /* the system has no task directory: a valid empty snapshot */
+        /* Only a proven absent directory is an empty snapshot. A failed open is unknown:
+         * the caller falls back to fresh direct reads instead of inventing absence. */
+        s->usable = errno == ENOENT || errno == ENOTDIR;
         return;
     }
     struct dirent *e;

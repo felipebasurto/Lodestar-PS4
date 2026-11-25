@@ -804,6 +804,20 @@ static void test_bgft_info(void) {
     memcpy(bad, b.data, b.len);
     CHECK(bgft_task_parse(bad, b.len - 1, &info) == -1);
     mem_free(bad);
+
+    /* Canonical keys present with the wrong width are malformed, not absent. */
+    static const uint8_t bad_error_width[] = {
+        0, 0, 0, 0,
+        0x68, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0, 0,
+        1, 2, 3,
+    };
+    CHECK(bgft_task_parse(bad_error_width, sizeof(bad_error_width), &info) == -1);
+    static const uint8_t bad_title_width[] = {
+        0, 0, 0, 0,
+        0x7c, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0,
+        'C', 'U', 'S', 'A', '0', '0', '0', '1',
+    };
+    CHECK(bgft_task_parse(bad_title_width, sizeof(bad_title_width), &info) == -1);
     buf_free(&json);
     buf_free(&b);
 }

@@ -78,10 +78,11 @@ static inline int bgft_task_parse(const uint8_t *d, size_t len, bgft_info_t *out
             return -1;
         const uint8_t *data = d + off;
         if (key == 0x7c) {
-            tmp.has_title = n1 == BGFT_TITLE_ID_LEN;
+            if (n1 != BGFT_TITLE_ID_LEN)
+                return -1; /* a canonical field of the wrong width is malformed, not absent */
+            tmp.has_title = 1;
             memset(tmp.title_id, 0, sizeof(tmp.title_id));
-            if (tmp.has_title)
-                memcpy(tmp.title_id, data, BGFT_TITLE_ID_LEN);
+            memcpy(tmp.title_id, data, BGFT_TITLE_ID_LEN);
         } else if (key == 0x1388) {
             size_t keep = n1 <= BGFTINFO_URL_CAP ? n1 : BGFTINFO_URL_CAP;
             tmp.has_url = 1;
@@ -90,8 +91,10 @@ static inline int bgft_task_parse(const uint8_t *d, size_t len, bgft_info_t *out
             memcpy(tmp.url, data, keep);
             tmp.url[keep] = 0;
         } else if (key == 0x68) {
-            tmp.error_present = n1 == 4;
-            tmp.error = tmp.error_present ? bgft_le32(data) : 0;
+            if (n1 != 4)
+                return -1;
+            tmp.error_present = 1;
+            tmp.error = bgft_le32(data);
         }
         off += n1;
         tmp.records++;

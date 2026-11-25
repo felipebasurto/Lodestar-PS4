@@ -1606,41 +1606,37 @@ static uint32_t bgft_find(const char *tid) {
     return found;
 }
 
-/* 1 when the game task of tid names the pkg at path (as the system writes it): tasks
- * written before /data paths were turned into /user/data ones are written again. */
-static int bgft_names(const char *tid, const char *url) {
-    uint32_t id = bgft_find(tid);
+/* Freshly read and parse one task for the fallback path. The fallback may cost more I/O
+ * than the scan snapshot, but it must never use looser health semantics. */
+static int bgft_read_info(uint32_t id, bgft_info_t *info) {
     char p[64];
     size_t len;
     snprintf(p, sizeof(p), BGFT_DIR "/%08x/d0.pdb", id);
     uint8_t *data = id ? read_all(p, &len) : NULL;
-    int ok = data && contains(data, len, url);
+    int ok = data && bgft_task_parse(data, len, info) == 0;
     mem_free(data);
-    return ok;
+    return ok ? 0 : -1;
+}
+
+/* 1 when the game task of tid canonically names the pkg at path (as the system writes it):
+ * tasks written before /data paths were turned into /user/data ones are written again. */
+static int bgft_names(const char *tid, const char *url) {
+    uint32_t id = bgft_find(tid);
+    bgft_info_t info;
+    if (bgft_read_info(id, &info))
+        return 0;
+    return info.has_title && !strcmp(info.title_id, tid) && bgft_info_url_is(&info, url);
 }
 
 /* The error BGFT recorded in the game task of tid (record 0x68), 0 when none: a task
- * BGFT gave up on (it refuses the game until a restart with a clean task). */
+ * BGFT gave up on (it refuses the game until a restart with a clean task). A malformed
+ * or conflicting task is unknown, so it answers nonzero rather than looking healthy. */
 static uint32_t bgft_task_error(const char *tid) {
-    uint32_t id = bgft_find(tid), err = 0;
-    char p[64];
-    size_t len;
-    snprintf(p, sizeof(p), BGFT_DIR "/%08x/d0.pdb", id);
-    uint8_t *d = id ? read_all(p, &len) : NULL;
-    /* a u32, then records: key, length, length again, data */
-    for (size_t o = 4; d && o + 12 <= len;) {
-        uint32_t key, l;
-        memcpy(&key, d + o, 4);
-        memcpy(&l, d + o + 4, 4);
-        o += 12;
-        if (l > len - o)
-            break;
-        if (key == 0x68 && l == 4)
-            memcpy(&err, d + o, 4);
-        o += l;
-    }
-    mem_free(d);
-    return err;
+    uint32_t id = bgft_find(tid);
+    bgft_info_t info;
+    if (bgft_read_info(id, &info) || !info.has_title || strcmp(info.title_id, tid))
+        return 1;
+    return info.error_present ? info.error : 0;
 }
 
 /* A free odd id whose install task id (one below) is free too. */
