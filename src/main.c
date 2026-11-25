@@ -4150,10 +4150,10 @@ static void handle_klog_line(const char *line) {
             printf("[delete] screen %.200s\n", p);
         if (to) {
             to += 6;
-            int kind = delete_scene(to);
-            if (kind == 2 || (kind == 1 && g_deleting))
+            int action = delete_window_transition(delete_scene(to), g_deleting);
+            if (action > 0)
                 start_delete_window();
-            else if (!kind && g_deleting)
+            else if (action < 0)
                 end_delete_window();
         }
     } else if ((p = after(line, "launchApp("))) {
@@ -4185,7 +4185,8 @@ static void handle_klog_line(const char *line) {
         open_failed(id);
     } else if ((p = after(line, "GameWillDelete("))) {
         snprintf(id, sizeof(id), "%.9s", p);
-        managed_t *m = g_deleting ? managed_by(id, NULL) : NULL;
+        managed_t *found = g_deleting ? managed_by(id, NULL) : NULL;
+        managed_t *m = delete_user_event_ok(g_deleting, found != NULL) ? found : NULL;
         g_will_delete[0] = 0; /* a delete that worked wrote nothing more: forget the last one */
         if (m) {
             printf("[delete] %s deleted on the console\n", id);
@@ -4235,11 +4236,7 @@ static void handle_klog_line(const char *line) {
                         continue;
                     /* the log line carries pkg-controlled metadata: only a plain
                      * content-id charset may reach a path (no '/', '\\', '.', '..') */
-                    int plain = 1;
-                    for (const char *c = id; *c && plain; c++)
-                        plain = (*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') ||
-                               *c == '-' || *c == '_';
-                    if (!plain)
+                    if (!delete_content_id_plain(id))
                         break;
                     char path[96], hold[PATH_MAX];
                     snprintf(path, sizeof(path), STATE_DIR "/%s.removed", id);

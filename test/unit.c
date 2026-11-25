@@ -737,6 +737,36 @@ static void test_delete_scene(void) {
 
 
 
+
+/* DEL-4 (specs/delete.md): window state decides whether an uninstall-looking kernel event is
+ * a user delete. The table includes the ordering cases that previously caused data loss. */
+static void test_delete_window(void) {
+    printf("delete: when kernel uninstall events are user deletes\n");
+    static const struct {
+        int kind, open, want;
+    } trans[] = {
+        {2, 0, 2}, {2, 1, 2}, /* confirmed screens open or refresh the window */
+        {1, 1, 1},            /* dialogs keep it open */
+        {1, 0, 0},            /* a dialog alone does not open it */
+        {0, 1, -1},           /* an unrelated scene closes it */
+        {0, 0, 0},
+    };
+    for (size_t i = 0; i < sizeof(trans) / sizeof(trans[0]); i++) {
+        int got = delete_window_transition(trans[i].kind, trans[i].open);
+        if (got != trans[i].want)
+            printf("  kind %d open %d: %d, wanted %d\n", trans[i].kind, trans[i].open, got, trans[i].want);
+        CHECK(got == trans[i].want);
+    }
+    CHECK(delete_user_event_ok(1, 1));
+    CHECK(!delete_user_event_ok(0, 1));
+    CHECK(!delete_user_event_ok(1, 0));
+    CHECK(!delete_user_event_ok(0, 0));
+    CHECK(delete_content_id_plain("UP0000-CUSA00001_00-TESTGAME00000000"));
+    CHECK(!delete_content_id_plain("UP0000-CUSA00001_00-../GAME"));
+    CHECK(!delete_content_id_plain("UP0000/CUSA00001"));
+    CHECK(!delete_content_id_plain(""));
+}
+
 /* P4N-13 (specs/ps4-native.md): the BGFT parser is strict about the external PDB frame and
  * extracts only the canonical launch metadata used by scans. */
 static void test_bgft_info(void) {
@@ -942,6 +972,7 @@ int main(void) {
     test_stage();
     test_delete_target();
     test_delete_scene();
+    test_delete_window();
     test_web_net();
     test_emu();
     printf("%d checks, %d failed\n", g_checks, g_failed);

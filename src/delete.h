@@ -37,3 +37,34 @@ static inline int delete_scene_kind(const char *name) {
             return 1;
     return 0;
 }
+
+/* Delete-window transitions. Returns 2 when a scene opens/refreshes the window, 1 when a
+ * dialog merely keeps it open, -1 when an unrelated scene closes it, and 0 when nothing
+ * changes. kind is delete_scene_kind(). */
+static inline int delete_window_transition(int kind, int open) {
+    if (kind == 2)
+        return 2;
+    if (kind == 1 && open)
+        return 1;
+    if (!kind && open)
+        return -1;
+    return 0;
+}
+
+/* A GameWillDelete line is a user delete only inside the window and only for a title this
+ * daemon manages. Outside the window the same line can be the system's own uninstall work
+ * (panel removal or registration replacement) and must not delete library files. */
+static inline int delete_user_event_ok(int window_open, int managed) { return window_open && managed; }
+
+/* The content id in a kernel-log uninstall line is pkg-controlled text before it is a path
+ * component. Only the plain charset of content ids may pass; no slash, dot or control byte. */
+static inline int delete_content_id_plain(const char *id) {
+    if (!id || !*id)
+        return 0;
+    for (const char *c = id; *c; c++) {
+        if (!((*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '-' ||
+              *c == '_'))
+            return 0;
+    }
+    return 1;
+}

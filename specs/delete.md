@@ -29,9 +29,12 @@ Check: test (keep bars 2 and 5: data loss and past regressions). Test: `test/uni
 Source: AI-WORKFLOW.md rule 2.
 
 ### DEL-4: a delete event outside an open delete window is not a user delete
-System/PS4Mount uninstall work outside the window must not trigger deletion of library files. Content ids used
-in paths must be plain validated characters.
-Check: read until the state machine is extracted; then test. Source: regression documented in `src/main.c`.
+System/PS4Mount uninstall work outside the window must not trigger deletion of library files. The window
+opens only on a confirmed delete scene, stays open through its dialogs, closes on unrelated scenes, and a
+`GameWillDelete` event is accepted only while it is open. Content ids used in paths must be plain validated
+characters.
+Check: test (keep bar 2: data loss). Test: `test/unit.c` › `test_delete_window`. Source: regression documented
+in `src/main.c`.
 
 ## Non-goals
 
