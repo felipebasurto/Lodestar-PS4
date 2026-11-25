@@ -2098,9 +2098,13 @@ static int top_layer(const char *target, const char *dir) {
     return strcmp(sf.f_fstypename, "nullfs") || strcmp(sf.f_mntfromname, dir) ? -1 : 1;
 }
 
+static void mount_table_invalidate(void);
+
 static int nullfs_mount(const char *dir, const char *target) {
     struct iovec iov[] = {IOV("fstype"), IOV("nullfs"), IOV("from"), IOV(dir), IOV("fspath"), IOV(target)};
-    if (nmount(iov, 6, 0)) {
+    int rc = nmount(iov, 6, 0);
+    mount_table_invalidate();
+    if (rc) {
         printf("[mount] %s -> %s: %s\n", dir, target, strerror(errno));
         return -1;
     }
@@ -2193,10 +2197,62 @@ static int mount_marker_dir(const char *target, char *out, size_t n) {
     return 1;
 }
 
-/* Observe both the live top (statfs) and every table entry on the target (getfsstat).
- * The two answer different questions: statfs proves what the system would use now, while
- * the table still shows dead layers whose backing drive went away. */
-static void mount_scan(const char *target, const char *expected, mount_obs_t *o) {
+/* Full mount tables are large. One table may answer routine no-work observations for a
+ * second, but never a mutation decision: before unmounting or mounting, mount_scan_fresh
+ * replaces it and the pure planner runs again. Local mutations invalidate it at once. */
+static struct statfs *g_mount_table;
+static size_t g_mount_table_cap;
+static int g_mount_table_n, g_mount_table_valid;
+static time_t g_mount_table_at;
+
+static void mount_table_invalidate(void) {
+    g_mount_table_n = 0;
+    g_mount_table_valid = 0;
+    g_mount_table_at = 0;
+}
+
+static int mount_table(const struct statfs **out, int *nout, int fresh) {
+    time_t now = time(NULL);
+    if (!fresh && g_mount_table_valid && g_mount_table_at == now) {
+        *out = g_mount_table;
+        *nout = g_mount_table_n;
+        return 0;
+    }
+    g_mount_table_valid = 0;
+    int n = getfsstat(NULL, 0, MNT_NOWAIT);
+    if (n <= 0) {
+        mount_table_invalidate();
+        return -1;
+    }
+    size_t need = (size_t)n + 16;
+    if (need > g_mount_table_cap) {
+        struct statfs *next = mem_alloc(need * sizeof(*next));
+        if (!next) {
+            mount_table_invalidate();
+            return -1;
+        }
+        mem_free(g_mount_table);
+        g_mount_table = next;
+        g_mount_table_cap = need;
+    }
+    n = getfsstat(g_mount_table, (long)(g_mount_table_cap * sizeof(*g_mount_table)), MNT_NOWAIT);
+    if (n < 0) {
+        mount_table_invalidate();
+        return -1;
+    }
+    g_mount_table_n = n;
+    g_mount_table_valid = 1;
+    g_mount_table_at = now;
+    *out = g_mount_table;
+    *nout = n;
+    return 0;
+}
+
+/* Observe both the live top (statfs, always fresh) and every table entry on the target
+ * (getfsstat, cached only as MNT-7 allows). The two answer different questions: statfs
+ * proves what the system would use now, while the table still shows dead layers whose
+ * backing drive went away. */
+static void mount_scan_mode(const char *target, const char *expected, mount_obs_t *o, int fresh) {
     memset(o, 0, sizeof(*o));
     o->all_owned = 1;
     char marker[PATH_MAX];
@@ -2209,18 +2265,10 @@ static void mount_scan(const char *target, const char *expected, mount_obs_t *o)
         o->top_exact = owner == MOUNT_OWNER_EXACT;
         o->top_owned = mount_owner_owned(owner);
     }
-    int n = getfsstat(NULL, 0, MNT_NOWAIT);
-    if (n <= 0)
+    const struct statfs *list = NULL;
+    int n = 0;
+    if (mount_table(&list, &n, fresh))
         return;
-    size_t len = sizeof(struct statfs) * (size_t)(n + 16);
-    struct statfs *list = mem_alloc(len);
-    if (!list)
-        return;
-    n = getfsstat(list, (long)len, MNT_NOWAIT);
-    if (n < 0) {
-        mem_free(list);
-        return;
-    }
     o->table_known = 1;
     for (int i = 0; i < n; i++) {
         if (strcmp(list[i].f_mntonname, target))
@@ -2236,7 +2284,20 @@ static void mount_scan(const char *target, const char *expected, mount_obs_t *o)
             }
         }
     }
-    mem_free(list);
+}
+
+static void mount_scan(const char *target, const char *expected, mount_obs_t *o) {
+    mount_scan_mode(target, expected, o, 0);
+}
+
+static void mount_scan_fresh(const char *target, const char *expected, mount_obs_t *o) {
+    mount_scan_mode(target, expected, o, 1);
+}
+
+static int unmount_tracked(const char *target, int flags) {
+    int rc = unmount(target, flags);
+    mount_table_invalidate(); /* the syscall may have succeeded or partially raced: no stale table */
+    return rc;
 }
 
 static int mount_refused(const char *target, const mount_obs_t *o, int unknown) {
@@ -2255,25 +2316,44 @@ static int mount_refused(const char *target, const mount_obs_t *o, int unknown) 
 
 /* Remove owned layers until the target has no layer at all. force may force the removal of
  * an owned layer, never of a foreign one; foreign or unknown ownership is a failure. */
-static int detach_target(const char *target, const char *expected, int force) {
+static int detach_target_mode(const char *target, const char *expected, int force, int cache_ok) {
     if (masked_path(target))
         return 0;
     for (int i = 0; i < 8; i++) {
         mount_obs_t o;
-        mount_scan(target, expected, &o);
+        mount_scan_mode(target, expected, &o, !cache_ok);
         mount_step_t step = mount_detach_step(o.table_known, o.layers, o.top, o.top_owned, o.all_owned);
         if (step == MOUNT_STEP_DONE)
             return 0;
         if (step != MOUNT_STEP_UNMOUNT)
             return mount_refused(target, &o, step == MOUNT_STEP_UNKNOWN);
+        if (cache_ok) { /* the first observation may be the snapshot; mutation never uses it */
+            mount_scan_fresh(target, expected, &o);
+            step = mount_detach_step(o.table_known, o.layers, o.top, o.top_owned, o.all_owned);
+            if (step == MOUNT_STEP_DONE)
+                return 0;
+            if (step != MOUNT_STEP_UNMOUNT)
+                return mount_refused(target, &o, step == MOUNT_STEP_UNKNOWN);
+        }
         int flags = force || !o.top ? MNT_FORCE : 0;
-        if (unmount(target, flags)) {
+        if (unmount_tracked(target, flags)) {
             printf("[mount] unmount %s: %s\n", target, strerror(errno));
             return -1;
         }
     }
     printf("[mount] %s: still mounted after 8 owned layers\n", target);
     return -1;
+}
+
+/* Default is fresh: delete, uninstall and installer preparation never use the no-work snapshot. */
+static int detach_target(const char *target, const char *expected, int force) {
+    return detach_target_mode(target, expected, force, 0);
+}
+
+/* Routine scan maintenance may use the bounded no-work snapshot; mutations inside it are
+ * still confirmed fresh before any unmount. */
+static int detach_target_routine(const char *target, const char *expected, int force) {
+    return detach_target_mode(target, expected, force, 1);
 }
 
 static int mount_dir(const char *dir, const char *target) {
@@ -2301,11 +2381,17 @@ static int mount_dir(const char *dir, const char *target) {
         mount_prepare_t step = mount_prepare_step(o.table_known, o.layers, o.top, o.top_exact, o.top_owned, o.all_owned);
         if (step == MOUNT_PREPARE_ALREADY)
             return 0;
+        if (step == MOUNT_PREPARE_MOUNT || step == MOUNT_PREPARE_UNMOUNT) {
+            mount_scan_fresh(target, dir, &o);
+            step = mount_prepare_step(o.table_known, o.layers, o.top, o.top_exact, o.top_owned, o.all_owned);
+            if (step == MOUNT_PREPARE_ALREADY)
+                return 0;
+        }
         if (step == MOUNT_PREPARE_MOUNT) {
             can_mount = 1;
         } else if (step == MOUNT_PREPARE_UNMOUNT) {
             int flags = o.top ? 0 : MNT_FORCE;
-            if (unmount(target, flags)) {
+            if (unmount_tracked(target, flags)) {
                 printf("[mount] unmount %s: %s\n", target, strerror(errno));
                 return -1;
             }
@@ -2389,7 +2475,7 @@ static int mount_paths(const char *tid, int has_patch, const char (*dtids)[10], 
     if (has_patch) {
         if (mount_dir(hold, target))
             return -1;
-    } else if (detach_target(target, hold, 1)) {
+    } else if (detach_target_routine(target, hold, 1)) {
         return -1;
     }
     for (int i = 0; g_cfg.dlc_mode == DLC_EXTERNAL && i < ndtids; i++) {
@@ -2757,16 +2843,16 @@ static void unmask_user_app(char (*tids)[10], int n) {
     char target[64];
     for (int i = 0; i < n; i++) {
         snprintf(target, sizeof(target), "/user/app/%s", tids[i]);
-        if (user_app_masked() && mounted_from(target, NULL, 0) && unmount(target, 0) && unmount(target, MNT_FORCE))
+        if (user_app_masked() && mounted_from(target, NULL, 0) && unmount_tracked(target, 0) && unmount_tracked(target, MNT_FORCE))
             printf("[reg] unmount %s: %s\n", target, strerror(errno));
     }
     /* the system keeps the folder open for a moment after AppInstallAll returned */
     for (int i = 0; i < 12 && user_app_masked(); i++) {
-        if (!unmount("/user/app", 0))
+        if (!unmount_tracked("/user/app", 0))
             break;
         pump_events(250);
     }
-    if (user_app_masked() && unmount("/user/app", MNT_FORCE))
+    if (user_app_masked() && unmount_tracked("/user/app", MNT_FORCE))
         printf("[reg] unmount /user/app: %s\n", strerror(errno));
     if (user_app_masked())
         printf("[reg] /user/app still shows only the new games\n");
@@ -3994,7 +4080,7 @@ static void emu_sync(void) {
         int dead = dead_layer(on);
         if (!emu_stale_unmount_ok(emu_is_dir_now(from), dead, layers_on(on)))
             continue;
-        if (unmount(on, MNT_FORCE))
+        if (unmount_tracked(on, MNT_FORCE))
             printf("[emu] %s: could not unmount %s: %s\n", on, from, strerror(errno));
         else {
             printf("[emu] %s: %s is gone, taken off\n", on, from);
@@ -4063,7 +4149,7 @@ static void release_dlc_mounts(void) {
         snprintf(expected, sizeof(expected), HOLD_DIR "/addcont/%.9s", tid);
         if (!is_game_id(tid) || strcmp(from, expected) || top_layer(on, from) != 1)
             continue;
-        if (unmount(on, 0))
+        if (unmount_tracked(on, 0))
             printf("[dlc] could not unmount %s: %s\n", on, strerror(errno));
         else
             printf("[dlc] %s unmounted for mode %s\n", tid, dlc_mode_name(g_cfg.dlc_mode));

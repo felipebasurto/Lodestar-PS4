@@ -65,6 +65,20 @@ Emulator mounts under `/data` are not game-target layers and continue to use the
 pairing of `specs/emulators.md`. This spec does not widen or narrow that contract.
 Check: read.
 
+### MNT-7: cached mount-table observations may only prove no-work states
+Reading the full mount table once per title per scan is prohibited: the table can hold over
+a thousand entries. A bounded one-second snapshot may answer routine observations, and local
+mount/unmount mutations invalidate it immediately. The snapshot may prove only no-work states
+(`DONE` or `ALREADY`) in routine scan maintenance. Before any `unmount(2)` or `nmount(2)`
+decision is executed, the target is observed again from a fresh table and the same pure
+planner decision is recomputed; if the fresh facts no longer request that mutation, no
+mutation occurs. Detaches that precede delete, uninstall or installer operations do not use
+the snapshot at all. Destructive postconditions such as `layers_on_failclosed` still read
+fresh rather than using the snapshot.
+Check: read (kernel mount-table integration; pure ownership decisions remain covered by
+`test/unit.c` › `test_mountplan`, and compile boundary by `test/sdkcheck.sh`).
+Source: scan performance audit after P4N-15.
+
 ## Non-goals
 
 - Unmounting mounts made by other payloads or by the user.
