@@ -2242,6 +2242,21 @@ static int served_elsewhere(const title_info_t *t) {
     return exists(pkg);
 }
 
+/* These two stay lazy in title_state's chain, as the direct scans were before: when the
+ * database already says the title is unregistered no task lookup happens, and the error is
+ * read only after the exact canonical URL matched. */
+static int title_bgft_names(const char *tid, const char *url) {
+    const bgftscan_entry_t *scan_task = bgftscan_find(&g_bgftscan, tid);
+    return g_bgftscan.usable ? bgftscan_names(scan_task, url) : bgft_names(tid, url);
+}
+
+static uint32_t title_bgft_error(const char *tid) {
+    if (!g_bgftscan.usable)
+        return bgft_task_error(tid);
+    const bgftscan_entry_t *scan_task = bgftscan_find(&g_bgftscan, tid);
+    return scan_task ? scan_task->error : 0;
+}
+
 static int title_state(const title_info_t *t) {
     const char *tid = t->title_id;
     if (installed_internally(tid) || removed(tid))
@@ -2254,12 +2269,9 @@ static int title_state(const title_info_t *t) {
     char app_url[PATH_MAX + 8];
     pkg_url(tid, "app", t->app_path, app_url, sizeof(app_url));
     /* folders set up by 0.3.1 and older lack the internal folder: registered again */
-    const bgftscan_entry_t *scan_task = bgftscan_find(&g_bgftscan, tid);
-    int names = g_bgftscan.usable ? bgftscan_names(scan_task, app_url) : bgft_names(tid, app_url);
-    uint32_t task_error = g_bgftscan.usable ? (scan_task ? scan_task->error : 0) : bgft_task_error(tid);
     const char *why = !db_is_registered(tid)                ? "not registered"
-                      : !names                              ? "no game task naming its pkg"
-                      : task_error                          ? "its game task holds an error"
+                      : !title_bgft_names(tid, app_url)      ? "no game task naming its pkg"
+                      : title_bgft_error(tid)                ? "its game task holds an error"
                       : !marker_matches(tid, t->marker)     ? "its pkgs changed"
                       : !hold_ready("app", tid, "app.pkg", t->app_path) ? "game link"
                       : t->has_patch && !hold_ready("patch", tid, "patch.pkg", t->patch_path) ? "update link"
