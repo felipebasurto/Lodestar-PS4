@@ -24,3 +24,11 @@ The modern panel keeps library filters and management in separate menus. Back cl
 before leaving the PS4 panel.
 Check: test for reaching details, filtering and Back (`test/web/panel.test.js`), read for hierarchy.
 Source: user feedback on the blue shelf.
+
+### PANEL-4: write requests come only from local network addresses
+
+The panel has no password. A write request must carry the panel header and come from loopback,
+a private LAN range, link-local, carrier-grade NAT space, or a local socket. Public IPv4 addresses
+are refused before any file or settings write.
+Check: test (keep bar 2: security boundary). Test: `test/unit.c` › `test_web_net`.
+Source: existing panel threat model.

@@ -3,6 +3,7 @@
  * Minimal HTTP server for the PS4Mount panel. */
 /* Minimal HTTP server for the PS4Mount panel (one request per connection). */
 #include "web.h"
+#include "webnet.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -155,8 +156,7 @@ static int may_write(int fd, const char *req) {
     if (getpeername(fd, (struct sockaddr *)&ss, &sl) || ss.ss_family != AF_INET)
         return 1; /* a local socket (the host tests) */
     uint32_t a = ntohl(((struct sockaddr_in *)&ss)->sin_addr.s_addr);
-    return (a >> 24) == 10 || (a >> 24) == 127 || (a >> 20) == 0xac1 || (a >> 16) == 0xc0a8 ||
-           (a >> 16) == 0xa9fe || (a >> 22) == 0x191;
+    return web_net_ok(a);
 }
 
 /* The body after what was read with the headers, up to len bytes. NULL on a short

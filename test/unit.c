@@ -19,6 +19,7 @@
 #include "origin.h"
 #include "pkg.h"
 #include "stage.h"
+#include "webnet.h"
 #include "pdb_template.h"
 
 static int g_failed, g_checks;
@@ -731,6 +732,33 @@ static void test_delete_scene(void) {
     }
 }
 
+
+/* PANEL-4 (specs/panel.md): the unauthenticated panel's write boundary is the exact set of
+ * local IPv4 networks. These rows include every mask boundary. */
+static void test_web_net(void) {
+    printf("panel: which network peers may write\n");
+#define IP(a, b, c, d) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(c) << 8) | (uint32_t)(d))
+    static const struct {
+        uint32_t addr;
+        int ok;
+    } rows[] = {
+        {IP(9, 255, 255, 255), 0}, {IP(10, 0, 0, 0), 1}, {IP(10, 255, 255, 255), 1}, {IP(11, 0, 0, 0), 0},
+        {IP(126, 255, 255, 255), 0}, {IP(127, 0, 0, 1), 1}, {IP(128, 0, 0, 0), 0},
+        {IP(172, 15, 255, 255), 0}, {IP(172, 16, 0, 0), 1}, {IP(172, 31, 255, 255), 1}, {IP(172, 32, 0, 0), 0},
+        {IP(192, 167, 255, 255), 0}, {IP(192, 168, 0, 1), 1}, {IP(192, 168, 255, 255), 1}, {IP(192, 169, 0, 0), 0},
+        {IP(169, 253, 255, 255), 0}, {IP(169, 254, 0, 1), 1}, {IP(169, 255, 0, 0), 0},
+        {IP(100, 63, 255, 255), 0}, {IP(100, 64, 0, 0), 1}, {IP(100, 127, 255, 255), 1}, {IP(100, 128, 0, 0), 0},
+        {IP(8, 8, 8, 8), 0}, {IP(0, 0, 0, 0), 0}, {IP(255, 255, 255, 255), 0},
+    };
+#undef IP
+    for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++) {
+        int got = web_net_ok(rows[i].addr);
+        if (got != rows[i].ok)
+            printf("  0x%08x: %d, wanted %d\n", rows[i].addr, got, rows[i].ok);
+        CHECK(got == rows[i].ok);
+    }
+}
+
 static void test_emu(void) {
     printf("emulators: which names are mounted over the console's folders\n");
     static const struct {
@@ -783,6 +811,7 @@ int main(void) {
     test_stage();
     test_delete_target();
     test_delete_scene();
+    test_web_net();
     test_emu();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;
