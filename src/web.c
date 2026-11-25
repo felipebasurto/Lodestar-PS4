@@ -56,7 +56,31 @@ int web_listen(void) {
     return s;
 }
 
+/* Owner responses are captured per thread while the owner decides them. Worker replies keep
+ * writing directly because no capture is installed on those threads. */
+typedef struct {
+    buf_t out;
+} web_capture_t;
+static pthread_key_t g_capture_key;
+static pthread_once_t g_capture_once = PTHREAD_ONCE_INIT;
+static int g_capture_key_ok;
+static void capture_key_make(void) { g_capture_key_ok = !pthread_key_create(&g_capture_key, NULL); }
+static int capture_key_ready(void) {
+    pthread_once(&g_capture_once, capture_key_make);
+    return g_capture_key_ok;
+}
+static web_capture_t *capture_current(void) {
+    if (!capture_key_ready())
+        return NULL;
+    return pthread_getspecific(g_capture_key);
+}
+
 static void send_all(int fd, const void *p, size_t n) {
+    web_capture_t *cap = capture_current();
+    if (cap) {
+        buf_put(&cap->out, p, n);
+        return;
+    }
     const char *c = p;
     while (n) {
         ssize_t w = write(fd, c, n);
@@ -231,12 +255,23 @@ typedef struct web_owner_job {
     struct web_owner_job *next;
 } web_owner_job_t;
 
+typedef struct web_write_job {
+    int fd;
+    uint8_t *data;
+    size_t len;
+    struct web_write_job *next;
+} web_write_job_t;
+
 static pthread_mutex_t g_pool_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_pool_cv = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t g_pool_idle_cv = PTHREAD_COND_INITIALIZER;
 static pthread_t g_pool_threads[WEB_POOL_THREADS];
 static int g_pool_nthreads, g_pool_started, g_pool_quit;
 static int g_pool_fds[WEB_POOL_QUEUE], g_pool_head, g_pool_count;
+#define WEB_WRITE_QUEUE 8
+#define WEB_WRITE_BYTES (1u << 20)
+static web_write_job_t *g_write_head, *g_write_tail;
+static unsigned g_write_count, g_write_bytes, g_write_active;
 static int g_pool_active[WEB_POOL_THREADS];
 static unsigned g_pool_inflight;
 static int g_wake_r = -1, g_wake_w = -1;
@@ -306,8 +341,43 @@ int web_owner_pending(void) {
     return n;
 }
 
+/* fd and captured bytes move together. Failure closes the connection rather than sending a
+ * response whose completion would depend on unbounded memory or on the owner blocking. */
+static int web_write_enqueue(int fd, buf_t *out) {
+    if (!out->data || !out->len)
+        return -1;
+    web_write_job_t *job = mem_alloc(sizeof(*job));
+    if (!job)
+        return -1;
+    job->fd = fd;
+    job->data = out->data;
+    job->len = out->len;
+    job->next = NULL;
+    pthread_mutex_lock(&g_pool_mu);
+    if (!g_pool_started || g_pool_quit || g_write_count >= WEB_WRITE_QUEUE ||
+        out->len > WEB_WRITE_BYTES - g_write_bytes) {
+        pthread_mutex_unlock(&g_pool_mu);
+        mem_free(job);
+        return -1;
+    }
+    if (g_write_tail)
+        g_write_tail->next = job;
+    else
+        g_write_head = job;
+    g_write_tail = job;
+    g_write_count++;
+    g_write_bytes += out->len;
+    g_pool_inflight++;
+    pthread_cond_signal(&g_pool_cv);
+    pthread_mutex_unlock(&g_pool_mu);
+    out->data = NULL;
+    out->len = out->cap = 0;
+    return 0;
+}
+
 /* Main-loop owner only: executes every queued parsed request through the same dispatcher as
- * the historical synchronous path. dispatch closes the fd unless it explicitly transfers it. */
+ * the historical synchronous path. Response bytes are captured whole and handed to the writer
+ * queue; direct worker dispatch retains the historical close unless it explicitly transfers fd. */
 void web_owner_pump(void) {
     static int pumping; /* main-loop owner only: registration may pump events recursively */
     if (pumping)
@@ -326,7 +396,18 @@ void web_owner_pump(void) {
         pthread_mutex_unlock(&g_owner_mu);
         if (!job)
             break;
+        if (!capture_key_ready()) {
+            web_dispatch(job->fd, &job->req); /* direct historical fallback: dispatch closes fd */
+            mem_free(job);
+            continue;
+        }
+        web_capture_t cap = {0};
+        pthread_setspecific(g_capture_key, &cap);
         web_dispatch(job->fd, &job->req);
+        pthread_setspecific(g_capture_key, NULL);
+        if (web_write_enqueue(job->fd, &cap.out))
+            close(job->fd);
+        buf_free(&cap.out);
         mem_free(job);
     }
     web_owner_drain_wake();
@@ -337,19 +418,42 @@ static void *web_pool_worker(void *arg) {
     int slot = (int)(intptr_t)arg;
     for (;;) {
         pthread_mutex_lock(&g_pool_mu);
-        while (!g_pool_count && !g_pool_quit)
+        while (!g_pool_count && !g_write_count && !g_pool_quit)
             pthread_cond_wait(&g_pool_cv, &g_pool_mu);
-        if (!g_pool_count && g_pool_quit) {
+        if (!g_pool_count && !g_write_count && g_pool_quit) {
             pthread_mutex_unlock(&g_pool_mu);
             break;
         }
-        int fd = g_pool_fds[g_pool_head];
-        g_pool_head = (g_pool_head + 1) % WEB_POOL_QUEUE;
-        g_pool_count--;
+        web_write_job_t *write_job = NULL;
+        int fd;
+        if (g_write_head) {
+            write_job = g_write_head;
+            g_write_head = write_job->next;
+            if (!g_write_head)
+                g_write_tail = NULL;
+            g_write_count--;
+            g_write_active++;
+            fd = write_job->fd;
+        } else {
+            fd = g_pool_fds[g_pool_head];
+            g_pool_head = (g_pool_head + 1) % WEB_POOL_QUEUE;
+            g_pool_count--;
+        }
         g_pool_active[slot] = fd;
         pthread_mutex_unlock(&g_pool_mu);
 
-        web_handle_connection(fd, 1);
+        if (write_job) {
+            send_all(write_job->fd, write_job->data, write_job->len);
+            close(write_job->fd);
+            size_t len = write_job->len;
+            mem_free(write_job->data);
+            mem_free(write_job);
+            pthread_mutex_lock(&g_pool_mu);
+            g_write_bytes -= len;
+            g_write_active--;
+            pthread_mutex_unlock(&g_pool_mu);
+        } else
+            web_handle_connection(fd, 1);
 
         pthread_mutex_lock(&g_pool_mu);
         g_pool_active[slot] = -1;
@@ -430,6 +534,13 @@ static int web_pool_offer(int fd) {
     return rc;
 }
 
+int web_write_busy(void) {
+    pthread_mutex_lock(&g_pool_mu);
+    int busy = g_write_count || g_write_active;
+    pthread_mutex_unlock(&g_pool_mu);
+    return busy;
+}
+
 void web_pool_idle_wait(void) {
     pthread_mutex_lock(&g_pool_mu);
     while (g_pool_inflight)
@@ -451,9 +562,21 @@ void web_stop(void) {
                 g_pool_inflight--;
             close(fd); /* never parsed: no application intent is lost */
         }
+        while (g_write_head) {
+            web_write_job_t *job = g_write_head;
+            g_write_head = job->next;
+            g_write_count--;
+            g_write_bytes -= job->len;
+            if (g_pool_inflight)
+                g_pool_inflight--;
+            close(job->fd); /* never transmitted: no partial owner response is sent by policy */
+            mem_free(job->data);
+            mem_free(job);
+        }
+        g_write_tail = NULL;
         for (int i = 0; i < WEB_POOL_THREADS; i++)
             if (g_pool_active[i] >= 0)
-                shutdown(g_pool_active[i], SHUT_RDWR); /* wake the read; the worker still owns close */
+                shutdown(g_pool_active[i], SHUT_RDWR); /* wake the read/write; the worker still owns close */
         nthreads = g_pool_nthreads;
         for (int i = 0; i < nthreads; i++)
             threads[i] = g_pool_threads[i];
@@ -468,6 +591,7 @@ void web_stop(void) {
     g_pool_started = g_pool_nthreads = 0;
     g_pool_quit = 0;
     g_pool_head = g_pool_count = 0;
+    g_write_count = g_write_bytes = g_write_active = 0;
     g_pool_inflight = 0;
     for (int i = 0; i < WEB_POOL_THREADS; i++)
         g_pool_active[i] = -1;
@@ -932,5 +1056,6 @@ static void web_dispatch(int fd, web_req_t *r) {
     } else {
         reply(fd, "404 Not Found", "text/plain", "not found\n", 10);
     }
-    close(fd);
+    if (!capture_current())
+        close(fd);
 }

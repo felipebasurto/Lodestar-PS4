@@ -68,9 +68,16 @@ to the owner queue. The main loop executes it through the same dispatcher, prese
 response contract. A worker must adjust the body pointer when copying the request into a
 queue node; it may never leave that pointer referring to its own stack. A pipe or equivalent
 wake mechanism tells the main loop that owner work is pending, so responses do not wait for
-the normal select timeout. Shutdown interrupts active connection reads with `shutdown()`,
+the normal select timeout.
+
+Owner responses are captured whole while they are produced, then their fd and bytes move
+together to a bounded writer queue. A worker transmits every byte and closes the fd; the
+owner never waits for a slow client socket. A response is never truncated by policy: if the
+writer queue cannot accept it whole, the connection is closed instead. The capture boundary
+is private to the web server and applies only to owner dispatch; worker dispatch writes to
+its socket directly. Shutdown interrupts active connection reads/writes with `shutdown()`,
 joins the bounded workers, and closes/drains queued fds without executing partially owned
-requests.
+requests or transmitting partial queued responses.
 
 Drive and links status may be produced concurrently. Their mutating actions are serialized
 at the web boundary, preserving the single-panel-caller ordering those subsystems had before

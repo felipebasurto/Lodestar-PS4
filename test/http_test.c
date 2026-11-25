@@ -134,6 +134,16 @@ static void read_response_close(int fd, char *out, size_t cap) {
     close(fd);
 }
 
+static size_t drain_response_close(int fd) {
+    char tmp[8192];
+    size_t n = 0;
+    ssize_t r;
+    while ((r = read(fd, tmp, sizeof(tmp))) > 0)
+        n += (size_t)r;
+    close(fd);
+    return n;
+}
+
 int main(void) {
     const char *r;
     printf("pages\n");
@@ -399,6 +409,25 @@ int main(void) {
         CHECK(web_owner_pending() == 0);
         read_response_close(c, resp, sizeof(resp));
         CHECK(status(resp, "200"));
+
+        g_stub_games_pad = 768 * 1024;
+        c = panel_conn();
+        CHECK(c >= 0);
+        if (c >= 0) {
+            int small = 2048;
+            setsockopt(c, SOL_SOCKET, SO_RCVBUF, &small, sizeof(small));
+            send_req_close_write(c, "GET /api/games HTTP/1.1\r\n\r\n");
+            web_serve(ls);
+            web_pool_idle_wait();
+            CHECK(web_owner_pending() == 1);
+            web_owner_pump();
+            CHECK(web_write_busy()); /* the owner finished; transmission is writer work now */
+            size_t bytes = drain_response_close(c);
+            web_pool_idle_wait();
+            CHECK(!web_write_busy());
+            CHECK(bytes > (size_t)g_stub_games_pad);
+        }
+        g_stub_games_pad = 0;
 
         before = g_stub_calls;
         c = panel_conn();

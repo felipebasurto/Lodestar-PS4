@@ -59,6 +59,8 @@ void web_owner_pump(void);
 int web_owner_wake_fd(void);
 /* Number of parsed requests waiting for the owner. */
 int web_owner_pending(void);
+/* 1 while a captured owner response is queued or being written (test/shutdown aid). */
+int web_write_busy(void);
 /* 1 when the route only uses static state or an internally synchronized subsystem. */
 int web_route_worker_safe(const char *path, int post);
 /* Waits until accepted worker work is finished or queued for the owner (test/shutdown aid). */

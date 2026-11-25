@@ -11,6 +11,7 @@
 
 char g_stub_call[64], g_stub_arg[4096];
 int g_stub_calls;
+int g_stub_games_pad;
 
 static int record(const char *call, const char *arg, char *msg, size_t cap) {
     snprintf(g_stub_call, sizeof(g_stub_call), "%s", call);
@@ -20,7 +21,12 @@ static int record(const char *call, const char *arg, char *msg, size_t cap) {
     return 0;
 }
 
-void app_games_json(buf_t *out) { buf_printf(out, "{\"version\":\"test\",\"games\":[]}"); }
+void app_games_json(buf_t *out) {
+    buf_printf(out, "{\"version\":\"test\",\"games\":[],\"pad\":\"");
+    for (int i = 0; i < g_stub_games_pad; i++)
+        buf_put(out, "x", 1);
+    buf_printf(out, "\"}");
+}
 int app_add(const char *tid, char *msg, size_t cap) { return record("add", tid, msg, cap); }
 int app_remove(const char *tid, char *msg, size_t cap) { return record("remove", tid, msg, cap); }
 void app_rescan(void) {
