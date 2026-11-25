@@ -9,12 +9,15 @@
 #include <unistd.h>
 
 #include "autorun.h"
+#include "bgftinfo.h"
+#include "bgftscan.h"
 #include "delete.h"
 #include "build.h"
 #include "check.h"
 #include "crypto.h"
 #include "emu.h"
 #include "lang.h"
+#include "mem.h"
 #include "pkgmake.h"
 #include "origin.h"
 #include "pkg.h"
@@ -733,6 +736,132 @@ static void test_delete_scene(void) {
 }
 
 
+
+/* P4N-13 (specs/ps4-native.md): the BGFT parser is strict about the external PDB frame and
+ * extracts only the canonical launch metadata used by scans. */
+static void test_bgft_info(void) {
+    printf("BGFT game task parser\n");
+    pkg_t app;
+    fake_pkg(&app, "UP0000-CUSA00001_00-TESTGAME00000000", 271384576);
+    const char *url = "/mnt/usb0/ps4/CUSA00001/app.pkg";
+    buf_t json = {0}, b = {0};
+    build_app_json(&json, &app, url);
+    bgft_task_t t = {0, 0x13520001, 0x00e31e2713ddac1eull, 0xf092, &app, "app.pkg", url, &json, NULL};
+    build_bgft_task(&b, &t);
+    bgft_info_t info;
+    CHECK(bgft_task_parse(b.data, b.len, &info) == 0);
+    CHECK(info.records == 41);
+    CHECK(info.title_id && info.title_id_len == 9 && !memcmp(info.title_id, "CUSA00001", 9));
+    CHECK(info.url && info.url_len == strlen(url) && !memcmp(info.url, url, info.url_len));
+    CHECK(info.error_present && info.error == 0);
+    CHECK(bgft_bytes_contains(info.url, info.url_len, (const uint8_t *)url, strlen(url)));
+    char legacy_tid[10] = "";
+    CHECK(bgft_legacy_title_id(b.data, b.len, legacy_tid));
+    CHECK(!strcmp(legacy_tid, "CUSA00001"));
+
+    uint8_t *bad = mem_alloc(b.len);
+    CHECK(bad != NULL);
+    memcpy(bad, b.data, b.len);
+    bad[0] = 1;
+    CHECK(bgft_task_parse(bad, b.len, &info) == -1);
+    memcpy(bad, b.data, b.len);
+    bad[8] ^= 1; /* first length no longer equals the repeated length */
+    CHECK(bgft_task_parse(bad, b.len, &info) == -1);
+    memcpy(bad, b.data, b.len);
+    CHECK(bgft_task_parse(bad, b.len - 1, &info) == -1);
+    mem_free(bad);
+    buf_free(&json);
+    buf_free(&b);
+}
+
+
+static void write_bin(const char *path, const void *data, size_t len) {
+    FILE *f = fopen(path, "wb");
+    CHECK(f != NULL);
+    if (f) {
+        CHECK(fwrite(data, 1, len, f) == len);
+        CHECK(fclose(f) == 0);
+    }
+}
+
+/* P4N-13 integration (specs/ps4-native.md): one directory load answers title, URL and error
+ * queries for every task, including a malformed legacy task, without rereading PDB files. */
+static void test_bgft_scan(void) {
+    printf("BGFT scan snapshot\n");
+    char root[] = "/tmp/ps4mount-bgftscan-XXXXXX";
+    if (!mkdtemp(root)) {
+        CHECK(0);
+        return;
+    }
+    pkg_t app, app2;
+    fake_pkg(&app, "UP0000-CUSA00001_00-TESTGAME00000000", 271384576);
+    fake_pkg(&app2, "UP0000-CUSA00002_00-TESTGAME00000000", 271384576);
+    const char *url = "/mnt/usb0/ps4/CUSA00001/app.pkg";
+    buf_t json = {0}, one = {0}, two = {0};
+    build_app_json(&json, &app, url);
+    bgft_task_t t = {0, 0x13520001, 1, 0xf000, &app, "app.pkg", url, &json, NULL};
+    bgft_task_t t2 = {0, 0x13520001, 1, 0xf002, &app2, "app.pkg", url, &json, NULL};
+    build_bgft_task(&one, &t);
+    build_bgft_task(&two, &t2);
+    /* put a nonzero error in the second task's canonical error record, walking the PDB
+     * frame rather than relying on where its key bytes happen to occur */
+    int patched = 0;
+    for (size_t off = 4; off + 12 <= two.len;) {
+        uint32_t key = le32(two.data + off), n = le32(two.data + off + 4);
+        if (n != le32(two.data + off + 8) || n > two.len - off - 12)
+            break;
+        if (key == 0x68 && n == 4) {
+            two.data[off + 12] = 0x19;
+            patched = 1;
+            break;
+        }
+        off += 12 + n;
+    }
+    CHECK(patched);
+    char dir[256], file[320];
+    snprintf(dir, sizeof(dir), "%s/0000f001", root);
+    CHECK(mkdir(dir, 0777) == 0);
+    snprintf(file, sizeof(file), "%s/d0.pdb", dir);
+    write_bin(file, one.data, one.len);
+    snprintf(dir, sizeof(dir), "%s/0000f003", root);
+    CHECK(mkdir(dir, 0777) == 0);
+    snprintf(file, sizeof(file), "%s/d0.pdb", dir);
+    write_bin(file, two.data, two.len);
+    const char legacy[] = "xx/user/app/CUSA00003/app.pkg yy";
+    snprintf(dir, sizeof(dir), "%s/0000f005", root);
+    CHECK(mkdir(dir, 0777) == 0);
+    snprintf(file, sizeof(file), "%s/d0.pdb", dir);
+    write_bin(file, legacy, sizeof(legacy) - 1);
+    snprintf(dir, sizeof(dir), "%s/0000f000", root); /* install task id: outside the game range */
+    CHECK(mkdir(dir, 0777) == 0);
+
+    bgftscan_t scan;
+    bgftscan_init(&scan);
+    bgftscan_load(&scan, root, 0xf001, 0xffff);
+    CHECK(scan.usable);
+    CHECK(scan.count == 3);
+    const bgftscan_entry_t *e = bgftscan_find(&scan, "CUSA00001");
+    CHECK(e && e->id == 0xf001 && !e->malformed);
+    CHECK(bgftscan_names(e, url));
+    CHECK(!bgftscan_names(e, "/mnt/usb0/ps4/CUSA00001/other.pkg"));
+    CHECK(e && e->error == 0);
+    e = bgftscan_find(&scan, "CUSA00002");
+    CHECK(e && e->id == 0xf003 && e->error == 0x19);
+    e = bgftscan_find(&scan, "CUSA00003");
+    CHECK(e && e->malformed && e->error != 0);
+    CHECK(!bgftscan_names(e, "/user/app/CUSA00003/app.pkg"));
+    CHECK(!bgftscan_find(&scan, "CUSA00009"));
+    bgftscan_free(&scan);
+    CHECK(scan.entries == NULL && scan.count == 0 && !scan.usable);
+
+    char cmd[384];
+    snprintf(cmd, sizeof(cmd), "rm -rf '%s'", root);
+    CHECK(system(cmd) == 0);
+    buf_free(&json);
+    buf_free(&one);
+    buf_free(&two);
+}
+
 /* PANEL-4 (specs/panel.md): the unauthenticated panel's write boundary is the exact set of
  * local IPv4 networks. These rows include every mask boundary. */
 static void test_web_net(void) {
@@ -802,6 +931,8 @@ int main(void) {
     test_pbm();
     test_ac_pdb();
     test_bgft_task();
+    test_bgft_info();
+    test_bgft_scan();
     test_check();
     test_lang();
     test_license();

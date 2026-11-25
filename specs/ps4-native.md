@@ -80,6 +80,14 @@ Reports and documentation label hardware-verified facts, host-test evidence, com
 and unresolved questions. A missing console/drive or failed read is never reported as absence.
 Check: read. Source: user requirement for agent-auditable output.
 
+### P4N-13: BGFT task state is parsed once per scan epoch
+A scan evaluates titles against one bounded snapshot of BGFT task metadata. The parser reads the canonical
+PDB records (`0x7c` title id, `0x1388` package URL, `0x68` error) with strict length checks. A malformed or
+unreadable task is unknown/untrusted, never proof that registration is healthy. Registration and removal
+paths that mutate tasks still read fresh state; the snapshot is only the scan's consistent read model.
+Check: test (keep bar 1: external file format; keep bar 3: scan ordering). Test: `test/unit.c` ›
+`test_bgft_info` and `test_bgft_scan`. Source: performance audit 2026-11-25; flatz BGFT format notes.
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,

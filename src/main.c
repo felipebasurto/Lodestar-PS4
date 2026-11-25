@@ -44,6 +44,7 @@
 
 #include "autorun.h"
 #include "badpatch.h"
+#include "bgftscan.h"
 #include "build.h"
 #include "catalog.h"
 #include "check.h"
@@ -1556,6 +1557,8 @@ static int contains(const uint8_t *d, size_t n, const char *s) {
     return 0;
 }
 
+static bgftscan_t g_bgftscan;
+
 /* The id of the game task of tid written here, 0 when there is none. */
 static uint32_t bgft_find(const char *tid) {
     char want[48], p[64];
@@ -2225,9 +2228,12 @@ static int title_state(const title_info_t *t) {
     char app_url[PATH_MAX + 8];
     pkg_url(tid, "app", t->app_path, app_url, sizeof(app_url));
     /* folders set up by 0.3.1 and older lack the internal folder: registered again */
+    const bgftscan_entry_t *scan_task = bgftscan_find(&g_bgftscan, tid);
+    int names = g_bgftscan.usable ? bgftscan_names(scan_task, app_url) : bgft_names(tid, app_url);
+    uint32_t task_error = g_bgftscan.usable ? (scan_task ? scan_task->error : 0) : bgft_task_error(tid);
     const char *why = !db_is_registered(tid)                ? "not registered"
-                      : !bgft_names(tid, app_url)           ? "no game task naming its pkg"
-                      : bgft_task_error(tid)                ? "its game task holds an error"
+                      : !names                              ? "no game task naming its pkg"
+                      : task_error                          ? "its game task holds an error"
                       : !marker_matches(tid, t->marker)     ? "its pkgs changed"
                       : !hold_ready("app", tid, "app.pkg", t->app_path) ? "game link"
                       : t->has_patch && !hold_ready("patch", tid, "patch.pkg", t->patch_path) ? "update link"
@@ -3290,6 +3296,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     static char tids[MAX_TITLES][10];
     int count = 0, pending = 0;
     int nt = titles_on_root(root, tids, MAX_TITLES);
+    if (nt)
+        bgftscan_load(&g_bgftscan, BGFT_DIR, BGFT_FIRST, BGFT_LAST);
     for (int k = 0; k < nt && count < MAX_TITLES; k++) {
         if (g_stop)
             break; /* the panel asked to stop */
@@ -3315,6 +3323,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             t->state = -1; /* failed recently: tried again later */
         pending += t->state == 1;
     }
+    bgftscan_free(&g_bgftscan); /* the epoch ends once every title_state decision is made */
     /* the totals for a scan asked in the panel; otherwise only what changed */
     if (fresh && g_manual_scan && !count)
         notify_kind(NOTIFY_DRIVE, TR("%s: no PS4 games found", "%s: no se encontraron juegos de PS4"), label);
