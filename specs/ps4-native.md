@@ -60,8 +60,10 @@ and summarized once; different lines are never suppressed. `klog_all` diagnosis 
 Check: test (keep bar 3: time/ordering; real upstream regression). Source: upstream v0.8.0 issue #42.
 
 ### P4N-9: notifications are operational, not a progress spam channel
-Notifications that repeat per title or per scan are coalesced into one actionable summary. Warnings requiring
-user action stay visible. The panel notification center keeps more detail than the console popup stream.
+Console popups are reserved for actions required, final outcomes and newly observed failures. Incremental
+progress and per-item details of a multi-game batch are written to the panel/log without interrupting gameplay.
+A persistent mount failure produces one popup per title per daemon run until that title mounts successfully;
+it does not repeat on every scan. Batch completion/restart summaries remain popups.
 Check: read. Source: user request 2026-11-25.
 
 ### P4N-10: transfers are atomic, resumable and observable

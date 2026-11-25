@@ -278,7 +278,7 @@ static notice_entry_t g_notices[NOTICE_MAX];
 static int g_nnotices;
 static pthread_mutex_t g_notice_mu = PTHREAD_MUTEX_INITIALIZER;
 
-static void notify_v(notify_kind_t kind, int record, const char *fmt, va_list ap) {
+static void notify_v(notify_kind_t kind, int record, int popup, const char *fmt, va_list ap) {
     notify_request_t req;
     memset(&req, 0, sizeof(req));
     req.target_id = -1;
@@ -300,14 +300,15 @@ static void notify_v(notify_kind_t kind, int record, const char *fmt, va_list ap
             g_nnotices++;
         pthread_mutex_unlock(&g_notice_mu);
     }
-    sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
+    if (popup)
+        sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
 }
 
 static void notify_kind(notify_kind_t kind, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static void notify_kind(notify_kind_t kind, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    notify_v(kind, 1, fmt, ap);
+    notify_v(kind, 1, 1, fmt, ap);
     va_end(ap);
 }
 
@@ -315,7 +316,7 @@ static void notify(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static void notify(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    notify_v(NOTIFY_INFO, 1, fmt, ap);
+    notify_v(NOTIFY_INFO, 1, 1, fmt, ap);
     va_end(ap);
 }
 
@@ -323,7 +324,24 @@ static void notify_private(const char *fmt, ...) __attribute__((format(printf, 1
 static void notify_private(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    notify_v(NOTIFY_DRIVE, 0, fmt, ap);
+    notify_v(NOTIFY_DRIVE, 0, 1, fmt, ap);
+    va_end(ap);
+}
+
+/* Detail worth keeping in the panel/log, but not worth interrupting a game for. */
+static void notify_detail_kind(notify_kind_t kind, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+static void notify_detail_kind(notify_kind_t kind, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    notify_v(kind, 1, 0, fmt, ap);
+    va_end(ap);
+}
+
+static void notify_detail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void notify_detail(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    notify_v(NOTIFY_INFO, 1, 0, fmt, ap);
     va_end(ap);
 }
 
@@ -1927,7 +1945,7 @@ out:
 
 /* Titles this daemon serves. */
 typedef struct {
-    int used, has_patch, running, ndlc, ndlc_tids;
+    int used, has_patch, running, ndlc, ndlc_tids, mount_warned;
     char dlc_tids[MAX_DLC_TIDS][10];
     time_t running_since; /* launch seen in klog; the sandbox mount appears shortly after */
     char tid[10], cid[37], name[128], dir[PATH_MAX];
@@ -2144,6 +2162,7 @@ static void manage_fields(const char *tid, const char *cid, const char *name, co
     if (keep.used) {
         m->running = keep.running;
         m->running_since = keep.running_since;
+        m->mount_warned = keep.mount_warned;
     }
     m->has_patch = has_patch;
     m->ndlc = ndlc;
@@ -3363,8 +3382,14 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         } else if (m && !running && m->running && time(NULL) - m->running_since > 60) {
             m->running = 0; /* closed without a klog end event */
         }
-        if (mount_info(info))
-            notify_kind(NOTIFY_WARN, TR("Failed to mount %s (%s)", "No se pudo montar %s (%s)"), info->name, t->tid);
+        if (mount_info(info)) {
+            if (!m || !m->mount_warned)
+                notify_kind(NOTIFY_WARN, TR("Failed to mount %s (%s)", "No se pudo montar %s (%s)"), info->name, t->tid);
+            if (m)
+                m->mount_warned = 1;
+        } else if (m) {
+            m->mount_warned = 0;
+        }
     }
     if (!pending) {
         activity_clear();
@@ -3377,8 +3402,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     int groups = (pending + size - 1) / size, grouped = groups > 1, done = 0, ok = 0, group = 0;
     int restart = 0; /* added games that wait for a restart (also when an earlier load marked it) */
     if (grouped)
-        notify(TR("%s: adding %d PS4 games in %d groups of up to %d", "%s: añadiendo %d juego(s) de PS4 en %d grupo(s) de hasta %d"),
-               label, pending, groups, size);
+        notify_detail(TR("%s: adding %d PS4 games in %d groups of up to %d", "%s: añadiendo %d juego(s) de PS4 en %d grupo(s) de hasta %d"),
+                      label, pending, groups, size);
     int *members = malloc(sizeof(int) * (size_t)size);
     char (*ids)[10] = malloc(10 * (size_t)size);
     int *prepared = malloc(sizeof(int) * (size_t)size);
@@ -3405,8 +3430,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             buf_t names = {0};
             for (int k = 0; k < n; k++)
                 buf_printf(&names, "%s%s", k ? ", " : "", titles[members[k]].name);
-            notify(TR("Group %d/%d, adding %d-%d of %d: %.400s", "Grupo %d/%d, añadiendo %d-%d de %d: %.400s"), group, groups,
-                   done + 1, done + n, pending,
+            notify_detail(TR("Group %d/%d, adding %d-%d of %d: %.400s", "Grupo %d/%d, añadiendo %d-%d de %d: %.400s"), group, groups,
+                          done + 1, done + n, pending,
                    names.data ? (const char *)names.data : "");
             buf_free(&names);
         }
@@ -3424,8 +3449,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
                 char extra[64] = "";
                 if (t->ndlc)
                     snprintf(extra, sizeof(extra), TR(" + %d add-on(s)", " + %d DLC"), t->ndlc);
-                notify(TR("Adding %d/%d: %s%s%s (%s)", "Añadiendo %d/%d: %s%s%s (%s)"), done + k + 1, pending, t->name,
-                       t->has_patch ? TR(" with update", " con actualización") : "", extra, t->tid);
+                notify_detail(TR("Adding %d/%d: %s%s%s (%s)", "Añadiendo %d/%d: %s%s%s (%s)"), done + k + 1, pending, t->name,
+                              t->has_patch ? TR(" with update", " con actualización") : "", extra, t->tid);
             }
             if (src_open(&src, root, t->tid) || register_prepare(&src)) {
                 if (retry_failed(t->tid))
@@ -3465,12 +3490,21 @@ static void scan_root(const char *root, int fresh, int reconnected) {
                 ok++;
                 int reboot = needs_reboot(t->tid);
                 restart += reboot;
-                if (!grouped && reboot)
-                    notify_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it",
-                                                "%s añadido. Reinicia la consola una vez para jugarlo"),
-                                t->name);
-                else if (!grouped)
-                    notify_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
+                if (!grouped && reboot) {
+                    if (pending == 1)
+                        notify_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it",
+                                                    "%s añadido. Reinicia la consola una vez para jugarlo"),
+                                    t->name);
+                    else
+                        notify_detail_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it",
+                                                           "%s añadido. Reinicia la consola una vez para jugarlo"),
+                                           t->name);
+                } else if (!grouped) {
+                    if (pending == 1)
+                        notify_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
+                    else
+                        notify_detail_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
+                }
             }
             src_close(&src);
         }
