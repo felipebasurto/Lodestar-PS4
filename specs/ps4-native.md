@@ -86,8 +86,10 @@ Check: read. Source: user requirement for agent-auditable output.
 A scan evaluates titles against one bounded snapshot of BGFT task metadata. The parser reads the canonical
 PDB records (`0x7c` title id, exact length-delimited `0x1388` package URL, `0x68` error) with strict length checks; a canonical
 field present with the wrong width is malformed, not absent. A malformed or unreadable task is unknown/untrusted,
-never proof that registration is healthy. Registration and removal paths that mutate tasks still read fresh state,
-but fresh fallback reads use exactly the same canonical health semantics as the snapshot; they differ only in I/O cost.
+never proof that registration is healthy. Within the serialized scan/registration epoch, absence and task-id
+occupancy may come from that snapshot; positive identity used for mutation is re-read fresh, and uncertain writes
+invalidate the epoch as specified in `specs/bgft.md`. Fresh fallback reads use exactly the same canonical health
+semantics as the snapshot; they differ only in I/O cost.
 Check: test (keep bar 1: external file format; keep bar 3: scan ordering). Test: `test/unit.c` ›
 `test_bgft_info` and `test_bgft_scan`. Source: performance audit 2026-11-25; flatz BGFT format notes.
 

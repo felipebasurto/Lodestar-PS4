@@ -936,16 +936,19 @@ static void test_bgft_scan(void) {
         CHECK(0);
         return;
     }
-    pkg_t app, app2;
+    pkg_t app, app2, app3;
     fake_pkg(&app, "UP0000-CUSA00001_00-TESTGAME00000000", 271384576);
     fake_pkg(&app2, "UP0000-CUSA00002_00-TESTGAME00000000", 271384576);
+    fake_pkg(&app3, "UP0000-CUSA00004_00-TESTGAME00000000", 271384576);
     const char *url = "/mnt/usb0/ps4/CUSA00001/app.pkg";
-    buf_t json = {0}, one = {0}, two = {0};
+    buf_t json = {0}, one = {0}, two = {0}, three = {0};
     build_app_json(&json, &app, url);
     bgft_task_t t = {0, 0x13520001, 1, 0xf000, &app, "app.pkg", url, &json, NULL};
     bgft_task_t t2 = {0, 0x13520001, 1, 0xf002, &app2, "app.pkg", url, &json, NULL};
+    bgft_task_t t3 = {0, 0x13520001, 1, 0xf004, &app3, "app.pkg", url, &json, NULL};
     build_bgft_task(&one, &t);
     build_bgft_task(&two, &t2);
+    build_bgft_task(&three, &t3);
     /* put a nonzero error in the second task's canonical error record, walking the PDB
      * frame rather than relying on where its key bytes happen to occur */
     int patched = 0;
@@ -982,6 +985,11 @@ static void test_bgft_scan(void) {
     bgftscan_load(&scan, root, 0xf001, 0xffff);
     CHECK(scan.usable);
     CHECK(scan.count == 3);
+    /* occupancy is physical directory evidence, not successful parsing: the install id
+     * 0xf000 has no d0.pdb here but still makes its pair unavailable */
+    CHECK(bgftscan_id_used(&scan, 0xf000));
+    CHECK(bgftscan_id_used(&scan, 0xf001));
+    CHECK(!bgftscan_id_used(&scan, 0xf002));
     const bgftscan_entry_t *e = bgftscan_find(&scan, "CUSA00001");
     CHECK(e && e->id == 0xf001 && !e->malformed);
     CHECK(bgftscan_names(e, url));
@@ -993,6 +1001,20 @@ static void test_bgft_scan(void) {
     CHECK(e && e->malformed && e->error != 0);
     CHECK(!bgftscan_names(e, "/user/app/CUSA00003/app.pkg"));
     CHECK(!bgftscan_find(&scan, "CUSA00009"));
+    /* BGFT-1/2: bytes written during the epoch are indexed synchronously, and removal by
+     * task id drops only that task. */
+    CHECK(bgftscan_update(&scan, 0xf007, one.data, one.len));
+    CHECK(scan.count == 4);
+    CHECK(bgftscan_id_used(&scan, 0xf007));
+    e = bgftscan_find(&scan, "CUSA00001");
+    CHECK(e && e->id == 0xf001); /* the first task with that title remains first */
+    bgftscan_remove_id(&scan, 0xf007);
+    CHECK(scan.count == 3);
+    CHECK(!bgftscan_id_used(&scan, 0xf007));
+    CHECK(bgftscan_update(&scan, 0xf001, three.data, three.len));
+    e = bgftscan_find(&scan, "CUSA00004");
+    CHECK(e && e->id == 0xf001 && !e->malformed);
+    CHECK(!bgftscan_find(&scan, "CUSA00001"));
     bgftscan_free(&scan);
     CHECK(scan.entries == NULL && scan.count == 0 && !scan.usable);
 
@@ -1015,6 +1037,7 @@ static void test_bgft_scan(void) {
     buf_free(&json);
     buf_free(&one);
     buf_free(&two);
+    buf_free(&three);
 }
 
 /* PANEL-4 (specs/panel.md): the unauthenticated panel's write boundary is the exact set of

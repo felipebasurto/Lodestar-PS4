@@ -1587,8 +1587,37 @@ static bgftscan_t g_bgftscan;
  * batch reload. This is synchronous main-loop state, not shared with the install threads. */
 static void bgftscan_invalidate(void) { g_bgftscan.usable = 0; }
 
+/* Fresh positive evidence for one task id: canonical title identity, or the legacy
+ * /user/app path shape older tasks carry. Used to keep snapshot hits honest before mutation. */
+static int bgft_task_identifies(uint32_t id, const char *tid) {
+    char p[64];
+    snprintf(p, sizeof(p), BGFT_DIR "/%08x/d0.pdb", id);
+    size_t len;
+    uint8_t *data = id ? read_all(p, &len) : NULL;
+    if (!data)
+        return 0;
+    bgft_info_t info;
+    int match = 0;
+    if (!bgft_task_parse(data, len, &info) && info.has_title)
+        match = !strcmp(info.title_id, tid);
+    if (!match) {
+        char legacy[10];
+        match = bgft_legacy_title_id(data, len, legacy) && !strcmp(legacy, tid);
+    }
+    mem_free(data);
+    return match;
+}
+
 /* The id of the game task of tid written here, 0 when there is none. */
 static uint32_t bgft_find(const char *tid) {
+    if (g_bgftscan.usable) {
+        const bgftscan_entry_t *hit = bgftscan_find(&g_bgftscan, tid);
+        if (!hit)
+            return 0; /* negative evidence is valid only inside this serialized scan epoch */
+        if (bgft_task_identifies(hit->id, tid))
+            return hit->id;
+        bgftscan_invalidate(); /* positive evidence did not survive a fresh read */
+    }
     char want[48], p[64];
     snprintf(want, sizeof(want), "/user/app/%s/app.pkg", tid);
     DIR *d = opendir(BGFT_DIR);
@@ -1651,25 +1680,39 @@ static uint32_t bgft_free_id(void) {
      * boot is never used again (a game given one could not start: BGFT still had the
      * deleted task's state); the lowest free one only once the ids run out */
     uint32_t top = BGFT_FIRST - 2;
-    DIR *d = opendir(BGFT_DIR);
-    struct dirent *e;
-    while (d && (e = readdir(d))) {
-        char *end;
-        unsigned long id = strtoul(e->d_name, &end, 16);
-        if (!*end && id >= BGFT_FIRST - 1 && id <= BGFT_LAST && id > top)
-            top = (uint32_t)id;
+    if (g_bgftscan.usable) {
+        for (uint32_t id = BGFT_LAST; id >= BGFT_FIRST - 1; id--)
+            if (bgftscan_id_used(&g_bgftscan, id)) {
+                top = id;
+                break;
+            }
+    } else {
+        DIR *d = opendir(BGFT_DIR);
+        struct dirent *e;
+        while (d && (e = readdir(d))) {
+            char *end;
+            unsigned long id = strtoul(e->d_name, &end, 16);
+            if (!*end && id >= BGFT_FIRST - 1 && id <= BGFT_LAST && id > top)
+                top = (uint32_t)id;
+        }
+        if (d)
+            closedir(d);
     }
-    if (d)
-        closedir(d);
     uint32_t next = (top + 2) | 1;
     if (next <= BGFT_LAST)
         return next;
     for (uint32_t id = BGFT_FIRST; id <= BGFT_LAST; id += 2) {
-        snprintf(p, sizeof(p), BGFT_DIR "/%08x", id);
-        if (exists(p))
-            continue;
-        snprintf(p, sizeof(p), BGFT_DIR "/%08x", id - 1);
-        if (!exists(p))
+        int game_used, install_used;
+        if (g_bgftscan.usable) {
+            game_used = bgftscan_id_used(&g_bgftscan, id);
+            install_used = bgftscan_id_used(&g_bgftscan, id - 1);
+        } else {
+            snprintf(p, sizeof(p), BGFT_DIR "/%08x", id);
+            game_used = exists(p);
+            snprintf(p, sizeof(p), BGFT_DIR "/%08x", id - 1);
+            install_used = exists(p);
+        }
+        if (!game_used && !install_used)
             return id;
     }
     return 0;
@@ -1712,6 +1755,7 @@ static int place_bgft(title_src_t *t, const buf_t *json, const patch_ref_t *pr) 
     name = name ? name + 1 : t->app_path;
     char url[PATH_MAX + 8];
     pkg_url(tid, "app", t->app_path, url, sizeof(url));
+    buf_t written0 = {0};
     for (int d1 = 0; d1 < 2; d1++) {
         bgft_task_t bt = {d1, g_fw, now, id - 1, &t->app, name, url, json, pr};
         buf_t b = {0};
@@ -1721,13 +1765,20 @@ static int place_bgft(title_src_t *t, const buf_t *json, const patch_ref_t *pr) 
             rc |= write_buf(p, &b);
             changed = 1;
         }
+        if (!d1)
+            buf_put(&written0, b.data, b.len);
         buf_free(&b);
     }
+    /* Whether bytes were written or both files were already byte-identical, d0 is fresh
+     * proof here. A failed or uncertain write instead invalidates the whole epoch. */
+    int indexed = !rc && g_bgftscan.usable && bgftscan_update(&g_bgftscan, id, written0.data, written0.len);
+    if (!indexed)
+        bgftscan_invalidate();
     if (changed) {
-        bgftscan_invalidate(); /* also when a write failed part way: the next read is fresh */
         printf("[reg] %s: BGFT game task %08x %s\n", tid, id, fresh ? "written" : "updated");
         mark_reboot(tid);
     }
+    buf_free(&written0);
     return rc ? -1 : 0;
 }
 
@@ -3362,7 +3413,6 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             t->state = -1; /* failed recently: tried again later */
         pending += t->state == 1;
     }
-    bgftscan_free(&g_bgftscan); /* the epoch ends once every title_state decision is made */
     /* the totals for a scan asked in the panel; otherwise only what changed */
     if (fresh && g_manual_scan && !count)
         notify_kind(NOTIFY_DRIVE, TR("%s: no PS4 games found", "%s: no se encontraron juegos de PS4"), label);
@@ -3412,6 +3462,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         }
     }
     if (!pending) {
+        bgftscan_free(&g_bgftscan);
         activity_clear();
         return;
     }
@@ -3431,6 +3482,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         free(members);
         free(ids);
         free(prepared);
+        bgftscan_free(&g_bgftscan);
         activity_clear();
         return;
     }
@@ -3533,6 +3585,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     free(members);
     free(ids);
     free(prepared);
+    bgftscan_free(&g_bgftscan); /* the epoch ends after registration mutations are reconciled */
     if (pending > 1)
         notify_kind(NOTIFY_READY, TR("%s: %d of %d game(s) added%s", "%s: %d de %d juego(s) añadido(s)%s"), label, ok,
                     pending,
