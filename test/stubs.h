@@ -6,3 +6,4 @@
 extern char g_stub_call[64], g_stub_arg[4096];
 extern int g_stub_calls;
 extern int g_stub_games_pad;
+extern unsigned char g_stub_check_first, g_stub_check_last;

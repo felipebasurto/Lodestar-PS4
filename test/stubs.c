@@ -12,6 +12,7 @@
 char g_stub_call[64], g_stub_arg[4096];
 int g_stub_calls;
 int g_stub_games_pad;
+unsigned char g_stub_check_first, g_stub_check_last;
 
 static int record(const char *call, const char *arg, char *msg, size_t cap) {
     snprintf(g_stub_call, sizeof(g_stub_call), "%s", call);
@@ -68,7 +69,9 @@ int app_pic(const char *tid, buf_t *out) {
 }
 void app_check(const void *data, size_t len, uint64_t size, buf_t *out) {
     char arg[64], m[8];
-    (void)data;
+    const uint8_t *bytes = data;
+    g_stub_check_first = len ? bytes[0] : 0;
+    g_stub_check_last = len ? bytes[len - 1] : 0;
     snprintf(arg, sizeof(arg), "%zu %llu", len, (unsigned long long)size);
     record("check", arg, m, sizeof(m));
     buf_printf(out, "{\"ok\":true}");

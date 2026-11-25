@@ -223,6 +223,9 @@ typedef struct {
     unsigned long long length;
     long long deadline;
     int post;
+    uint8_t *body_owned;    /* worker-read check body; owned by this request object */
+    size_t body_owned_len;  /* bytes and owner-body quota units while body_owned is set */
+    int body_incomplete;    /* worker finished waiting: owner must not read the socket */
 } web_req_t;
 
 
@@ -247,6 +250,7 @@ int web_route_worker_safe(const char *path, int post) {
 #define WEB_POOL_THREADS 2
 #define WEB_POOL_QUEUE 8
 #define WEB_OWNER_QUEUE 4
+#define WEB_OWNER_BODY_BYTES (16u << 20)
 #define WEB_STACK_SIZE (256u << 10)
 
 typedef struct web_owner_job {
@@ -281,6 +285,7 @@ static pthread_mutex_t g_links_action_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_owner_mu = PTHREAD_MUTEX_INITIALIZER;
 static web_owner_job_t *g_owner_head, *g_owner_tail;
 static int g_owner_count;
+static size_t g_owner_body_bytes;
 
 static void web_handle_connection(int fd, int queue_owner);
 static void web_dispatch(int fd, web_req_t *r);
@@ -304,6 +309,30 @@ static void web_owner_drain_wake(void) {
     char tmp[64];
     while (g_wake_r >= 0 && read(g_wake_r, tmp, sizeof(tmp)) > 0)
         ;
+}
+
+static int owner_body_reserve(size_t len) {
+    pthread_mutex_lock(&g_owner_mu);
+    int ok = len <= WEB_OWNER_BODY_BYTES - g_owner_body_bytes;
+    if (ok)
+        g_owner_body_bytes += len;
+    pthread_mutex_unlock(&g_owner_mu);
+    return ok ? 0 : -1;
+}
+
+static void owner_body_release(size_t len) {
+    pthread_mutex_lock(&g_owner_mu);
+    g_owner_body_bytes -= len;
+    pthread_mutex_unlock(&g_owner_mu);
+}
+
+static void owner_body_free(web_req_t *req) {
+    if (!req->body_owned)
+        return;
+    mem_free(req->body_owned);
+    owner_body_release(req->body_owned_len);
+    req->body_owned = NULL;
+    req->body_owned_len = 0;
 }
 
 /* Copies req into a node owned by the main-loop queue. body points into raw, so it must be
@@ -398,6 +427,7 @@ void web_owner_pump(void) {
             break;
         if (!capture_key_ready()) {
             web_dispatch(job->fd, &job->req); /* direct historical fallback: dispatch closes fd */
+            owner_body_free(&job->req);
             mem_free(job);
             continue;
         }
@@ -408,6 +438,7 @@ void web_owner_pump(void) {
         if (web_write_enqueue(job->fd, &cap.out))
             close(job->fd);
         buf_free(&cap.out);
+        owner_body_free(&job->req);
         mem_free(job);
     }
     web_owner_drain_wake();
@@ -611,6 +642,7 @@ void web_stop(void) {
     while (job) {
         web_owner_job_t *next = job->next;
         close(job->fd);
+        owner_body_free(&job->req);
         mem_free(job);
         job = next;
     }
@@ -871,6 +903,43 @@ static int web_read_request(int fd, web_req_t *r) {
     r->length = length;
     r->deadline = deadline;
     r->post = post;
+    r->body_owned = NULL;
+    r->body_owned_len = 0;
+    r->body_incomplete = 0;
+    return 0;
+}
+
+/* Reads a bounded check body in the network worker. On success body_owned, its quota and fd
+ * move as one owner intent; on a short read only the proven fact of incompleteness is queued. */
+static int web_prepare_check_body(int fd, web_req_t *r) {
+    if (!r->post || strncmp(r->path, "/api/check", 10) || (r->path[10] && r->path[10] != '?') ||
+        !r->length || r->length > CHECK_MAX)
+        return 0;
+    size_t len = (size_t)r->length;
+    if (owner_body_reserve(len))
+        return -1;
+    uint8_t *data = mem_alloc(len);
+    size_t got = 0;
+    if (data) {
+        size_t pre = r->have < len ? r->have : len;
+        memcpy(data, r->body, pre);
+        got = pre;
+        while (got < len && now_ms() < r->deadline) {
+            ssize_t n = read(fd, data + got, len - got);
+            if (n <= 0)
+                break;
+            got += (size_t)n;
+        }
+    }
+    if (!data || got != len) {
+        if (data)
+            mem_free(data);
+        owner_body_release(len);
+        r->body_incomplete = 1;
+        return 0;
+    }
+    r->body_owned = data;
+    r->body_owned_len = len;
     return 0;
 }
 
@@ -890,7 +959,8 @@ static void web_handle_connection(int fd, int queue_owner) {
         web_dispatch(fd, &r);
         return;
     }
-    if (web_owner_enqueue(fd, &r)) {
+    if (web_prepare_check_body(fd, &r) || web_owner_enqueue(fd, &r)) {
+        owner_body_free(&r);
         reply(fd, "503 Service Unavailable", "text/plain", "panel busy\n", 11);
         close(fd);
     }
@@ -977,10 +1047,12 @@ static void web_dispatch(int fd, web_req_t *r) {
         json_msg(fd, !rc, msg);
     } else if (post && !strncmp(path, "/api/check", 10) && (path[10] == 0 || path[10] == '?')) {
         const char *sz = strstr(path, "size=");
-        uint8_t *data = NULL;
+        uint8_t *data = r->body_owned;
         if (!length || length > CHECK_MAX)
             json_msg(fd, 0, TR("send the first MB of the pkg (at most 16 MB)", "envía el primer MB del pkg (como máximo 16 MB)"));
-        else if (!(data = read_body(fd, body, have, (size_t)length, deadline)))
+        else if (r->body_incomplete)
+            json_msg(fd, 0, TR("the pkg start did not arrive whole", "el comienzo del pkg no llegó entero"));
+        else if (!data && !(data = read_body(fd, body, have, (size_t)length, deadline)))
             json_msg(fd, 0, TR("the pkg start did not arrive whole", "el comienzo del pkg no llegó entero"));
         else {
             buf_t b = {0};
@@ -988,7 +1060,8 @@ static void web_dispatch(int fd, web_req_t *r) {
             reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
             buf_free(&b);
         }
-        mem_free(data);
+        if (data != r->body_owned)
+            mem_free(data);
     } else if (post && !strncmp(path, "/api/upload", 11) && (path[11] == 0 || path[11] == '?')) {
         if (!length)
             json_msg(fd, 0, TR("nothing was sent", "no se envió nada"));

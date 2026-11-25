@@ -113,17 +113,18 @@ static int panel_conn(void) {
     return fd;
 }
 
-static void send_req_close_write(int fd, const char *req) {
-    size_t left = strlen(req);
-    while (left) {
-        ssize_t n = write(fd, req, left);
+static void send_req_len_close_write(int fd, const char *req, size_t len) {
+    while (len) {
+        ssize_t n = write(fd, req, len);
         if (n <= 0)
             break;
         req += n;
-        left -= (size_t)n;
+        len -= (size_t)n;
     }
     shutdown(fd, SHUT_WR);
 }
+
+static void send_req_close_write(int fd, const char *req) { send_req_len_close_write(fd, req, strlen(req)); }
 
 static void read_response_close(int fd, char *out, size_t cap) {
     size_t n = 0;
@@ -428,6 +429,43 @@ int main(void) {
             CHECK(bytes > (size_t)g_stub_games_pad);
         }
         g_stub_games_pad = 0;
+
+        size_t check_len = 9000; /* past the header buffer: the worker must complete it */
+        char *check_req = malloc(check_len + 256);
+        CHECK(check_req != NULL);
+        if (check_req) {
+            int head_len = snprintf(check_req, check_len + 256,
+                                    "POST /api/check?size=9999 HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: %zu\r\n\r\n",
+                                    check_len);
+            memset(check_req + head_len, 'b', check_len);
+            check_req[head_len] = 'A';
+            check_req[head_len + check_len - 1] = 'Z';
+            before = g_stub_calls;
+            c = panel_conn();
+            CHECK(c >= 0);
+            send_req_len_close_write(c, check_req, (size_t)head_len + check_len);
+            web_serve(ls);
+            web_pool_idle_wait();
+            CHECK(web_owner_pending() == 1);
+            web_owner_pump();
+            CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "check"));
+            CHECK(!strcmp(g_stub_arg, "9000 9999") && g_stub_check_first == 'A' && g_stub_check_last == 'Z');
+            read_response_close(c, resp, sizeof(resp));
+            CHECK(status(resp, "200"));
+            free(check_req);
+        }
+
+        before = g_stub_calls;
+        c = panel_conn();
+        CHECK(c >= 0);
+        send_req_close_write(c, "POST /api/check HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 32\r\n\r\nabc");
+        web_serve(ls);
+        web_pool_idle_wait();
+        CHECK(web_owner_pending() == 1);
+        web_owner_pump();
+        CHECK(g_stub_calls == before); /* short body: the historical error, without app_check */
+        read_response_close(c, resp, sizeof(resp));
+        CHECK(status(resp, "400"));
 
         before = g_stub_calls;
         c = panel_conn();

@@ -51,10 +51,17 @@ Source: existing Drive/links host callback audit.
 
 ### WEBAPI-6: bounded network workers never execute owner routes
 At most two persistent network workers parse accepted connections. The accept queue is
-bounded to eight connected fds and the owner queue to four parsed requests; beyond those
-bounds a new connection is closed or answered `503`, never allowed to consume unbounded
-memory. If no worker can be created, `web_serve` falls back to the historical synchronous
-path rather than dropping the panel.
+bounded to eight connected fds, the owner queue to four parsed requests, and owner-bound
+`/api/check` bodies to 16 MiB in total; beyond those bounds a new connection is closed or
+answered `503`, never allowed to consume unbounded memory. If no worker can be created,
+`web_serve` falls back to the historical synchronous path rather than dropping the panel.
+
+`/api/check` remains an owner route because its answer depends on library/configuration
+state and uses one shared temporary path. Its declared body is nevertheless bounded, so a
+worker reads that body completely before queueing the request. The allocated body, its byte
+quota and the fd move as one owner intent. If the body arrives short the owner still produces
+the historical "did not arrive whole" answer, but it never waits on the socket itself; if the
+body quota cannot be reserved the request is answered `503` without entering the owner queue.
 
 Only routes whose state is static or internally synchronized may complete in a worker in
 this first matrix: the two HTML pages, `/api/log`, Drive status/actions, links
@@ -89,6 +96,7 @@ wait for network I/O or the FUSE lock. The adopted-mount refresh clock is claime
 compare-and-swap so overlapping owner refreshes cannot pile control queries onto the mount.
 Workers never start that control conversation as a side effect of reading `nas_active`; only
 the main-loop owner calls the explicit refresh entry point.
-Check: test through `test/http_test.c` (owner execution ordering and worker-only route
-completion without owner pumping) and `test/sdkcheck.sh`; read for shutdown ownership.
+Check: test through `test/http_test.c` (owner execution ordering, worker-only route
+completion without owner pumping, owner response writer handoff and pre-read check bodies)
+and `test/sdkcheck.sh`; read for shutdown ownership.
 Source: panel/API architecture audit and WEBAPI-2 implementation design.
