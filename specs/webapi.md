@@ -65,10 +65,16 @@ body quota cannot be reserved the request is answered `503` without entering the
 
 Only routes whose state is static or internally synchronized may complete in a worker in
 this first matrix: the two HTML pages, `/api/log`, Drive status/actions, links
-status/actions, `/api/upload` and `/api/uploads`. `/api/check`, games/icons/pics, storage,
-destinations, mounts, restore, configuration, NAS and process control remain owner routes
-because they read or mutate library/mount/configuration state. Unknown routes are worker
-safe because they produce only the fixed 404 response.
+status/actions, `/api/upload`, `/api/uploads`, `/api/nas/scan` and `/api/nas/shares`.
+The two NAS probe routes may connect to other machines but do not use the mounted backend:
+scan uses fresh sockets, share listing creates its own backend context, their output arrays
+are local, and the saved-login fallback is copied through the configuration mutex. SMB context
+creation/destruction is serialized across the whole process because libsmb2 keeps a global
+active-context list; ordinary operations then use per-context state. The probes may therefore
+wait in workers rather than in the owner. `/api/check`, games/icons/pics, storage,
+destinations, mounts, restore, configuration, NAS reload and process control remain owner
+routes because they read or mutate library/mount/configuration state. Unknown routes are
+worker safe because they produce only the fixed 404 response.
 
 An owner route transfers both the connected fd and the parsed request object exactly once
 to the owner queue. The main loop executes it through the same dispatcher, preserving the
@@ -86,7 +92,8 @@ its socket directly. Shutdown interrupts active connection reads/writes with `sh
 joins the bounded workers, and closes/drains queued fds without executing partially owned
 requests or transmitting partial queued responses.
 
-Drive and links status may be produced concurrently. Their mutating actions are serialized
+NAS probe output buffers are per-call; concurrent probes may run, bounded by the worker
+count. Drive and links status may be produced concurrently. Their mutating actions are serialized
 at the web boundary, preserving the single-panel-caller ordering those subsystems had before
 workers; their internal queue state remains protected by their own mutexes, and queue-count
 snapshots used for admission are read under those mutexes. A Drive library enumeration can

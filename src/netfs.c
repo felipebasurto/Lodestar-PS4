@@ -1425,7 +1425,10 @@ int nas_scan(nas_host_t *out, int max) {
     }
     if (found)
         name_hosts(out, found);
-    printf("[nas] scan of %s/24: %d server(s)\n", inet_ntoa((struct in_addr){htonl(net)}), found);
+    char net_text[16];
+    struct in_addr net_addr = {htonl(net)};
+    inet_ntop(AF_INET, &net_addr, net_text, sizeof(net_text));
+    printf("[nas] scan of %s/24: %d server(s)\n", net_text, found);
     return found;
 }
 

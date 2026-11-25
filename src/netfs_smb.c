@@ -13,6 +13,7 @@
 #include <string.h>
 #include <sys/param.h>
 #include <poll.h>
+#include <pthread.h>
 #include <unistd.h>
 
 #include <smb2/smb2.h>
@@ -21,6 +22,24 @@
 #include <smb2/libsmb2-share-enum.h>
 
 #include "lang.h"
+
+/* libsmb2 keeps every context in a process-global active list without a lock. Client use is
+ * otherwise per-context, so serialize only creation/destruction across mounted clients and
+ * independent share-listing probes. */
+static pthread_mutex_t g_smb_ctx_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static struct smb2_context *smb_context_new(void) {
+    pthread_mutex_lock(&g_smb_ctx_mu);
+    struct smb2_context *s = smb2_init_context();
+    pthread_mutex_unlock(&g_smb_ctx_mu);
+    return s;
+}
+
+static void smb_context_free(struct smb2_context *s) {
+    pthread_mutex_lock(&g_smb_ctx_mu);
+    smb2_destroy_context(s);
+    pthread_mutex_unlock(&g_smb_ctx_mu);
+}
 
 static struct smb2_context *g_smb;
 static char g_base[PATH_MAX]; /* "" for the share root, else "sub" */
@@ -53,7 +72,7 @@ static int sm_connect(const nas_cfg_t *cfg) {
         memmove(sub, sub + 1, strlen(sub));
     snprintf(g_base, sizeof(g_base), "%s", sub);
 
-    g_smb = smb2_init_context();
+    g_smb = smb_context_new();
     if (!g_smb) {
         snprintf(g_err, sizeof(g_err), "%s", "out of memory");
         return -1;
@@ -66,7 +85,7 @@ static int sm_connect(const nas_cfg_t *cfg) {
     }
     if (smb2_connect_share(g_smb, server, cfg->share, cfg->user[0] ? cfg->user : NULL)) {
         snprintf(g_err, sizeof(g_err), "%s", smb2_get_error(g_smb));
-        smb2_destroy_context(g_smb);
+        smb_context_free(g_smb);
         g_smb = NULL;
         return -1;
     }
@@ -80,7 +99,7 @@ static void sm_disconnect(void) {
     if (!g_smb)
         return;
     smb2_disconnect_share(g_smb);
-    smb2_destroy_context(g_smb);
+    smb_context_free(g_smb);
     g_smb = NULL;
 }
 
@@ -204,7 +223,7 @@ static int sm_shares(const nas_cfg_t *cfg, char (*names)[NAS_NAME_MAX], int max,
         snprintf(server, sizeof(server), "%s:%d", cfg->server, cfg->port);
     else
         snprintf(server, sizeof(server), "%s", cfg->server);
-    struct smb2_context *s = smb2_init_context();
+    struct smb2_context *s = smb_context_new();
     if (!s) {
         snprintf(err, n, "%s", TR("out of memory", "sin memoria"));
         return -1;
@@ -244,7 +263,7 @@ static int sm_shares(const nas_cfg_t *cfg, char (*names)[NAS_NAME_MAX], int max,
     }
     if (smb2_get_fd(s) >= 0)
         smb2_disconnect_share(s);
-    smb2_destroy_context(s);
+    smb_context_free(s);
     return k;
 }
 

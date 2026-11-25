@@ -189,6 +189,15 @@ static void cfg_scan_path(int i, char *out, size_t n) {
     snprintf(out, n, "%s", i >= 0 && i < MAX_SCAN_PATHS ? g_cfg.paths[i] : "");
     pthread_mutex_unlock(&g_cfg_mu);
 }
+
+/* NAS probe routes can run in web workers: copy the saved login boundary in one lock. */
+static void cfg_nas_login(char *server, size_t ns, char *user, size_t nu, char *pass, size_t np) {
+    pthread_mutex_lock(&g_cfg_mu);
+    snprintf(server, ns, "%s", g_cfg.nas_server);
+    snprintf(user, nu, "%s", g_cfg.nas_user);
+    snprintf(pass, np, "%s", g_cfg.nas_pass);
+    pthread_mutex_unlock(&g_cfg_mu);
+}
 #define NAS_RESCAN_MAX 1440 /* minutes: once a day */
 static int g_setup; /* a first start: no game is added until the settings are saved (first_start) */
 /* A first start with nobody at the panel for this long goes on with the default settings:
@@ -6124,7 +6133,7 @@ static void form_field(const char *body, const char *key, char *out, size_t n) {
 
 /* /api/nas/scan: the file servers on the console's network. */
 void app_nas_scan_json(buf_t *out) {
-    static nas_host_t h[64];
+    nas_host_t h[64];
     int n = nas_supported() ? nas_scan(h, 64) : 0;
     buf_printf(out, "{\"hosts\":[");
     for (int i = 0; i < n; i++) {
@@ -6150,9 +6159,12 @@ void app_nas_shares_json(const char *body, buf_t *out) {
     form_field(body, "server", c.server, sizeof(c.server));
     form_field(body, "user", c.user, sizeof(c.user));
     form_field(body, "pass", c.pass, sizeof(c.pass));
-    if (!c.pass[0] && !strcmp(c.server, g_cfg.nas_server) && !strcmp(c.user, g_cfg.nas_user))
-        snprintf(c.pass, sizeof(c.pass), "%s", g_cfg.nas_pass);
-    static char names[64][NAS_NAME_MAX];
+    char saved_server[64], saved_user[64], saved_pass[64];
+    cfg_nas_login(saved_server, sizeof(saved_server), saved_user, sizeof(saved_user), saved_pass, sizeof(saved_pass));
+    if (!c.pass[0] && !strcmp(c.server, saved_server) && !strcmp(c.user, saved_user))
+        snprintf(c.pass, sizeof(c.pass), "%s", saved_pass);
+    memset(saved_pass, 0, sizeof(saved_pass));
+    char names[64][NAS_NAME_MAX];
     char err[192] = "";
     int k = !nas_supported() ? -1 : c.server[0] ? nas_shares(&c, names, 64, err, sizeof(err)) : -1;
     if (k < 0 && !err[0])
