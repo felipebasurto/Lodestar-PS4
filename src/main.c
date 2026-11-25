@@ -2201,14 +2201,41 @@ static int mount_marker_dir(const char *target, char *out, size_t n) {
  * second, but never a mutation decision: before unmounting or mounting, mount_scan_fresh
  * replaces it and the pure planner runs again. Local mutations invalidate it at once. */
 static struct statfs *g_mount_table;
-static size_t g_mount_table_cap;
-static int g_mount_table_n, g_mount_table_valid;
+static const struct statfs **g_mount_index;
+static size_t g_mount_table_cap, g_mount_index_cap;
+static int g_mount_table_n, g_mount_table_valid, g_mount_index_valid;
 static time_t g_mount_table_at;
 
 static void mount_table_invalidate(void) {
     g_mount_table_n = 0;
     g_mount_table_valid = 0;
+    g_mount_index_valid = 0;
     g_mount_table_at = 0;
+}
+
+static int mount_index_cmp(const void *a, const void *b) {
+    const struct statfs *aa = *(const struct statfs *const *)a;
+    const struct statfs *bb = *(const struct statfs *const *)b;
+    return strcmp(aa->f_mntonname, bb->f_mntonname);
+}
+
+/* Pointers sorted by mountpoint, built once for a snapshot. Layer order is not part of the
+ * ownership decision: the live top comes from statfs and stacked layers are accepted only
+ * when every visible layer is owned, so sorting cannot weaken the planner. */
+static void mount_index_build(void) {
+    g_mount_index_valid = 0;
+    if ((size_t)g_mount_table_n > g_mount_index_cap) {
+        const struct statfs **next = mem_alloc((size_t)g_mount_table_n * sizeof(*next));
+        if (!next)
+            return; /* the caller falls back to one linear scan of this snapshot */
+        mem_free(g_mount_index);
+        g_mount_index = next;
+        g_mount_index_cap = (size_t)g_mount_table_n;
+    }
+    for (int i = 0; i < g_mount_table_n; i++)
+        g_mount_index[i] = &g_mount_table[i];
+    qsort(g_mount_index, (size_t)g_mount_table_n, sizeof(*g_mount_index), mount_index_cmp);
+    g_mount_index_valid = 1;
 }
 
 static int mount_table(const struct statfs **out, int *nout, int fresh) {
@@ -2241,8 +2268,17 @@ static int mount_table(const struct statfs **out, int *nout, int fresh) {
         return -1;
     }
     g_mount_table_n = n;
-    g_mount_table_valid = 1;
-    g_mount_table_at = now;
+    if (fresh) {
+        /* A one-off destructive/mutation observation is linear: sorting it would cost more
+         * than the scan and its result must not become the routine no-work snapshot. */
+        g_mount_table_valid = 0;
+        g_mount_index_valid = 0;
+        g_mount_table_at = 0;
+    } else {
+        g_mount_table_valid = 1;
+        g_mount_table_at = now;
+        mount_index_build();
+    }
     *out = g_mount_table;
     *nout = n;
     return 0;
@@ -2270,17 +2306,34 @@ static void mount_scan_mode(const char *target, const char *expected, mount_obs_
     if (mount_table(&list, &n, fresh))
         return;
     o->table_known = 1;
-    for (int i = 0; i < n; i++) {
-        if (strcmp(list[i].f_mntonname, target))
+    int first = 0, count = n, indexed = !fresh && g_mount_index_valid;
+    if (indexed) {
+        int lo = 0, hi = n;
+        while (lo < hi) {
+            int mid = lo + (hi - lo) / 2;
+            int cmp = strcmp(g_mount_index[mid]->f_mntonname, target);
+            if (cmp < 0)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        first = lo;
+        count = 0;
+        while (first + count < n && !strcmp(g_mount_index[first + count]->f_mntonname, target))
+            count++;
+    }
+    for (int i = 0; i < count; i++) {
+        const struct statfs *m = indexed ? g_mount_index[first + i] : &list[i];
+        if (!indexed && strcmp(m->f_mntonname, target))
             continue;
         o->layers++;
-        mount_owner_t owner = mount_layer_owner(target, expected, list[i].f_fstypename, list[i].f_mntfromname,
+        mount_owner_t owner = mount_layer_owner(target, expected, m->f_fstypename, m->f_mntfromname,
                                                 has_marker ? marker : NULL);
         if (!mount_owner_owned(owner)) {
             o->all_owned = 0;
             if (!o->foreign_type[0]) {
-                snprintf(o->foreign_type, sizeof(o->foreign_type), "%s", list[i].f_fstypename);
-                snprintf(o->foreign_from, sizeof(o->foreign_from), "%s", list[i].f_mntfromname);
+                snprintf(o->foreign_type, sizeof(o->foreign_type), "%s", m->f_fstypename);
+                snprintf(o->foreign_from, sizeof(o->foreign_from), "%s", m->f_mntfromname);
             }
         }
     }

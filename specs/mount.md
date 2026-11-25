@@ -75,6 +75,9 @@ planner decision is recomputed; if the fresh facts no longer request that mutati
 mutation occurs. Detaches that precede delete, uninstall or installer operations do not use
 the snapshot at all. Destructive postconditions such as `layers_on_failclosed` still read
 fresh rather than using the snapshot.
+A reusable snapshot may be indexed by mountpoint for O(log mounts) lookup. That ordering is an
+implementation detail, not ownership evidence: live top evidence still comes from `statfs`, and
+stacked layers are accepted only when every visible layer is owned.
 Check: read (kernel mount-table integration; pure ownership decisions remain covered by
 `test/unit.c` › `test_mountplan`, and compile boundary by `test/sdkcheck.sh`).
 Source: scan performance audit after P4N-15.
