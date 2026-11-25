@@ -26,11 +26,35 @@ typedef struct {
 } title_row_t;
 
 static title_row_t *g_titles, *g_next;
-static int g_ntitles, g_cap, g_next_cap;
+static const title_row_t **g_index;
+static int g_ntitles, g_cap, g_next_cap, g_index_cap, g_index_valid;
 static time_t g_read_at;
 static int g_read_ok, g_read_valid;
 /* the panel thread and the NAS/mount threads all ask: one reader at a time */
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static int title_index_cmp(const void *a, const void *b) {
+    const title_row_t *aa = *(const title_row_t *const *)a;
+    const title_row_t *bb = *(const title_row_t *const *)b;
+    return strcmp(aa->tid, bb->tid);
+}
+
+/* The cached list is scanned once per title by scans and panel refreshes. Sort pointers to
+ * it when it changes; if the small index cannot grow, the linear scan remains as fallback. */
+static void index_titles(void) {
+    g_index_valid = 0;
+    if (g_ntitles > g_index_cap) {
+        const title_row_t **grown = realloc(g_index, sizeof(*grown) * (size_t)g_ntitles);
+        if (!grown)
+            return;
+        g_index = grown;
+        g_index_cap = g_ntitles;
+    }
+    for (int i = 0; i < g_ntitles; i++)
+        g_index[i] = &g_titles[i];
+    qsort(g_index, (size_t)g_ntitles, sizeof(*g_index), title_index_cmp);
+    g_index_valid = 1;
+}
 
 static void refresh(void) {
     if (g_read_ok && time(NULL) == g_read_at)
@@ -103,11 +127,26 @@ static void refresh(void) {
         g_next = prev;
         g_next_cap = prev_cap;
         g_ntitles = n;
+        index_titles();
         g_read_ok = g_read_valid = 1;
     }
 }
 
 static const title_row_t *find_title(const char *title_id) {
+    if (g_index_valid) {
+        int lo = 0, hi = g_ntitles;
+        while (lo < hi) {
+            int mid = lo + (hi - lo) / 2;
+            int cmp = strcmp(g_index[mid]->tid, title_id);
+            if (cmp < 0)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        if (lo < g_ntitles && !strcmp(g_index[lo]->tid, title_id))
+            return g_index[lo];
+        return NULL;
+    }
     for (int i = 0; i < g_ntitles; i++)
         if (!strcmp(g_titles[i].tid, title_id))
             return &g_titles[i];

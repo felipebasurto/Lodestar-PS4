@@ -79,6 +79,11 @@ int main(void) {
             "INSERT INTO tbl_appinfo VALUES('CUSA00001','TITLE_ID','CUSA00001'),('CUSA00001','TITLE','A'),"
             "('CUSA00001','APP_VER','01.04'),"
             "('CUSA00002','TITLE_ID','CUSA00002'),('CUSA00003','TITLE','C');"); /* CUSA00003: no TITLE_ID row */
+    for (int i = 0; i < 300; i++) {
+        char sql[128];
+        snprintf(sql, sizeof(sql), "INSERT INTO tbl_appinfo VALUES('CUSA%05d','TITLE_ID','x');", 1000 + i);
+        exec(w, sql);
+    }
     next_second();
     CHECK(db_is_registered("CUSA00001"));
     CHECK(db_confirms_registered("CUSA00001"));
@@ -93,6 +98,11 @@ int main(void) {
     CHECK(db_app_ver("CUSA00001") && !strcmp(db_app_ver("CUSA00001"), "01.04"));
     CHECK(db_app_ver("CUSA00002") && !strcmp(db_app_ver("CUSA00002"), "")); /* registered, no APP_VER */
     CHECK(!db_app_ver("CUSA00003"));
+    CHECK(db_is_registered("CUSA01000")); /* sorted index: first row of a large list */
+    CHECK(db_is_registered("CUSA01299")); /* last row */
+    CHECK(!db_is_registered("CUSA01111X")); /* no partial match */
+    CHECK(!db_is_registered("CUSA00999")); /* missing before the indexed range */
+    CHECK(!db_is_registered("CUSA01300")); /* missing after it */
 
     printf("never written or locked\n");
     uint8_t before[32], after[32];
