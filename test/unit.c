@@ -23,6 +23,7 @@
 #include "pkg.h"
 #include "mountplan.h"
 #include "retention.h"
+#include "restore.h"
 #include "stage.h"
 #include "webnet.h"
 #include "pdb_template.h"
@@ -1198,6 +1199,31 @@ static void test_retention_marks(void) {
     }
 }
 
+
+/* REST-2/3/4 (specs/restore.md): state cleanup follows the per-title uninstall commit, and
+ * origin.txt paths are external input that must stay relative to the drive root. */
+static void test_restore_plan(void) {
+    printf("restore: commit ordering and original path admission\n");
+    CHECK(!restore_clear_state_ok(0, 0));  /* never unregistered */
+    CHECK(!restore_clear_state_ok(0, 1));  /* failed before the commit boundary */
+    CHECK(restore_clear_state_ok(1, 0));   /* unregistered, every move that existed succeeded */
+    CHECK(!restore_clear_state_ok(1, 1));  /* unregistered but a pkg could not move: stay suppressed */
+    static const char *good[] = {
+        "Game.pkg", "games/My Game [v1.00].pkg", "a/.hidden/file.pkg", "d1/d2/d3/update.pkg",
+    };
+    for (size_t i = 0; i < sizeof(good) / sizeof(good[0]); i++)
+        CHECK(restore_orig_path_ok(good[i]));
+    static const char *bad[] = {
+        "", "/Game.pkg", "\\Game.pkg", "a\\Game.pkg", "../Game.pkg", "a/../Game.pkg",
+        "./Game.pkg", "a/./Game.pkg", ".", "..", "a//Game.pkg", "a/", "/",
+    };
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+        if (restore_orig_path_ok(bad[i]))
+            printf("  unsafe restore path accepted: %s\n", bad[i]);
+        CHECK(!restore_orig_path_ok(bad[i]));
+    }
+}
+
 static void test_emu(void) {
     printf("emulators: which names are mounted over the console's folders\n");
     static const struct {
@@ -1259,6 +1285,7 @@ int main(void) {
     test_web_net();
     test_mountplan();
     test_retention_marks();
+    test_restore_plan();
     test_emu();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;

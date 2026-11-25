@@ -66,6 +66,7 @@
 #include "origin.h"
 #include "pkg.h"
 #include "retention.h"
+#include "restore.h"
 #include "shortpath.h"
 #include "emu.h"
 #include "stage.h"
@@ -5062,23 +5063,6 @@ static void clean_name(char *s) {
             *s = '_';
 }
 
-/* orig comes from origin.txt (media anyone can write) or the pkg TITLE: joined under the
- * drive root it must not leave it — no absolute path, no backslash, no ".." component. */
-static int orig_safe(const char *o) {
-    if (!o[0] || o[0] == '/' || strchr(o, '\\'))
-        return 0;
-    for (const char *p = o; *p;) {
-        const char *e = strchr(p, '/');
-        size_t l = e ? (size_t)(e - p) : strlen(p);
-        if ((l == 1 && p[0] == '.') || (l == 2 && p[0] == '.' && p[1] == '.'))
-            return 0;
-        if (!e)
-            break;
-        p = e + 1;
-    }
-    return 1;
-}
-
 /* Moves <game_dir>/<rel> to its recorded original path (or fallback, relative to the
  * drive root, for pkgs moved before origins were recorded) and adds it to the list of
  * restored pkgs when remember is set (moved back on request: the scan leaves them alone).
@@ -5093,7 +5077,7 @@ static int restore_pkg(const char *root, const char *game_dir, const char *rel, 
         snprintf(orig, sizeof(orig), "%s", fallback);
         clean_name(orig);
     }
-    if (!orig_safe(orig) || snprintf(dir, sizeof(dir), "%s/%s", root, orig) >= (int)sizeof(dir)) {
+    if (!restore_orig_path_ok(orig) || snprintf(dir, sizeof(dir), "%s/%s", root, orig) >= (int)sizeof(dir)) {
         printf("[restore] %s: unsafe original path %s\n", src, orig);
         return -1;
     }
@@ -5225,6 +5209,10 @@ static int restore_unregister(const char *root, const char *tid) {
     snprintf(game, sizeof(game), "%s/ps4/%s", root, tid);
     int nd = folder_dlc_tids(game, dtids, MAX_DLC_TIDS);
     unmount_title(tid, dtids, nd);
+    if (!title_detached(tid, dtids, nd)) {
+        printf("[restore] %s kept: still mounted\n", tid);
+        return -1;
+    }
     char msg[256];
     if (!installed_internally(tid) && app_remove(tid, msg, sizeof(msg))) {
         printf("[restore] %s kept: %s\n", tid, msg);
@@ -5401,6 +5389,9 @@ static int restore_collect(char (*only)[10], int nonly, restore_item_t *items, i
  * restore_files (0 for the move back organize off does by itself). */
 static void run_restore(char (*only)[10], int nonly, int remember) {
     static restore_item_t items[MAX_TITLES];
+    static unsigned char unregistered[MAX_TITLES], move_failed[MAX_TITLES];
+    memset(unregistered, 0, sizeof(unregistered));
+    memset(move_failed, 0, sizeof(move_failed));
     int n = restore_collect(only, nonly, items, MAX_TITLES), moved = 0, failed = 0, done = 0, kept = 0;
     if (!n) {
         notify("%s", TR("No PS4Mount games to restore", "No hay juegos de PS4Mount que restaurar"));
@@ -5429,9 +5420,12 @@ static void run_restore(char (*only)[10], int nonly, int remember) {
                 kept++;
                 continue;
             }
+            unregistered[k] = 1;
             /* one removal at a time: the next waits until the system databases are idle */
             wait_db_quiet(3, 30);
+            int failed_before = failed;
             restore_files(items[k].root, items[k].tid, items[k].name, &moved, &failed, remember);
+            move_failed[k] = failed > failed_before;
             done++;
         }
     }
@@ -5439,7 +5433,8 @@ static void run_restore(char (*only)[10], int nonly, int remember) {
      * game added again later is not taken for one removed on the console */
     pump_events(3000);
     for (int i = 0; i < n; i++)
-        restore_clear_state(items[i].tid);
+        if (restore_clear_state_ok(unregistered[i], move_failed[i]))
+            restore_clear_state(items[i].tid);
     g_next_scan = 0;
     if (n == 1 && done)
         notify_kind(NOTIFY_READY, TR("%s: %d pkg file(s) restored%s", "%s: %d pkg(s) restaurado(s)%s"), items[0].name,
