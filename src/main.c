@@ -3815,7 +3815,8 @@ static void scan_finish(unsigned seq) {
     pthread_mutex_unlock(&g_scanreq_mu);
 }
 
-static int g_stop; /* the panel asked to stop: the long loops end before the daemon does */
+static int g_stop; /* one-way atomic stop intent: the long loops end before the daemon does */
+static int stop_requested(void) { return __atomic_load_n(&g_stop, __ATOMIC_ACQUIRE); }
 
 static void scan_root(const char *root, int fresh, int reconnected) {
     const char *label = root_label(root);
@@ -3841,7 +3842,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     if (nt)
         bgftscan_load(&g_bgftscan, BGFT_DIR, BGFT_FIRST, BGFT_LAST);
     for (int k = 0; k < nt && count < MAX_TITLES; k++) {
-        if (g_stop)
+        if (stop_requested())
             break; /* the panel asked to stop */
         if (!(k % 8))
             pump_now(); /* the panel answers while a library is walked */
@@ -3880,7 +3881,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
                     label, pending);
     /* games already in the library: keep them mounted */
     for (int i = 0; i < count; i++) {
-        if (g_stop)
+        if (stop_requested())
             break;
         if (!(i % 8))
             pump_now();
@@ -3942,7 +3943,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     }
     memset(prepared, 0, sizeof(int) * (size_t)size);
     for (int i = 0; i < count;) {
-        if (g_stop)
+        if (stop_requested())
             break;
         int n = 0;
         for (; i < count && n < size; i++)
@@ -3963,7 +3964,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         }
         int np = 0;
         for (int k = 0; k < n; k++) {
-            if (g_stop)
+            if (stop_requested())
                 break;
             if (!(k % 4))
                 pump_now(); /* the panel answers while the files of a group are prepared */
@@ -4897,7 +4898,7 @@ static void rescan_invalidate(void) {
 
 /* The panel's own "scan for games" is an intent: the owner invalidates inside the scan epoch. */
 void app_rescan_hard(void) { scan_request_hard(); }
-void app_stop(void) { g_stop = 1; }
+void app_stop(void) { __atomic_store_n(&g_stop, 1, __ATOMIC_RELEASE); }
 
 static void json_str(buf_t *b, const char *s) {
     buf_put(b, "\"", 1);
@@ -7686,7 +7687,7 @@ int main(void) {
     notify_running();
     unlink(STATE_DIR "/stop");
     for (;;) {
-        if (g_stop || exists(STATE_DIR "/stop")) {
+        if (stop_requested() || exists(STATE_DIR "/stop")) {
             unlink(STATE_DIR "/stop");
             notify("%s", TR(VERSION " stopped", VERSION " detenido"));
             shutdown_daemon(lock);

@@ -77,10 +77,12 @@ scan uses fresh sockets, share listing creates its own backend context, their ou
 are local, and the saved-login fallback is copied through the configuration mutex. SMB context
 creation/destruction is serialized across the whole process because libsmb2 keeps a global
 active-context list; ordinary operations then use per-context state. The probes may therefore
-wait in workers rather than in the owner. `/api/check`, games/icons/pics, storage,
-destinations, mounts, restore, configuration, NAS reload and process control remain owner
-routes because they read or mutate library/mount/configuration state. Unknown routes are
-worker safe because they produce only the fixed 404 response.
+wait in workers rather than in the owner. `/api/stop` is also worker-safe: it publishes only
+a one-way atomic stop intent, so the request is not stranded behind a long scan. `/api/check`,
+games/icons/pics, storage, destinations, mounts, restore, configuration, NAS reload and
+`/api/app/close` remain owner routes because they read or mutate library/mount/configuration
+state or call process-control services of the system. Unknown routes are worker safe because
+they produce only the fixed 404 response.
 
 An owner route transfers both the connected fd and the parsed request object exactly once
 to the owner queue. The main loop executes it through the same dispatcher, preserving the
