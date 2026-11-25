@@ -50,7 +50,8 @@ Check: read. Source: ps4-payload-sdk; local firmware tests.
 
 ### P4N-7: a package with impossible size metadata is not handed to the system installer
 A nonzero PKG file whose header declares package size zero is damaged or malformed for install purposes.
-It may be shown as a problem, but PS4Mount must not queue it to BGFT or let it stall a batch for a minute.
+It may be shown as a problem, but PS4Mount must not queue it to BGFT. The observed Uncharted timeout
+correlates with such a file; causality is not proven.
 Check: test (keep bar 5: real hardware regression). Source: Toshiba audit 2026-11-25; PR #11 Uncharted DLC timeout.
 
 ### P4N-8: kernel-log copying is rate-limited without dropping new information

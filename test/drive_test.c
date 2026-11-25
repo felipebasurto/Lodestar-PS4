@@ -54,7 +54,7 @@ static int g_cut_upload_after;   /* close the connection at the PUT that would p
 static int g_cut_download_at;    /* send this many bytes of a download, then close */
 static int g_damage_download;    /* report a wrong MD5 for downloads */
 static int g_refresh_revoked;    /* the refresh token is no longer valid */
-static int g_token_polls, g_revoked_calls, g_refreshes, g_ranges, g_secret_seen, g_slow_ms, g_accepts, g_requests, g_puts, g_put_conns;
+static int g_token_polls, g_revoked_calls, g_refreshes, g_ranges, g_secret_seen, g_slow_ms, g_slow_upload_ms, g_accepts, g_requests, g_puts, g_put_conns;
 
 static void md5_of(const uint8_t *d, size_t n, char out[33]) {
     br_md5_context c;
@@ -346,6 +346,12 @@ static int serve(int fd, int first) {
         int query = cr && cr[21] == '*';
         g_puts += !query;
         g_put_conns += !query && first; /* a chunk that opened a connection of its own */
+        if (!query && g_slow_upload_ms) {
+            int ms = g_slow_upload_ms;
+            pthread_mutex_unlock(&g_smu);
+            usleep((useconds_t)ms * 1000);
+            pthread_mutex_lock(&g_smu);
+        }
         if (cr && !query)
             sscanf(cr + 21, "%zu-%zu/%zu", &a, &b, &total);
         if (!f) {
@@ -632,6 +638,9 @@ int main(void) {
     pthread_mutex_lock(&g_smu);
     int up_conns = g_put_conns, up_puts = g_puts;
     pthread_mutex_unlock(&g_smu);
+    pthread_mutex_lock(&g_smu);
+    g_slow_upload_ms = 50; /* a real network does not finish 8 chunks before the first status read */
+    pthread_mutex_unlock(&g_smu);
     CHECK(drive_upload("CUSA00001", msg, sizeof(msg)) == 0);
     int saw_progress = 0;
     for (int i = 0; i < 400 && !saw_progress; i++) {
@@ -641,6 +650,9 @@ int main(void) {
         buf_free(&b);
     }
     CHECK(saw_progress); /* the whole game (1331217 + 262144 + 1000), not one file */
+    pthread_mutex_lock(&g_smu);
+    g_slow_upload_ms = 0;
+    pthread_mutex_unlock(&g_smu);
     wait_idle();
     result(res, sizeof(res), &ok);
     CHECK(ok && strstr(res, "Test: Game is in Google Drive (2 MB in "));

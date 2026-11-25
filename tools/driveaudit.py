@@ -52,8 +52,8 @@ CHECKS = {
                      "has no use for it."),
     "size-zero": ("ERROR",
                   "The header declares a pkg size of 0 in a file that has data: the header is "
-                  "damaged. Hardware evidence shows such tiny damaged add-ons can stall the "
-                  "system's installer (BGFT) so nothing else installs. Do not let the console "
+                  "damaged. A tiny damaged add-on with this shape timed out during hardware testing (correlation, not proven causality). "
+                  "Do not let the console's installer (BGFT) "
                   "install this file; copy it again from the source."),
     "size-short": ("ERROR",
                    "Fewer bytes on disk than the header declares: the download or copy was cut. "

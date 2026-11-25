@@ -9,7 +9,7 @@ From 2026-11-25 19:00:00 to 2026-11-25 19:00:10
   [main] 1  [scan] 1
 
 == What to look at
-  [ERROR] A pkg occupies space but its header declares a size of 0 bytes: it is damaged. It is not handed to the system installer because it can stall the queue; copy that pkg again from the source.
+  [ERROR] A pkg occupies space but its header declares a size of 0 bytes: it is damaged. It is not handed to the system installer. It is a possible cause of the timeout seen in an Uncharted add-on, not a proven cause; copy that pkg again from the source.
         1 time(s); first line: [scan] skip /mnt/usb0/ps4/CUSA02320/addcont/CUSA02320/NATHANDRAKEPACK1/ac.pkg (UP0002-CUSA02320_00-NATHANDRAKEPACK1: a nonzero pkg whose header declares 0 bytes
 
 == Temporary files PS4Mount deleted from internal storage

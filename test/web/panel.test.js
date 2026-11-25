@@ -42,7 +42,7 @@ function page(file, opts) {
   // as build.sh does: the language tables where the page says <!--LANG-->
   const html = fs.readFileSync(W + file, 'utf8').replace('<!--LANG-->', () => '<script>' + INLINE + '</script>');
   const dom = new JSDOM(html, {
-    url: 'http://ps5:8770/' + (opts.suffix || ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
+    url: 'http://ps4:8770/' + (opts.suffix || ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w) {
       w.setInterval = () => 0;
       w.scrollTo = () => {};
@@ -182,7 +182,7 @@ function tKeys(file) {
   const kp = (el, ch) => { const e = new w.KeyboardEvent('keypress', { key: ch, charCode: ch.charCodeAt(0), cancelable: true }); el.dispatchEvent(e); return e.defaultPrevented; };
   ok(kp(gs, 'a') && kp(gs, '-') && kp(gs, 'e') && !kp(gs, '7'), 'group size: keys other than digits are blocked');
   ok(gs.getAttribute('inputmode') === 'numeric' && d.getElementById('s-rsize').getAttribute('inputmode') === 'numeric', 'numeric keyboard on both fields');
-  ok(gs.type === 'number' && d.getElementById('s-rsize').type === 'number', 'both fields are type=number (numeric keyboard on the PS5)');
+  ok(gs.type === 'number' && d.getElementById('s-rsize').type === 'number', 'both fields are type=number (numeric keyboard on the console browser)');
   gs.value = ''; reqs.length = 0; d.getElementById('setform').dispatchEvent(new w.Event('submit', { cancelable: true })); await tick();
   ok(reqs.length === 0 && d.getElementById('toast').textContent.includes('1 to 50'), 'empty group size refused');
   gs.value = '5';

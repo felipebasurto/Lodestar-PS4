@@ -409,7 +409,7 @@ $('s-batch').onclick = function () { $('s-size').disabled = !this.checked; };
 function dlcFields() { $('s-dlcbig-row').hidden = $('s-dlc-mode').value !== 'internal'; }
 $('s-dlc-mode').onchange = dlcFields;
 $('s-cancel').onclick = function () { show('v-games'); };
-/* Number fields: type=number opens the numeric keyboard on the PS5 (inputmode alone does
+/* Number fields: type=number opens the numeric keyboard on the console browser (inputmode alone does
  * not), inputmode on phones; digits only, capped at max. */
 function onlyDigits(el, max) {
   /* a key that types anything but a digit never reaches the field (Enter still submits) */
