@@ -248,13 +248,14 @@ static int read_one(cat_pkg_t *p, pkg_t *pkg, sfo_t *sfo) {
                 *s = ' ';
     }
     p->nservices = 0;
-    for (int i = 1; i <= CAT_MAX_SERVICES; i++) {
-        char key[48];
-        snprintf(key, sizeof(key), "SERVICE_ID_ADDCONT_ADD_%d", i);
-        const sfo_item_t *it = sfo_get(sfo, key);
-        if (it && !it->is_int && strlen(it->sval) >= 19)
-            snprintf(p->services[p->nservices++], sizeof(p->services[0]), "%.19s", it->sval);
-    }
+    if (strcmp(p->category, "ac"))
+        for (int i = 1; i <= CAT_MAX_SERVICES; i++) {
+            char key[48];
+            snprintf(key, sizeof(key), "SERVICE_ID_ADDCONT_ADD_%d", i);
+            const sfo_item_t *it = sfo_get(sfo, key);
+            if (it && !it->is_int && strlen(it->sval) >= 19)
+                snprintf(p->services[p->nservices++], sizeof(p->services[0]), "%.19s", it->sval);
+        }
     rc = 0;
 out:
     mem_free(d);
@@ -633,12 +634,13 @@ int catalog_save(const catalog_t *c, const char *path) {
         const cat_pkg_t *p = &c->pkgs[i];
         if (p->state == CAT_UNREAD || p->state == CAT_SHORT || strpbrk(p->path, "\t\r\n"))
             continue;
+        int nservices = strcmp(p->category, "ac") ? p->nservices : 0;
         fprintf(f, "%d\t%llu\t%lld\t%s\t%s\t%s\t%s\t%d", p->state, (unsigned long long)p->size,
                 (long long)p->mtime, p->category[0] ? p->category : "-", p->title_id[0] ? p->title_id : "-",
-                p->content_id[0] ? p->content_id : "-", p->app_ver[0] ? p->app_ver : "-", p->nservices);
-        for (int k = 0; k < p->nservices; k++)
+                p->content_id[0] ? p->content_id : "-", p->app_ver[0] ? p->app_ver : "-", nservices);
+        for (int k = 0; k < nservices; k++)
             fprintf(f, "\t%s", p->services[k]);
-        fprintf(f, "\t%s\t%s\n", p->name[0] ? p->name : "-", p->path);
+        fprintf(f, "\t%s\t%s\n", !strcmp(p->category, "ac") && p->name[0] ? p->name : "-", p->path);
     }
     int rc = ferror(f) ? -1 : 0;
     if (fclose(f))
@@ -680,11 +682,13 @@ static int parse_line(char *line, cat_pkg_t *p) {
     field(p->title_id, sizeof(p->title_id), f[4]);
     field(p->content_id, sizeof(p->content_id), f[5]);
     field(p->app_ver, sizeof(p->app_ver), f[6]);
-    for (int k = 0; k < ns; k++)
-        snprintf(p->services[k], sizeof(p->services[k]), "%s", f[8 + k]);
-    p->nservices = ns;
-    if (named)
+    if (strcmp(p->category, "ac")) {
+        for (int k = 0; k < ns; k++)
+            snprintf(p->services[k], sizeof(p->services[k]), "%s", f[8 + k]);
+        p->nservices = ns;
+    } else if (named) {
         field(p->name, sizeof(p->name), f[8 + ns]);
+    }
     const char *path = f[8 + ns + named];
     if (path[0] != '/')
         return -1;

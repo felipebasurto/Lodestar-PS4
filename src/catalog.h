@@ -41,8 +41,10 @@ typedef struct {
     int state;                            /* CAT_UNREAD, CAT_BAD (not a fake PS4 pkg), CAT_OK or CAT_SHORT */
     char category[4];                     /* gd game, gp update, ac add-on */
     char title_id[10], content_id[37], app_ver[8];
-    char name[64];                        /* add-ons: TITLE, for the panel */
-    char services[CAT_MAX_SERVICES][20];  /* add-on content ID prefixes a game or update lists */
+    union {
+        char services[CAT_MAX_SERVICES][20]; /* game/update: add-on content ID prefixes it lists */
+        char name[64];                       /* add-on: TITLE, for the panel */
+    };
     int nservices;
     int seen;                             /* found by the current walk */
     int role;                             /* CAT_ROLE_* */

@@ -31,3 +31,13 @@ fall back to the linear scan. Walks that invalidate game indexes do not reuse st
 Check: test (large input space and public catalog behavior). Test: `test/catalog_test.c` ›
 large catalog lookup case.
 Source: scan algorithmic audit 2026-11-25.
+
+### CAT-4: add-on names and service lists share category-specific storage
+A package is either an add-on (`ac`) or a game/update. Add-on display names are meaningful only
+for `ac`; `SERVICE_ID_ADDCONT_ADD_n` lists are meaningful only when grouping a game or update.
+The catalog may therefore store them in category-specific overlapping storage. The persisted
+cache format remains unchanged. Service lists found on add-ons and display names found on
+games/updates are meaningless input and are not preserved as grouping evidence.
+Check: test (external persisted catalog format and grouping behavior). Tests:
+`test/catalog_test.c` existing service/add-on grouping cases.
+Source: catalog memory audit 2026-11-25.
