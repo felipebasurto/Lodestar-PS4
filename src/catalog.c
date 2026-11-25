@@ -18,6 +18,13 @@
 #include "mem.h"
 #include "pkg.h"
 
+
+static void release_xstore(catalog_t *c) {
+    free(c->xupdates_store);
+    free(c->xdlc_store);
+    c->xupdates_store = c->xdlc_store = NULL;
+}
+
 static int by_path(const void *a, const void *b) {
     return strcmp(((const cat_pkg_t *)a)->path, ((const cat_pkg_t *)b)->path);
 }
@@ -321,6 +328,7 @@ static int pick_update(const catalog_t *c, const cat_game_t *g, cat_choose_fn ch
 }
 
 void catalog_group(catalog_t *c, cat_choose_fn choose) {
+    release_xstore(c);
     c->ngames = c->dupes = c->orphans = c->included = 0;
     for (int i = 0; i < c->npkgs; i++)
         c->pkgs[i].role = CAT_ROLE_NONE;
@@ -424,12 +432,15 @@ int catalog_dlc_of(const catalog_t *all, const catalog_t *c, const cat_game_t *g
 }
 
 void catalog_unlink(catalog_t *all, int n) {
-    for (int d = 0; d < n; d++)
+    for (int d = 0; d < n; d++) {
         for (int k = 0; k < all[d].ngames; k++) {
             cat_game_t *g = &all[d].games[k];
             g->nxupdates = g->nxdlc = 0;
             g->xpatch = -1;
+            g->xupdates = g->xdlc = NULL;
         }
+        release_xstore(&all[d]);
+    }
 }
 
 /* The update of g among the ones of every drive: the chosen version, else the highest.
@@ -485,6 +496,21 @@ void catalog_link(catalog_t *all, int n, cat_choose_fn choose, int cross) {
             catalog_group(&all[d], choose);
     if (!cross)
         return;
+    for (int d = 0; d < n; d++) {
+        catalog_t *c = &all[d];
+        if (!c->ngames)
+            continue;
+        c->xupdates_store = calloc((size_t)c->ngames, CAT_MAX_UPDATES * sizeof(cat_ref_t));
+        c->xdlc_store = calloc((size_t)c->ngames, CAT_MAX_DLC * sizeof(cat_ref_t));
+        if (!c->xupdates_store || !c->xdlc_store) {
+            release_xstore(c); /* no cross refs for this catalog; local grouping stays valid */
+            continue;
+        }
+        for (int k = 0; k < c->ngames; k++) {
+            c->games[k].xupdates = c->xupdates_store + (size_t)k * CAT_MAX_UPDATES;
+            c->games[k].xdlc = c->xdlc_store + (size_t)k * CAT_MAX_DLC;
+        }
+    }
     for (int d = 0; d < n; d++)
         for (int i = 0; i < all[d].npkgs; i++) {
             cat_pkg_t *u = &all[d].pkgs[i];
@@ -492,7 +518,7 @@ void catalog_link(catalog_t *all, int n, cat_choose_fn choose, int cross) {
                 continue;
             for (int e = 0; e < n; e++) {
                 cat_game_t *g = e == d ? NULL : game_find(&all[e], u->title_id);
-                if (g && g->nupdates + g->nxupdates < CAT_MAX_UPDATES) {
+                if (g && g->xupdates && g->nupdates + g->nxupdates < CAT_MAX_UPDATES) {
                     g->xupdates[g->nxupdates++] = (cat_ref_t){d, i};
                     u->role = CAT_ROLE_SPARE;
                 }
@@ -516,7 +542,7 @@ void catalog_link(catalog_t *all, int n, cat_choose_fn choose, int cross) {
                     if (strcmp(g->title_id, a->title_id) && !serves(&all[e].pkgs[g->app], a) &&
                         !(patch && serves(patch, a)))
                         continue;
-                    if (g->ndlc + g->nxdlc >= CAT_MAX_DLC)
+                    if (!g->xdlc || g->ndlc + g->nxdlc >= CAT_MAX_DLC)
                         continue;
                     g->xdlc[g->nxdlc++] = (cat_ref_t){d, i};
                     if (a->role == CAT_ROLE_ORPHAN) {
@@ -649,6 +675,7 @@ int catalog_load(catalog_t *c, const char *path) {
 }
 
 void catalog_free(catalog_t *c) {
+    release_xstore(c);
     free(c->pkgs);
     free(c->games);
     memset(c, 0, sizeof(*c));

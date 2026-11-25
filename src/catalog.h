@@ -62,10 +62,10 @@ typedef struct {
     int app, patch; /* patch is -1 without an update, or when the update used is xpatch */
     int updates[CAT_MAX_UPDATES], nupdates; /* every update found, the one used included */
     int dlc[CAT_MAX_DLC], ndlc;
-    cat_ref_t xupdates[CAT_MAX_UPDATES];
+    cat_ref_t *xupdates; /* optional side storage, present only after a cross link */
     int nxupdates;
     int xpatch; /* index in xupdates of the update used, -1 for none */
-    cat_ref_t xdlc[CAT_MAX_DLC];
+    cat_ref_t *xdlc;
     int nxdlc;
 } cat_game_t;
 
@@ -78,6 +78,7 @@ typedef struct {
     cat_pkg_t *pkgs; /* sorted by path */
     int npkgs, cap;
     cat_game_t *games;
+    cat_ref_t *xupdates_store, *xdlc_store; /* backing blocks for cross links, when used */
     int ngames, gcap;
     int dupes;    /* game pkgs not used: an earlier copy of the same game is used */
     int orphans;  /* add-ons whose game is not on the drive */

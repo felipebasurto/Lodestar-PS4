@@ -282,6 +282,7 @@ static const char *choose_none(const char *tid) {
 
 static void test_choose(void) {
     printf("catalog: update chosen and cross-drive\n");
+    CHECK(sizeof(cat_game_t) < 512);
     char root[] = "/tmp/ps4mount-cat-XXXXXX";
     if (!mkdtemp(root)) {
         CHECK(0);
