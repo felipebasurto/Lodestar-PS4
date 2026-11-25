@@ -65,6 +65,7 @@
 #include "netfs.h"
 #include "origin.h"
 #include "pkg.h"
+#include "retention.h"
 #include "shortpath.h"
 #include "emu.h"
 #include "stage.h"
@@ -3526,20 +3527,31 @@ static int catalog_update(catalog_t *cat, const char *root, int fresh) {
     return cat->ngames > 0;
 }
 
-/* Add-ons deleted on the console come back with their game: drive reconnected or
- * "Add to library" in the panel. */
-static void clear_removed_dlc(void) {
+/* Add-ons deleted on the console come back only with their own game: drive reconnected
+ * with that game present, or that game added/restored through the panel. Unrelated titles
+ * must not resurrect a DLC the user deleted. */
+static void clear_removed_dlc_tids(char (*tids)[10], int ntids) {
     DIR *d = opendir(STATE_DIR);
     if (!d)
         return;
     struct dirent *e;
     char p[PATH_MAX];
     while ((e = readdir(d)))
-        if (strlen(e->d_name) == 36 + 8 && !strcmp(e->d_name + 36, ".removed")) {
-            snprintf(p, sizeof(p), STATE_DIR "/%s", e->d_name);
-            unlink(p);
-        }
+        for (int i = 0; i < ntids; i++)
+            if (retention_clear_dlc_for_tid(e->d_name, tids[i])) {
+                snprintf(p, sizeof(p), STATE_DIR "/%s", e->d_name);
+                unlink(p);
+                break;
+            }
     closedir(d);
+}
+
+static void clear_removed_dlc_for(const char *tid) {
+    char one[1][10];
+    if (!is_game_id(tid))
+        return;
+    memcpy(one[0], tid, sizeof(one[0]));
+    clear_removed_dlc_tids(one, 1);
 }
 
 static int readd_queue(const char *tid, const char *why);
@@ -3557,8 +3569,6 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     activity_set("scanning", label, NULL, NULL, 0, 0, 0, 0);
     if (fresh && g_manual_scan && !in_place(root))
         notify_kind(NOTIFY_DRIVE, TR("Scanning %s for PS4 games...", "Buscando juegos de PS4 en %s..."), label);
-    if (reconnected)
-        clear_removed_dlc();
     int moved = in_place(root) ? 0 : adopt_root_pkgs(root);
     if (moved && !fresh)
         notify_kind(NOTIFY_DRIVE, TR("%s: %d new package(s) found", "%s: %d pkg(s) nuevo(s) encontrado(s)"), label, moved);
@@ -3566,6 +3576,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     static char tids[MAX_TITLES][10];
     int count = 0, pending = 0;
     int nt = titles_on_root(root, tids, MAX_TITLES);
+    if (reconnected)
+        clear_removed_dlc_tids(tids, nt);
     if (nt)
         bgftscan_load(&g_bgftscan, BGFT_DIR, BGFT_FIRST, BGFT_LAST);
     for (int k = 0; k < nt && count < MAX_TITLES; k++) {
@@ -4883,7 +4895,7 @@ int app_add(const char *tid, char *msg, size_t cap) {
     }
     snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", tid);
     unlink(rm);
-    clear_removed_dlc();
+    clear_removed_dlc_for(tid);
     g_next_scan = 0;
     snprintf(msg, cap, TR("Adding %s to the library", "Añadiendo %s a la biblioteca"), tid);
     return 0;
@@ -5225,6 +5237,7 @@ static void restore_clear_state(const char *tid) {
     char p[64];
     snprintf(p, sizeof(p), STATE_DIR "/%s.removed", tid);
     unlink(p);
+    clear_removed_dlc_for(tid);
     snprintf(p, sizeof(p), STATE_DIR "/%s.src", tid);
     unlink(p);
     retry_clear(tid);
@@ -5427,7 +5440,6 @@ static void run_restore(char (*only)[10], int nonly, int remember) {
     pump_events(3000);
     for (int i = 0; i < n; i++)
         restore_clear_state(items[i].tid);
-    clear_removed_dlc();
     g_next_scan = 0;
     if (n == 1 && done)
         notify_kind(NOTIFY_READY, TR("%s: %d pkg file(s) restored%s", "%s: %d pkg(s) restaurado(s)%s"), items[0].name,

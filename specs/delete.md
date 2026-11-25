@@ -62,6 +62,18 @@ re-add a title, but must never delete data.
 Check: test (keep bar 2: data loss; ordering). Test: `test/unit.c` › `test_delete_window` pending decisions.
 Source: delete audit 2026-11-25.
 
+
+### DEL-7: removal retention is scoped to the title the user action names
+A base `<TID>.removed` marker suppresses automatic registration until the title is explicitly added again,
+restored, or its drive reconnects with that title present. Reconnection is treated as intent only for titles observed on
+that drive, preserving the existing “connect it back to use it” contract. An add-on `<CONTENT_ID>.removed`
+marker suppresses only that add-on. It may be cleared only for the title embedded in the content id when that
+same title is added, restored, or observed on a reconnected drive; an unrelated drive, game or restore never
+clears it. Marker filenames are external state input and must validate as exactly `<TID>.removed` or
+`<CONTENT_ID>.removed` before their embedded title id is used.
+Check: test (state format; data retention ordering). Test: `test/unit.c` › `test_retention_marks`.
+Source: `.removed`/DLC retention audit 2026-11-25.
+
 ## Non-goals
 
 - Interpreting a failed read of system databases as proof that a title is absent.

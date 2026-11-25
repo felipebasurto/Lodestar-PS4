@@ -22,6 +22,7 @@
 #include "origin.h"
 #include "pkg.h"
 #include "mountplan.h"
+#include "retention.h"
 #include "stage.h"
 #include "webnet.h"
 #include "pdb_template.h"
@@ -1166,6 +1167,37 @@ static void test_mountplan(void) {
     }
 }
 
+
+/* DEL-7 (specs/delete.md): .removed filenames are state input, and only a valid marker's
+ * own embedded title id may decide which DLC retention it clears. */
+static void test_retention_marks(void) {
+    printf("retention: which .removed markers belong to a title\n");
+    char tid[10];
+    CHECK(retention_marker("CUSA00001.removed", tid) == RETENTION_MARK_BASE && !strcmp(tid, "CUSA00001"));
+    CHECK(retention_marker("UP0000-CUSA00001_00-ADDON00000000000.removed", tid) == RETENTION_MARK_DLC &&
+          !strcmp(tid, "CUSA00001"));
+    CHECK(retention_marker("EP0001-CUSA00002_00-ADDON00000000000.removed", tid) == RETENTION_MARK_DLC &&
+          !strcmp(tid, "CUSA00002"));
+    CHECK(retention_clear_dlc_for_tid("UP0000-CUSA00001_00-ADDON00000000000.removed", "CUSA00001"));
+    CHECK(!retention_clear_dlc_for_tid("UP0000-CUSA00001_00-ADDON00000000000.removed", "CUSA00002"));
+    CHECK(!retention_clear_dlc_for_tid("CUSA00001.removed", "CUSA00001")); /* base markers are not DLC */
+    CHECK(!retention_clear_dlc_for_tid("UP0000-CUSA00001_00-ADDON000/00000.removed", "CUSA00001"));
+    static const char *bad[] = {
+        "cusa00001.removed", "CUSA00001.removedx", "xCUSA00001.removed", "CUSA00001.remove",
+        "UP0000-CUSA00001_00-ADDON0000000000.removed",  /* 35-byte content id */
+        "UP0000-CUSA00001_00-ADDON000000000000.removed", /* 37-byte content id */
+        "UP0000-CUSA00001_00-ADDON00000000..removed",
+        "UP0000-CUSA00001_00-ADDON000/00000.removed",
+        "UP0000-cusa00001_00-ADDON0000000000.removed",
+        "", ".removed",
+    };
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+        if (retention_marker(bad[i], tid) != RETENTION_MARK_NONE)
+            printf("  bad marker accepted: %s\n", bad[i]);
+        CHECK(retention_marker(bad[i], tid) == RETENTION_MARK_NONE);
+    }
+}
+
 static void test_emu(void) {
     printf("emulators: which names are mounted over the console's folders\n");
     static const struct {
@@ -1226,6 +1258,7 @@ int main(void) {
     test_remove_admission();
     test_web_net();
     test_mountplan();
+    test_retention_marks();
     test_emu();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;
