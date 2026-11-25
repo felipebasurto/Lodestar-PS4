@@ -34,10 +34,15 @@ Source: user (2026-11-24); the 10 minutes are the value of the version before th
 | 3 days | delete (STORE-4) |
 | -5 s (the clock went back) | keep |
 
-### STORE-3: a received pkg is deleted once the system has the whole app
-The title is installed on the internal drive, registered in the system's database, and the system's
-`app.pkg` has the same size as the copy.
-Check: read. Source: version before this PR (unchanged by it).
+### STORE-3: a received pkg is deleted once positive evidence says the system has the whole app
+The title id must be valid, the title must be installed on the internal drive rather than merely mounted
+there, a successful fresh read of the system's database must confirm registration, and the installed file
+for the package kind must be a regular file with the same nonzero size as the copy: `app.pkg` under
+`/user/app/<TID>` for a game, `patch.pkg` under `/user/patch/<TID>` for an update, and the matching
+`ac.pkg` under `/user/addcont/<TID>` for an add-on. A failed database read, stale cache, mounted target,
+missing file, wrong size, malformed content id, or malformed title id is not deletion evidence.
+Check: test (keep bar 2: data deletion; positive evidence). Test: `test/unit.c` › `test_stage`.
+Source: staged-install verification audit 2026-11-25.
 
 ### STORE-4: a pkg the system never installed is deleted after 3 days
 Whatever else is true. A paused install of a big game can wait days; 3 days is the limit.
@@ -88,5 +93,8 @@ Source: user (2026-11-24: idea 3, the storage panel). The old page (`/legacy`) d
   for the people who use it? (2026-11-24)
 - STORE-7 deletes a copy after one refusal. If BGFT can refuse for a passing reason (a busy service),
   the user must send the pkg again. Keep it for a retry instead? (2026-11-24)
+- Whether app.db rows and kind-specific installed files become visible only after the installer no longer
+  reads the source pkg is not proven without console evidence. Until hardware validation, STORE-3 is a
+  conservative positive-evidence check, not proof about the installer's internal ordering. (2026-11-25)
 - On removing a game, its `<TID>.restart` marker is kept on purpose (the panel's restart notice reads
   it). Does it ever need to go? (2026-11-24)

@@ -6311,7 +6311,7 @@ static void install_cleanup(void) {
     while (d && (e = readdir(d))) {
         if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, ".."))
             continue;
-        char path[PATH_MAX], tid[10] = "", title[128], app[64];
+        char path[PATH_MAX], tid[10] = "", app[PATH_MAX];
         struct stat st, ast;
         snprintf(path, sizeof(path), INSTALL_DIR "/%s", e->d_name);
         if (lstat(path, &st) || !S_ISREG(st.st_mode))
@@ -6333,11 +6333,17 @@ static void install_cleanup(void) {
         case STAGE_VERIFY:
             break;
         }
-        if (pkg_id_title(path, tid, title, sizeof(title)))
+        pkg_check_t c;
+        if (pkg_check(path, g_fw, &c))
             continue;
-        snprintf(app, sizeof(app), "/user/app/%s/app.pkg", tid);
-        if (!installed_internally(tid) || !db_is_registered(tid) || lstat(app, &ast) ||
-            !S_ISREG(ast.st_mode) || ast.st_size != st.st_size)
+        snprintf(tid, sizeof(tid), "%s", c.title_id);
+        char root[96];
+        if (stage_install_paths(c.kind, c.title_id, c.content_id, root, sizeof(root), app, sizeof(app)))
+            continue;
+        int target_stat = !lstat(app, &ast);
+        if (!stage_installed_ok(is_game_id(tid), !layers_on_failclosed(root), db_confirms_registered(tid),
+                                target_stat && S_ISREG(ast.st_mode), target_stat ? (uint64_t)ast.st_size : 0,
+                                (uint64_t)st.st_size))
             continue;
         if (!unlink(path))
             printf("[clean] %s: %s installed, copy deleted (%llu bytes)\n", path, tid, (unsigned long long)st.st_size);

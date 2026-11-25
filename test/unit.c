@@ -747,6 +747,37 @@ static void test_stage(void) {
                    rows[i].want);
         CHECK(got == rows[i].want);
     }
+
+    /* STORE-3: every piece of positive install evidence is required; removing any one keeps the copy. */
+    CHECK(stage_installed_ok(1, 1, 1, 1, 1234567, 1234567));
+    CHECK(!stage_installed_ok(0, 1, 1, 1, 1234567, 1234567)); /* malformed title id */
+    CHECK(!stage_installed_ok(1, 0, 1, 1, 1234567, 1234567)); /* mounted or absent, not an internal install */
+    CHECK(!stage_installed_ok(1, 1, 0, 1, 1234567, 1234567)); /* no confirmed fresh database row */
+    CHECK(!stage_installed_ok(1, 1, 1, 0, 1234567, 1234567)); /* app.pkg missing or not regular */
+    CHECK(!stage_installed_ok(1, 1, 1, 1, 1234567, 1234568)); /* size mismatch */
+    CHECK(!stage_installed_ok(1, 1, 1, 1, 0, 0));             /* zero bytes is not a whole app */
+
+    char root[96], target[160];
+    CHECK(stage_install_paths(PKG_KIND_GAME, "CUSA00001", "UP0000-CUSA00001_00-GAME000000000000",
+                              root, sizeof(root), target, sizeof(target)) == 0);
+    CHECK(!strcmp(root, "/user/app/CUSA00001") && !strcmp(target, "/user/app/CUSA00001/app.pkg"));
+    CHECK(stage_install_paths(PKG_KIND_UPDATE, "CUSA00001", "UP0000-CUSA00001_00-GAME000000000000",
+                              root, sizeof(root), target, sizeof(target)) == 0);
+    CHECK(!strcmp(root, "/user/patch/CUSA00001") && !strcmp(target, "/user/patch/CUSA00001/patch.pkg"));
+    CHECK(stage_install_paths(PKG_KIND_ADDON, "CUSA00001", "UP0000-CUSA00001_00-ADDON00000000000",
+                              root, sizeof(root), target, sizeof(target)) == 0);
+    CHECK(!strcmp(root, "/user/addcont/CUSA00001") &&
+          !strcmp(target, "/user/addcont/CUSA00001/ADDON00000000000/ac.pkg"));
+    CHECK(stage_install_paths(PKG_KIND_OTHER, "CUSA00001", "UP0000-CUSA00001_00-GAME000000000000",
+                              root, sizeof(root), target, sizeof(target)));
+    CHECK(stage_install_paths(PKG_KIND_GAME, "cusa00001", "UP0000-CUSA00001_00-GAME000000000000",
+                              root, sizeof(root), target, sizeof(target)));
+    CHECK(stage_install_paths(PKG_KIND_ADDON, "CUSA00002", "UP0000-CUSA00001_00-ADDON00000000000",
+                              root, sizeof(root), target, sizeof(target))); /* content id is for another game */
+    CHECK(stage_install_paths(PKG_KIND_ADDON, "CUSA00001", "UP0000-CUSA00001_00-ADDON0000000000",
+                              root, sizeof(root), target, sizeof(target))); /* 35-byte content id */
+    CHECK(stage_install_paths(PKG_KIND_ADDON, "CUSA00001", "UP0000-CUSA00001_00-ADDON00/0000000",
+                              root, sizeof(root), target, sizeof(target))); /* slash is not path evidence */
 }
 
 
