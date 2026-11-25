@@ -10,6 +10,10 @@ Sources: rewrite memory audit 2026-11-25 and the measured Toshiba library in `sp
 The registration representation may keep only the keys it consumes: `TITLE`, `VERSION`,
 `APP_VER`, `SYSTEM_VER` and `CATEGORY`. Presence and integer/string type validity are part
 of the metadata because missing keys and wrong types have different fallback behavior.
+`TITLE` keeps the display width of the parser. Version fields keep the eight-byte width
+already used by registration/panel consumers; category keeps five bytes, enough to represent
+every valid category exactly while a longer malformed value can never truncate into equality
+with one. Type validity remains a property of the original field, not of the truncated copy.
 The full bounded `sfo_t` table may be used transiently for validation, but is not embedded
 in `title_src_t` or `dlc_src_t`.
 Check: test (external file format, memory ownership and behavior parity). Tests:

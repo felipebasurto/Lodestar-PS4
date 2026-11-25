@@ -369,11 +369,19 @@ static void test_pkg_meta(void) {
     CHECK(m.has_app_ver && !m.app_ver_valid); /* absence and wrong type stay different */
     CHECK(m.has_system_ver && m.system_ver_valid && m.system_ver == 0x09008000);
     CHECK(m.has_category && !strcmp(m.category, "ac"));
+    /* decision widths are bounded, but a too-long malformed category cannot become valid */
+    snprintf(s.items[4].sval, sizeof(s.items[4].sval), "ac-long-malformed");
+    sfo_meta(&s, &m);
+    CHECK(m.has_category && strcmp(m.category, "ac"));
+    snprintf(s.items[4].sval, sizeof(s.items[4].sval), "gdOxxxx");
+    sfo_meta(&s, &m);
+    CHECK(m.has_category && strcmp(m.category, "gdO"));
+    snprintf(s.items[4].sval, sizeof(s.items[4].sval), "ac");
     memset(&s, 0, sizeof(s));
     sfo_meta(&s, &m);
     CHECK(!m.has_title && !m.title_valid && !m.has_version && !m.version_valid);
     CHECK(!m.has_app_ver && !m.app_ver_valid && !m.has_system_ver && !m.system_ver_valid);
-    CHECK(sizeof(pkg_meta_t) < 416);
+    CHECK(sizeof(pkg_meta_t) < 160);
 }
 
 static void touch(const char *path) {
