@@ -856,6 +856,10 @@ static void test_remove_admission(void) {
     CHECK(!remove_owned_ok(0, 0, 0, 0));
     CHECK(!remove_owned_ok(1, 1, 1, 1));
     CHECK(!remove_owned_ok(1, 0, 0, 0));
+    CHECK(remove_detached_ok(0, 0, 0));
+    CHECK(!remove_detached_ok(1, 0, 0));
+    CHECK(!remove_detached_ok(0, 1, 0));
+    CHECK(!remove_detached_ok(0, 0, 1));
 }
 
 /* P4N-13 (specs/ps4-native.md): the BGFT parser is strict about the external PDB frame and

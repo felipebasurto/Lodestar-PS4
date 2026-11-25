@@ -75,6 +75,13 @@ static inline int remove_owned_ok(int installed_internal, int managed, int src_s
     return managed || src_state || library_root;
 }
 
+
+/* Removal may reach the system uninstaller only when every target through which the drive
+ * content is reachable is detached. */
+static inline int remove_detached_ok(int app_mounted, int patch_mounted, int addcont_mounted) {
+    return !app_mounted && !patch_mounted && !addcont_mounted;
+}
+
 /* The content id in a kernel-log uninstall line is pkg-controlled text before it is a path
  * component. Only the plain charset of content ids may pass; no slash, dot or control byte. */
 static inline int delete_content_id_plain(const char *id) {

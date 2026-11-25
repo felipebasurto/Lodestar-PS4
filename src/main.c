@@ -4643,6 +4643,35 @@ static int uninstall_title(const char *tid) {
     return g_uninstall_rc;
 }
 
+static int folder_dlc_tids(const char *game, char (*tids)[10], int max);
+
+/* Add-on mount targets known for a removal, even when the managed record is absent after
+ * a restart. In-place catalogs name add-ons wherever they are; organized folders keep them
+ * under the game's own addcont directory. */
+static int removal_dlc_tids(const char *root, const char *tid, const managed_t *m, char (*out)[10]) {
+    if (m) {
+        memcpy(out, m->dlc_tids, sizeof(m->dlc_tids));
+        return m->ndlc_tids;
+    }
+    if (in_place(root)) {
+        const catalog_t *c = drive_catalog(root);
+        const cat_game_t *g = c ? catalog_game(c, tid) : NULL;
+        const cat_pkg_t *list[CAT_MAX_DLC];
+        int nlist = g ? catalog_dlc_of(g_cat, c, g, list, CAT_MAX_DLC) : 0, n = 0;
+        for (int i = 0; i < nlist && n < MAX_DLC_TIDS; i++) {
+            int known = 0;
+            for (int k = 0; k < n; k++)
+                known |= !strcmp(out[k], list[i]->title_id);
+            if (!known)
+                snprintf(out[n++], 10, "%s", list[i]->title_id);
+        }
+        return n;
+    }
+    char game[PATH_MAX];
+    snprintf(game, sizeof(game), "%s/ps4/%s", root, tid);
+    return folder_dlc_tids(game, out, MAX_DLC_TIDS);
+}
+
 int app_remove(const char *tid, char *msg, size_t cap) {
     managed_t *m = managed_by(tid, NULL);
     char root[PATH_MAX], srcmark[64];
@@ -4657,15 +4686,19 @@ int app_remove(const char *tid, char *msg, size_t cap) {
         snprintf(msg, cap, "%s", TR("Close the game before removing it", "Cierra el juego antes de quitarlo"));
         return -1;
     }
-    if (m)
-        unmount_title(tid, m->dlc_tids, m->ndlc_tids);
-    else
-        unmount_title(tid, NULL, 0);
-    char a[64], b[64];
+    char dtids[MAX_DLC_TIDS][10];
+    int ndtids = removal_dlc_tids(root, tid, m, dtids);
+    unmount_title(tid, dtids, ndtids);
+    char a[64], b[64], d[64];
     snprintf(a, sizeof(a), "/user/app/%s", tid);
     snprintf(b, sizeof(b), "/user/patch/%s", tid);
-    if (mounted_from(a, NULL, 0) || mounted_from(b, NULL, 0)) {
-        /* never let the system uninstall run while the USB folder is reachable */
+    int addcont_mounted = 0;
+    for (int i = 0; i < ndtids; i++) {
+        snprintf(d, sizeof(d), "/user/addcont/%s", dtids[i]);
+        addcont_mounted |= mounted_from(d, NULL, 0) != 0;
+    }
+    if (!remove_detached_ok(mounted_from(a, NULL, 0), mounted_from(b, NULL, 0), addcont_mounted)) {
+        /* never let the system uninstall run while the USB content is reachable */
         snprintf(msg, cap, TR("Could not unmount %s; nothing was removed", "No se pudo desmontar %s; no se quitó nada"), tid);
         return -1;
     }
@@ -4678,7 +4711,7 @@ int app_remove(const char *tid, char *msg, size_t cap) {
     unlink(srcpath);
     int rc = db_is_registered(tid) ? uninstall_title(tid) : 0;
     if (!rc) {
-        clean_holds(tid, m ? m->dlc_tids : NULL, m ? m->ndlc_tids : 0);
+        clean_holds(tid, dtids, ndtids);
         /* the task goes with it: BGFT keeps the state of an id for the whole boot, and a
          * game added again under the same one could not start */
         bgft_remove(tid);
