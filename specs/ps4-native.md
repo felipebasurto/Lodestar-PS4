@@ -112,6 +112,17 @@ Check: read (the scan loop is system-facing and compiled through `test/sdkcheck.
 fingerprint format itself remains covered by `test/titlecache_test.c`).
 Source: performance audit of scan_root repeated fingerprinting.
 
+
+### P4N-16: helper-thread completion is an ordered publication, never a volatile flag
+System-service helper threads (InstallAll/TitleDir and UnInstall) publish their result before
+clearing their busy state with release ordering; callers read busy/result with acquire ordering.
+`volatile` is not synchronization and must not be used as one. A timed-out busy helper still
+blocks later helper use until it publishes completion, so its title/input slots are never overwritten.
+While busy the result is unknown and logs say pending; zero or an earlier result is never printed
+as evidence of the current call.
+Check: read (the system-service boundary is compiled through `test/sdkcheck.sh`; host tests cannot
+call the PS4 installer). Source: concurrency audit of existing install/uninstall helper threads.
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,

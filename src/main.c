@@ -2791,7 +2791,7 @@ static void check_firmware(void) {
 /* The system registration runs in its own thread: after rest mode InstallAll was seen to
  * block for good, which froze the whole daemon (panel, klog, stop request). A call still
  * running is never doubled; titles keep being checked in the database. */
-static volatile int g_install_busy, g_install_rc;
+static int g_install_busy, g_install_rc;
 static char g_install_tids[MAX_TITLES][10];
 static int g_install_n;
 
@@ -2818,8 +2818,8 @@ static void *install_thread(void *arg) {
     } else {
         rc = register_call(NULL);
     }
-    g_install_rc = rc;
-    g_install_busy = 0;
+    __atomic_store_n(&g_install_rc, rc, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_install_busy, 0, __ATOMIC_RELEASE); /* result before completion */
     return NULL;
 }
 
@@ -2827,7 +2827,7 @@ static void *install_thread(void *arg) {
 static int install_all_start(char (*tids)[10], int n) {
     if (g_reg_mode == REG_NONE)
         return -1; /* never where it corrupts the database */
-    if (g_install_busy) {
+    if (__atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE)) {
         printf("[reg] registration still running from an earlier call\n");
         return -1;
     }
@@ -2835,7 +2835,7 @@ static int install_all_start(char (*tids)[10], int n) {
     for (int i = 0; i < n && g_install_n < MAX_TITLES; i++)
         if (!db_is_registered(tids[i]))
             snprintf(g_install_tids[g_install_n++], 10, "%s", tids[i]);
-    g_install_busy = 1;
+    __atomic_store_n(&g_install_busy, 1, __ATOMIC_RELEASE);
     pthread_t th;
     if (pthread_create(&th, NULL, install_thread, NULL)) {
         install_thread(NULL); /* no thread: call it here */
@@ -3018,19 +3018,23 @@ static void install_all(char (*tids)[10], int n) {
             now += db_is_registered(tids[i]);
         idle = now > done ? 0 : idle + 1;
         done = now;
-        if (masked && !g_install_busy) {
+        if (masked && !__atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE)) {
             unmask_user_app(tids, n);
             masked = 0;
         }
     }
     /* the rows can be there before AppInstallAll returns: the other games stay hidden
      * until it does (at most two minutes) */
-    for (int i = 0; masked && g_install_busy && i < 120; i++)
+    for (int i = 0; masked && __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE) && i < 120; i++)
         pump_events(1000);
     if (masked)
         unmask_user_app(tids, n);
-    printf("[reg] %s=%s0x%08x: %d of %d title(s) registered\n", reg_mode_name(), g_install_busy ? "(still running) " : "",
-           g_install_rc, done, n);
+    if (__atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE)) {
+        printf("[reg] %s still running: %d of %d title(s) registered so far\n", reg_mode_name(), done, n);
+    } else {
+        printf("[reg] %s=0x%08x: %d of %d title(s) registered\n", reg_mode_name(),
+               __atomic_load_n(&g_install_rc, __ATOMIC_ACQUIRE), done, n);
+    }
 }
 
 /* The system databases are only ever written by the system: ShellCore keeps them
@@ -5141,13 +5145,13 @@ int app_add(const char *tid, char *msg, size_t cap) {
  * The wait does not serve the panel (this also runs from a panel request). */
 #define UNINSTALL_WAIT 60
 
-static volatile int g_uninstall_busy, g_uninstall_rc;
+static int g_uninstall_busy, g_uninstall_rc;
 static char g_uninstall_tid[10];
 
 static void *uninstall_thread(void *arg) {
     (void)arg;
-    g_uninstall_rc = g_uninstall_call(g_uninstall_tid);
-    g_uninstall_busy = 0;
+    __atomic_store_n(&g_uninstall_rc, g_uninstall_call(g_uninstall_tid), __ATOMIC_RELAXED);
+    __atomic_store_n(&g_uninstall_busy, 0, __ATOMIC_RELEASE); /* result before completion */
     return NULL;
 }
 
@@ -5157,25 +5161,25 @@ static int uninstall_title(const char *tid) {
         printf("[remove] %s: sceAppInstUtilAppUnInstall is not in this firmware\n", tid);
         return -3;
     }
-    if (g_uninstall_busy) {
+    if (__atomic_load_n(&g_uninstall_busy, __ATOMIC_ACQUIRE)) {
         printf("[remove] %s: an earlier uninstall (%s) is still running\n", tid, g_uninstall_tid);
         return -2;
     }
     snprintf(g_uninstall_tid, sizeof(g_uninstall_tid), "%s", tid);
-    g_uninstall_busy = 1;
+    __atomic_store_n(&g_uninstall_busy, 1, __ATOMIC_RELEASE);
     pthread_t th;
     if (pthread_create(&th, NULL, uninstall_thread, NULL)) {
         uninstall_thread(NULL);
-        return g_uninstall_rc;
+        return __atomic_load_n(&g_uninstall_rc, __ATOMIC_ACQUIRE);
     }
     pthread_detach(th);
-    for (int i = 0; i < UNINSTALL_WAIT * 10 && g_uninstall_busy; i++)
+    for (int i = 0; i < UNINSTALL_WAIT * 10 && __atomic_load_n(&g_uninstall_busy, __ATOMIC_ACQUIRE); i++)
         usleep(100000);
-    if (g_uninstall_busy) {
+    if (__atomic_load_n(&g_uninstall_busy, __ATOMIC_ACQUIRE)) {
         printf("[remove] %s: uninstall did not return within %d s\n", tid, UNINSTALL_WAIT);
         return -2;
     }
-    return g_uninstall_rc;
+    return __atomic_load_n(&g_uninstall_rc, __ATOMIC_ACQUIRE);
 }
 
 static int folder_dlc_tids(const char *game, char (*tids)[10], int max);
