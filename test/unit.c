@@ -21,6 +21,7 @@
 #include "pkgmake.h"
 #include "origin.h"
 #include "pkg.h"
+#include "mountplan.h"
 #include "stage.h"
 #include "webnet.h"
 #include "pdb_template.h"
@@ -1094,6 +1095,77 @@ static void test_web_net(void) {
     }
 }
 
+
+/* MNT-1, MNT-2, MNT-3, MNT-4 (specs/mount.md): what proves a nullfs layer is PS4Mount's,
+ * and when an observed stack may be replaced, detached or must be left alone. */
+static void test_mountplan(void) {
+    printf("mount ownership and fail-closed mount decisions\n");
+    char tid[10];
+    CHECK(mount_target_kind("/user/app/CUSA00001", tid) == MOUNT_TARGET_APP && !strcmp(tid, "CUSA00001"));
+    CHECK(mount_target_kind("/user/patch/CUSA00001", tid) == MOUNT_TARGET_PATCH);
+    CHECK(mount_target_kind("/user/addcont/CUSA00001", tid) == MOUNT_TARGET_ADDCONT);
+    CHECK(mount_target_kind("/user/app/CUSA00001/extra", NULL) == MOUNT_TARGET_NONE);
+    CHECK(mount_target_kind("/user/app/cusa00001", NULL) == MOUNT_TARGET_NONE);
+    CHECK(mount_target_kind("/data/PCSX2/games", NULL) == MOUNT_TARGET_NONE);
+
+    const char *target = "/user/app/CUSA00001";
+    const char *expected = "/system_data/ps4mount/app/CUSA00001";
+    CHECK(mount_layer_owner(target, expected, "nullfs", expected, NULL) == MOUNT_OWNER_EXACT);
+    CHECK(mount_layer_owner(target, expected, "nullfs", "/mnt/usb0/ps4/CUSA00001", "/mnt/usb0/ps4/CUSA00001") ==
+          MOUNT_OWNER_LEGACY);
+    CHECK(mount_layer_owner("/user/patch/CUSA00001", expected, "nullfs", "/mnt/usb0/ps4/CUSA00001",
+                            "/mnt/usb0/ps4/CUSA00001") == MOUNT_OWNER_LEGACY);
+    CHECK(mount_layer_owner("/user/addcont/CUSA00001", expected, "nullfs", "/mnt/usb0/ps4/CUSA00001",
+                            "/mnt/usb0/ps4/CUSA00001") == MOUNT_OWNER_FOREIGN);
+    CHECK(mount_layer_owner(target, expected, "nullfs", "/mnt/usb0/ps4/CUSA00001", NULL) == MOUNT_OWNER_FOREIGN);
+    CHECK(mount_layer_owner(target, expected, "nullfs", "/mnt/usb0/ps4/CUSA00001", "/mnt/usb0/ps4/CUSA00002") ==
+          MOUNT_OWNER_FOREIGN);
+    CHECK(mount_layer_owner(target, expected, "nullfs", "/system_data/ps4mount/app/CUSA00002", NULL) ==
+          MOUNT_OWNER_FOREIGN);
+    CHECK(mount_layer_owner(target, expected, "exfat", expected, NULL) == MOUNT_OWNER_FOREIGN);
+    CHECK(mount_layer_owner("/user/app/CUSA00001/extra", expected, "nullfs", expected, NULL) == MOUNT_OWNER_FOREIGN);
+    CHECK(!mount_owner_owned(MOUNT_OWNER_FOREIGN));
+    CHECK(mount_owner_owned(MOUNT_OWNER_EXACT));
+    CHECK(mount_owner_owned(MOUNT_OWNER_LEGACY));
+
+    static const struct {
+        int table, layers, top, exact, owned, all, prepare, detach;
+    } rows[] = {
+        /* no observation: never mutate */
+        {0, 0, 0, 0, 0, 0, MOUNT_PREPARE_UNKNOWN, MOUNT_STEP_UNKNOWN},
+        {0, 1, 1, 1, 1, 1, MOUNT_PREPARE_UNKNOWN, MOUNT_STEP_UNKNOWN},
+        /* empty table */
+        {1, 0, 0, 0, 0, 1, MOUNT_PREPARE_MOUNT, MOUNT_STEP_DONE},
+        /* a live top missing from the table is inconsistency, not absence */
+        {1, 0, 1, 0, 1, 1, MOUNT_PREPARE_UNKNOWN, MOUNT_STEP_UNKNOWN},
+        {1, 0, 1, 1, 1, 1, MOUNT_PREPARE_UNKNOWN, MOUNT_STEP_UNKNOWN},
+        /* exact live top is already mounted */
+        {1, 1, 1, 1, 1, 1, MOUNT_PREPARE_ALREADY, MOUNT_STEP_UNMOUNT},
+        /* live owned non-exact top may be replaced or detached */
+        {1, 1, 1, 0, 1, 1, MOUNT_PREPARE_UNMOUNT, MOUNT_STEP_UNMOUNT},
+        /* live foreign top blocks even when lower layers are owned */
+        {1, 2, 1, 0, 0, 0, MOUNT_PREPARE_REFUSE, MOUNT_STEP_REFUSE},
+        /* a foreign lower layer makes replacement impossible: routine mount refuses without
+         * disturbing the owned top, while delete still strips owned exposure first */
+        {1, 2, 1, 0, 1, 0, MOUNT_PREPARE_REFUSE, MOUNT_STEP_UNMOUNT},
+        /* invisible top: safe only when every visible layer is owned */
+        {1, 1, 0, 0, 0, 1, MOUNT_PREPARE_UNMOUNT, MOUNT_STEP_UNMOUNT},
+        {1, 2, 0, 0, 0, 0, MOUNT_PREPARE_REFUSE, MOUNT_STEP_REFUSE},
+        /* exact beneath a foreign live top is not reachable and does not count as mounted */
+        {1, 2, 1, 0, 0, 0, MOUNT_PREPARE_REFUSE, MOUNT_STEP_REFUSE},
+    };
+    for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++) {
+        int prepare = mount_prepare_step(rows[i].table, rows[i].layers, rows[i].top, rows[i].exact, rows[i].owned,
+                                         rows[i].all);
+        int detach = mount_detach_step(rows[i].table, rows[i].layers, rows[i].top, rows[i].owned, rows[i].all);
+        if (prepare != rows[i].prepare || detach != rows[i].detach)
+            printf("  row %zu: prepare %d wanted %d, detach %d wanted %d\n", i, prepare, rows[i].prepare, detach,
+                   rows[i].detach);
+        CHECK(prepare == rows[i].prepare);
+        CHECK(detach == rows[i].detach);
+    }
+}
+
 static void test_emu(void) {
     printf("emulators: which names are mounted over the console's folders\n");
     static const struct {
@@ -1153,6 +1225,7 @@ int main(void) {
     test_delete_window();
     test_remove_admission();
     test_web_net();
+    test_mountplan();
     test_emu();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;

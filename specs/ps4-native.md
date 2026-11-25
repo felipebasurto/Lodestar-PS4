@@ -93,6 +93,14 @@ semantics as the snapshot; they differ only in I/O cost.
 Check: test (keep bar 1: external file format; keep bar 3: scan ordering). Test: `test/unit.c` ›
 `test_bgft_info` and `test_bgft_scan`. Source: performance audit 2026-11-25; flatz BGFT format notes.
 
+
+### P4N-14: nullfs ownership is explicit and fail-closed
+Mount mutation is based on ownership evidence, not on the fact that a target is mounted. Current hold-folder
+layers, proven legacy direct-drive layers, foreign layers and unreadable observations are distinct states;
+foreign or unknown layers are never force-unmounted. Mount and detach postconditions are defined in
+`specs/mount.md` and their decision tables are host-testable.
+Check: test (security/data loss). Test: `test/unit.c` › `test_mountplan`. Source: mount ownership rewrite 2026-11-25.
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,

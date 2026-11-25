@@ -61,6 +61,7 @@
 #include "lang.h"
 #include "logts.h"
 #include "mem.h"
+#include "mountplan.h"
 #include "netfs.h"
 #include "origin.h"
 #include "pkg.h"
@@ -443,6 +444,27 @@ static int layers_on(const char *path) {
             count++;
     mem_free(list);
     return count;
+}
+
+/* For detach postconditions an unreadable mount table is not "no layers". Returns nonzero
+ * both when a layer is present and when absence cannot be proven. */
+static int layers_on_failclosed(const char *path) {
+    int n = getfsstat(NULL, 0, MNT_NOWAIT), count = 0;
+    if (n <= 0)
+        return 1;
+    struct statfs *list = mem_alloc(sizeof(*list) * (size_t)(n + 16));
+    if (!list)
+        return 1;
+    n = getfsstat(list, (long)(sizeof(*list) * (size_t)(n + 16)), MNT_NOWAIT);
+    if (n < 0) {
+        mem_free(list);
+        return 1;
+    }
+    for (int i = 0; i < n; i++)
+        if (!strcmp(list[i].f_mntonname, path))
+            count++;
+    mem_free(list);
+    return count != 0;
 }
 
 /* A layer is on path but cannot be read: its drive was disconnected (and maybe
@@ -1358,16 +1380,19 @@ static int place_dlc(dlc_src_t *a) {
 /* The ac.pkg link of every add-on exists and reaches its pkg. */
 /* 1 when the add-on is installed the system's way: its own pkg in /user/addcont, not
  * PS4Mount's mount there. */
-static void unmount_all_layers(const char *target, int force);
+static int detach_target(const char *target, const char *expected, int force);
 
 static int dlc_installed_ids(const char *dtid, const char *cid) {
     char p[96];
     struct stat st;
     snprintf(p, sizeof(p), "/user/addcont/%s", dtid);
-    if (mounted_from(p, NULL, 0))
+    if (mounted_from(p, NULL, 0) || dead_layer(p)) {
         /* an older PS4Mount left the add-on folder mounted over the real one: what the
          * system installed is below it, and would be installed again on every registration */
-        unmount_all_layers(p, 1);
+        char expected[PATH_MAX];
+        hold_path(expected, sizeof(expected), "addcont", dtid);
+        detach_target(p, expected, 1);
+    }
     snprintf(p, sizeof(p), "/user/addcont/%s/%s/ac.pkg", dtid, cid + 20);
     return !lstat(p, &st) && S_ISREG(st.st_mode);
 }
@@ -1782,7 +1807,6 @@ static int place_bgft(title_src_t *t, const buf_t *json, const patch_ref_t *pr) 
     return rc ? -1 : 0;
 }
 
-static void unmount_all_layers(const char *target, int force);
 static void pump_events(int ms);
 
 /* Installs a small add-on with the system's installer and waits for it (a minute at
@@ -1819,9 +1843,14 @@ static int dlc_install(dlc_src_t *a) {
     }
     char target[64], url[PATH_MAX + 8], msg[PATH_MAX + 64];
     snprintf(target, sizeof(target), "/user/addcont/%s", a->pkg.title_id);
-    /* a folder mounted here by an older PS4Mount: the install must reach the real one */
-    if (mounted_from(target, NULL, 0))
-        unmount_all_layers(target, 1);
+    /* a folder mounted here by an older PS4Mount: the install must reach the real one.
+     * Dead layers have no readable top, so prove the whole target clean before installing. */
+    char expected[PATH_MAX];
+    hold_path(expected, sizeof(expected), "addcont", a->pkg.title_id);
+    if (detach_target(target, expected, 1)) {
+        printf("[dlc] %s: install refused, its add-on folder could not be detached safely\n", a->pkg.content_id);
+        return 1;
+    }
     const char *dlc_name = a->meta.title_valid ? a->meta.title : a->pkg.content_id;
     int32_t user = 0;
     sceUserServiceGetForegroundUser(&user);
@@ -2097,8 +2126,6 @@ static int title_running(const char *tid) {
     return 0;
 }
 
-static void unmount_all_layers(const char *target, int force);
-
 /* Set while /user/app shows only the games being registered (see mask_user_app): the
  * other game folders are hidden then, and must not be mounted or unmounted. */
 static int g_masked;
@@ -2108,6 +2135,118 @@ static int masked_path(const char *target) {
         return 0;
     printf("[mount] %s: skipped while /user/app shows only the new games\n", target);
     return 1;
+}
+
+typedef struct {
+    int table_known, layers, all_owned;
+    int top, top_exact, top_owned;
+    char foreign_from[PATH_MAX], foreign_type[32];
+} mount_obs_t;
+
+/* The first line of <TID>.src is the library location written when the game was registered.
+ * For app/patch targets it is the extra evidence that distinguishes a legacy direct drive
+ * mount of PS4Mount from any other nullfs that happens to come from /mnt. */
+static int mount_marker_dir(const char *target, char *out, size_t n) {
+    char tid[10], path[64], buf[PATH_MAX + 256] = {0};
+    mount_target_kind_t kind = mount_target_kind(target, tid);
+    if (kind != MOUNT_TARGET_APP && kind != MOUNT_TARGET_PATCH)
+        return 0;
+    snprintf(path, sizeof(path), STATE_DIR "/%s.src", tid);
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return 0;
+    ssize_t len = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (len <= 0)
+        return 0;
+    buf[strcspn(buf, "\n")] = 0;
+    if (!buf[0] || strlen(buf) >= n)
+        return 0;
+    snprintf(out, n, "%s", buf);
+    return 1;
+}
+
+/* Observe both the live top (statfs) and every table entry on the target (getfsstat).
+ * The two answer different questions: statfs proves what the system would use now, while
+ * the table still shows dead layers whose backing drive went away. */
+static void mount_scan(const char *target, const char *expected, mount_obs_t *o) {
+    memset(o, 0, sizeof(*o));
+    o->all_owned = 1;
+    char marker[PATH_MAX];
+    int has_marker = mount_marker_dir(target, marker, sizeof(marker));
+    struct statfs sf;
+    if (!statfs(target, &sf) && !strcmp(sf.f_mntonname, target)) {
+        mount_owner_t owner = mount_layer_owner(target, expected, sf.f_fstypename, sf.f_mntfromname,
+                                                has_marker ? marker : NULL);
+        o->top = 1;
+        o->top_exact = owner == MOUNT_OWNER_EXACT;
+        o->top_owned = mount_owner_owned(owner);
+    }
+    int n = getfsstat(NULL, 0, MNT_NOWAIT);
+    if (n <= 0)
+        return;
+    size_t len = sizeof(struct statfs) * (size_t)(n + 16);
+    struct statfs *list = mem_alloc(len);
+    if (!list)
+        return;
+    n = getfsstat(list, (long)len, MNT_NOWAIT);
+    if (n < 0) {
+        mem_free(list);
+        return;
+    }
+    o->table_known = 1;
+    for (int i = 0; i < n; i++) {
+        if (strcmp(list[i].f_mntonname, target))
+            continue;
+        o->layers++;
+        mount_owner_t owner = mount_layer_owner(target, expected, list[i].f_fstypename, list[i].f_mntfromname,
+                                                has_marker ? marker : NULL);
+        if (!mount_owner_owned(owner)) {
+            o->all_owned = 0;
+            if (!o->foreign_type[0]) {
+                snprintf(o->foreign_type, sizeof(o->foreign_type), "%s", list[i].f_fstypename);
+                snprintf(o->foreign_from, sizeof(o->foreign_from), "%s", list[i].f_mntfromname);
+            }
+        }
+    }
+    mem_free(list);
+}
+
+static int mount_refused(const char *target, const mount_obs_t *o, int unknown) {
+    char key[PATH_MAX + 96];
+    snprintf(key, sizeof(key), "mount-refused:%s:%s:%s", target, unknown ? "unknown" : o->foreign_type,
+             unknown ? "" : o->foreign_from);
+    if (!first_time(key))
+        return -1; /* the scan will keep refusing it; the evidence is not repeated every 10 s */
+    if (unknown)
+        printf("[mount] %s: the mount table could not be read; leaving it as it is\n", target);
+    else
+        printf("[mount] %s: foreign layer (%s from %s), left alone\n", target,
+               o->foreign_type[0] ? o->foreign_type : "unknown", o->foreign_from[0] ? o->foreign_from : "unknown");
+    return -1;
+}
+
+/* Remove owned layers until the target has no layer at all. force may force the removal of
+ * an owned layer, never of a foreign one; foreign or unknown ownership is a failure. */
+static int detach_target(const char *target, const char *expected, int force) {
+    if (masked_path(target))
+        return 0;
+    for (int i = 0; i < 8; i++) {
+        mount_obs_t o;
+        mount_scan(target, expected, &o);
+        mount_step_t step = mount_detach_step(o.table_known, o.layers, o.top, o.top_owned, o.all_owned);
+        if (step == MOUNT_STEP_DONE)
+            return 0;
+        if (step != MOUNT_STEP_UNMOUNT)
+            return mount_refused(target, &o, step == MOUNT_STEP_UNKNOWN);
+        int flags = force || !o.top ? MNT_FORCE : 0;
+        if (unmount(target, flags)) {
+            printf("[mount] unmount %s: %s\n", target, strerror(errno));
+            return -1;
+        }
+    }
+    printf("[mount] %s: still mounted after 8 owned layers\n", target);
+    return -1;
 }
 
 static int mount_dir(const char *dir, const char *target) {
@@ -2124,44 +2263,57 @@ static int mount_dir(const char *dir, const char *target) {
             printf("[mount] created %s\n", parent);
     }
     mkdir(target, 0777);
-    if (dead_layer(target)) {
-        printf("[mount] %s: removing a layer of a disconnected drive\n", target);
-        unmount_all_layers(target, 1);
-    }
-    int top = top_layer(target, dir);
-    if (top == 1)
+    /* Common steady state: the live top is already the exact hold folder. Lower layers do
+     * not affect what the system uses, so the full mount-table scan is not needed. */
+    if (top_layer(target, dir) == 1)
         return 0;
-    while (top != 0) {
-        if (unmount(target, 0)) {
-            printf("[mount] unmount %s: %s\n", target, strerror(errno));
-            return -1;
+    int can_mount = 0;
+    for (int i = 0; i < 8 && !can_mount; i++) {
+        mount_obs_t o;
+        mount_scan(target, dir, &o);
+        mount_prepare_t step = mount_prepare_step(o.table_known, o.layers, o.top, o.top_exact, o.top_owned, o.all_owned);
+        if (step == MOUNT_PREPARE_ALREADY)
+            return 0;
+        if (step == MOUNT_PREPARE_MOUNT) {
+            can_mount = 1;
+        } else if (step == MOUNT_PREPARE_UNMOUNT) {
+            int flags = o.top ? 0 : MNT_FORCE;
+            if (unmount(target, flags)) {
+                printf("[mount] unmount %s: %s\n", target, strerror(errno));
+                return -1;
+            }
+        } else {
+            return mount_refused(target, &o, step == MOUNT_PREPARE_UNKNOWN);
         }
-        top = top_layer(target, dir);
     }
-    return nullfs_mount(dir, target);
+    if (!can_mount) {
+        printf("[mount] %s: still occupied after 8 owned layers\n", target);
+        return -1;
+    }
+    if (nullfs_mount(dir, target))
+        return -1;
+    mount_obs_t done;
+    mount_scan(target, dir, &done);
+    if (done.top_exact)
+        return 0;
+    printf("[mount] %s: mount postcondition failed\n", target);
+    return -1;
 }
 
-static void unmount_all_layers(const char *target, int force) {
-    if (masked_path(target))
-        return;
-    for (int i = 0; i < 8 && (mounted_from(target, NULL, 0) || layers_on(target) > 0); i++)
-        if (unmount(target, force ? MNT_FORCE : 0)) {
-            printf("[mount] unmount %s: %s\n", target, strerror(errno));
-            if (!force)
-                return;
-        }
-}
-
-/* Removes every layer of the title (forced: a system uninstall is about to run). */
+/* Removes every layer of the title PS4Mount can prove it owns. Foreign or unknown layers
+ * stay in place and are a failed postcondition for destructive operations. */
 static void unmount_title(const char *tid, char (*dtids)[10], int ndtids) {
-    char target[64];
+    char target[64], expected[PATH_MAX];
     snprintf(target, sizeof(target), "/user/app/%s", tid);
-    unmount_all_layers(target, 1);
+    hold_path(expected, sizeof(expected), "app", tid);
+    detach_target(target, expected, 1);
     snprintf(target, sizeof(target), "/user/patch/%s", tid);
-    unmount_all_layers(target, 1);
+    hold_path(expected, sizeof(expected), "patch", tid);
+    detach_target(target, expected, 1);
     for (int i = 0; i < ndtids; i++) {
         snprintf(target, sizeof(target), "/user/addcont/%s", dtids[i]);
-        unmount_all_layers(target, 1);
+        hold_path(expected, sizeof(expected), "addcont", dtids[i]);
+        detach_target(target, expected, 1);
     }
 }
 
@@ -2169,13 +2321,13 @@ static void unmount_title(const char *tid, char (*dtids)[10], int ndtids) {
 static int title_detached(const char *tid, char (*dtids)[10], int ndtids) {
     char target[64];
     snprintf(target, sizeof(target), "/user/app/%s", tid);
-    int app_mounted = mounted_from(target, NULL, 0) != 0;
+    int app_mounted = layers_on_failclosed(target);
     snprintf(target, sizeof(target), "/user/patch/%s", tid);
-    int patch_mounted = mounted_from(target, NULL, 0) != 0;
+    int patch_mounted = layers_on_failclosed(target);
     int addcont_mounted = 0;
     for (int i = 0; i < ndtids; i++) {
         snprintf(target, sizeof(target), "/user/addcont/%s", dtids[i]);
-        addcont_mounted |= mounted_from(target, NULL, 0) != 0;
+        addcont_mounted |= layers_on_failclosed(target);
     }
     return remove_detached_ok(app_mounted, patch_mounted, addcont_mounted);
 }
@@ -2207,8 +2359,12 @@ static int mount_paths(const char *tid, int has_patch, const char (*dtids)[10], 
         return -1;
     snprintf(target, sizeof(target), "/user/patch/%s", tid);
     hold_path(hold, sizeof(hold), "patch", tid);
-    if (has_patch ? mount_dir(hold, target) : (unmount_all_layers(target, 1), 0))
+    if (has_patch) {
+        if (mount_dir(hold, target))
+            return -1;
+    } else if (detach_target(target, hold, 1)) {
         return -1;
+    }
     for (int i = 0; g_cfg.dlc_mode == DLC_EXTERNAL && i < ndtids; i++) {
         if (addcont_installed(dtids[i])) {
             printf("[mount] /user/addcont/%s holds add-ons installed the normal way, not mounted\n", dtids[i]);
