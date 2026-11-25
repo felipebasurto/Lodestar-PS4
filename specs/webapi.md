@@ -48,3 +48,40 @@ published/loaded atomically. Main-loop-only users may keep reading the owner sta
 Check: test for the language boundary (`test/unit.c` › `test_lang`); read for the narrow
 configuration accessors and for no direct `g_cfg` use in transfer-thread callback paths.
 Source: existing Drive/links host callback audit.
+
+### WEBAPI-6: bounded network workers never execute owner routes
+At most two persistent network workers parse accepted connections. The accept queue is
+bounded to eight connected fds and the owner queue to four parsed requests; beyond those
+bounds a new connection is closed or answered `503`, never allowed to consume unbounded
+memory. If no worker can be created, `web_serve` falls back to the historical synchronous
+path rather than dropping the panel.
+
+Only routes whose state is static or internally synchronized may complete in a worker in
+this first matrix: the two HTML pages, `/api/log`, Drive status/actions, links
+status/actions, `/api/upload` and `/api/uploads`. `/api/check`, games/icons/pics, storage,
+destinations, mounts, restore, configuration, NAS and process control remain owner routes
+because they read or mutate library/mount/configuration state. Unknown routes are worker
+safe because they produce only the fixed 404 response.
+
+An owner route transfers both the connected fd and the parsed request object exactly once
+to the owner queue. The main loop executes it through the same dispatcher, preserving the
+response contract. A worker must adjust the body pointer when copying the request into a
+queue node; it may never leave that pointer referring to its own stack. A pipe or equivalent
+wake mechanism tells the main loop that owner work is pending, so responses do not wait for
+the normal select timeout. Shutdown interrupts active connection reads with `shutdown()`,
+joins the bounded workers, and closes/drains queued fds without executing partially owned
+requests.
+
+Drive and links status may be produced concurrently. Their mutating actions are serialized
+at the web boundary, preserving the single-panel-caller ordering those subsystems had before
+workers; their internal queue state remains protected by their own mutexes, and queue-count
+snapshots used for admission are read under those mutexes. A Drive library enumeration can
+ask whether the NAS is active while a scan or FUSE client is changing that state. The answer
+is an atomically published scalar mirror updated where the owned state changes; readers never
+wait for network I/O or the FUSE lock. The adopted-mount refresh clock is claimed with
+compare-and-swap so overlapping owner refreshes cannot pile control queries onto the mount.
+Workers never start that control conversation as a side effect of reading `nas_active`; only
+the main-loop owner calls the explicit refresh entry point.
+Check: test through `test/http_test.c` (owner execution ordering and worker-only route
+completion without owner pumping) and `test/sdkcheck.sh`; read for shutdown ownership.
+Source: panel/API architecture audit and WEBAPI-2 implementation design.

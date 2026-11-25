@@ -7021,6 +7021,7 @@ static void shutdown_daemon(int lock) {
     bgftscan_free(&g_bgftscan);
     if (g_web >= 0)
         close(g_web);
+    web_stop(); /* before log_stop: no worker may still write or hold a queued fd */
     if (g_klog >= 0)
         close(g_klog);
     if (lock >= 0)
@@ -7506,6 +7507,7 @@ static void pump_events(int ms) {
     end.tv_sec += ms / 1000;
     end.tv_nsec += (long)(ms % 1000) * 1000000;
     for (;;) {
+        web_owner_pump();
         if (g_klog < 0) {
             g_klog = klog_connect();
             g_live = 0;
@@ -7529,6 +7531,12 @@ static void pump_events(int ms) {
             if (g_web > maxfd)
                 maxfd = g_web;
         }
+        int owner_wake = web_owner_wake_fd();
+        if (owner_wake >= 0) {
+            FD_SET(owner_wake, &fs);
+            if (owner_wake > maxfd)
+                maxfd = owner_wake;
+        }
         if (maxfd < 0) {
             usleep((useconds_t)left * 1000);
             return;
@@ -7540,6 +7548,8 @@ static void pump_events(int ms) {
         }
         if (ready <= 0)
             continue;
+        if (owner_wake >= 0 && FD_ISSET(owner_wake, &fs))
+            web_owner_pump();
         if (g_web >= 0 && FD_ISSET(g_web, &fs))
             web_serve(g_web);
         if (g_klog < 0 || !FD_ISSET(g_klog, &fs))
@@ -7695,6 +7705,7 @@ int main(void) {
             readd_title(tid);
             continue;
         }
+        nas_refresh(); /* owner-only control query; workers read the atomic active mirror */
         nas_apply(0); /* retries a share that was not reached, or the settings changed */
         nas_ask_reload(); /* the boot instance cannot open the fuse devices: ask for a load */
         install_received(); /* an app sent with "Send and install" */

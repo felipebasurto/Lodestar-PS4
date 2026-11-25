@@ -51,5 +51,17 @@ void app_uploads_json(buf_t *out);
 int web_listen(void);
 /* Serves one connection on the listening socket. */
 void web_serve(int listen_fd);
-/* Answers the request on a connected socket and closes it. */
+/* Answers the request on a connected socket and closes it (the direct/owner path). */
 void web_handle(int fd);
+/* Runs every parsed request waiting for the main-loop owner. */
+void web_owner_pump(void);
+/* Read end of the pipe that wakes the main loop when owner work arrives (-1 without workers). */
+int web_owner_wake_fd(void);
+/* Number of parsed requests waiting for the owner. */
+int web_owner_pending(void);
+/* 1 when the route only uses static state or an internally synchronized subsystem. */
+int web_route_worker_safe(const char *path, int post);
+/* Waits until accepted worker work is finished or queued for the owner (test/shutdown aid). */
+void web_pool_idle_wait(void);
+/* Stops the bounded worker pool and drains its queued connections. */
+void web_stop(void);

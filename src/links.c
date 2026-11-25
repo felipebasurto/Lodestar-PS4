@@ -2495,7 +2495,10 @@ int links_add(const char *text, const char *dest, const char *password, char *ms
         }
         if (rc)
             break;
-        if (g_njobs + na >= LINKS_MAX_JOBS) {
+        pthread_mutex_lock(&g_mu);
+        int queued = g_njobs;
+        pthread_mutex_unlock(&g_mu);
+        if (queued + na >= LINKS_MAX_JOBS) {
             snprintf(err, sizeof(err), TR("at most %d downloads in the list", "como máximo %d descargas en la lista"), LINKS_MAX_JOBS);
             rc = -1;
             break;

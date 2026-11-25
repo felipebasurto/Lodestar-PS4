@@ -2,6 +2,8 @@
  * Copyright (C) 2026 gasb07
  * The web panel server: routes, methods, title id checks and malformed requests, over a
  * real socket with the app_* calls recorded (stubs.c). Run with: bash test/run.sh */
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,6 +95,43 @@ static const char *postw(const char *path, const char *body) {
     snprintf(req, sizeof(req), "POST %s HTTP/1.1\r\nHost: x\r\nX-PS4Mount: 1\r\nContent-Length: %zu\r\n\r\n%s", path,
              strlen(body), body);
     return ask(req);
+}
+
+
+/* One real TCP client of the listening socket used by web_serve/worker-pool tests. */
+static int panel_conn(void) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in a = {0};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(WEB_PORT);
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (fd < 0 || connect(fd, (struct sockaddr *)&a, sizeof(a))) {
+        if (fd >= 0)
+            close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+static void send_req_close_write(int fd, const char *req) {
+    size_t left = strlen(req);
+    while (left) {
+        ssize_t n = write(fd, req, left);
+        if (n <= 0)
+            break;
+        req += n;
+        left -= (size_t)n;
+    }
+    shutdown(fd, SHUT_WR);
+}
+
+static void read_response_close(int fd, char *out, size_t cap) {
+    size_t n = 0;
+    ssize_t r;
+    while (n + 1 < cap && (r = read(fd, out + n, cap - 1 - n)) > 0)
+        n += (size_t)r;
+    out[n] = 0;
+    close(fd);
 }
 
 int main(void) {
@@ -341,6 +380,41 @@ int main(void) {
     CHECK(strstr(r, "\"message\":\"done \\\"rescan\\\"\"") != NULL || strstr(r, "Looking for games") != NULL);
     r = postw("/api/mount?title_id=CUSA00001", "");
     CHECK(strstr(r, "\"message\":\"done \\\"add\\\"\"") != NULL);
+
+    printf("bounded workers keep owner execution ordered\n");
+    int ls = web_listen();
+    CHECK(ls >= 0);
+    if (ls >= 0) {
+        char resp[4096];
+        int before = g_stub_calls;
+        int c = panel_conn();
+        CHECK(c >= 0);
+        send_req_close_write(c, "POST /api/rescan HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 0\r\n\r\n");
+        web_serve(ls);
+        web_pool_idle_wait();
+        CHECK(web_owner_pending() == 1);
+        CHECK(g_stub_calls == before); /* parsed concurrently, but not executed by the worker */
+        web_owner_pump();
+        CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "rescan-hard"));
+        CHECK(web_owner_pending() == 0);
+        read_response_close(c, resp, sizeof(resp));
+        CHECK(status(resp, "200"));
+
+        before = g_stub_calls;
+        c = panel_conn();
+        CHECK(c >= 0);
+        send_req_close_write(c, "POST /api/drive/refresh HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 0\r\n\r\n");
+        web_serve(ls);
+        web_pool_idle_wait();
+        CHECK(web_owner_pending() == 0);
+        CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "drive_refresh"));
+        read_response_close(c, resp, sizeof(resp));
+        CHECK(status(resp, "200"));
+
+        close(ls);
+        web_stop();
+        CHECK(web_owner_pending() == 0);
+    }
 
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed != 0;

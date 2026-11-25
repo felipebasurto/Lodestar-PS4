@@ -18,3 +18,12 @@ Check: test (keep bars 2 and 5). Test: `test/drive_test.c`. Source: existing imp
 ### DRIVE-3: a game's folder appears only when all its packages are whole
 A scan must never adopt a half-downloaded game.
 Check: test (keep bar 2: data integrity). Test: `test/drive_test.c`. Source: existing implementation.
+
+### DRIVE-4: panel actions read account state through the subsystem mutex
+Public Drive actions may be called while the Drive worker is signing in, disconnecting or
+refreshing credentials. `configured`/`connected` readiness checks and forget/disconnect
+decisions must read that state through `g_mu` (or an equally narrow snapshot), never through
+unsynchronized shared words. Holding the mutex is limited to copying scalars; network and file
+work stays outside it.
+Check: test through the existing concurrent Drive integration harness (`test/drive_test.c`);
+read for the narrow readiness snapshot. Source: web worker ownership audit.

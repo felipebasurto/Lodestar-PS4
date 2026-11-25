@@ -88,6 +88,8 @@ void nas_stop(void);
 /* This load ends: the mount and its client stay for the next load (nas_start adopts it). */
 void nas_release(void);
 int nas_active(void);
+/* Main-loop owner only: refreshes an adopted mount's state; workers read nas_active's mirror. */
+void nas_refresh(void);
 int nas_mounted(void);
 const char *nas_mountpoint(void);
 /* "NFS 192.168.0.19:/ps4share: ready", or why it is not. */

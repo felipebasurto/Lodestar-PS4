@@ -10,6 +10,8 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <pthread.h>
+#include <stdint.h>
 #include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +32,8 @@
 #define CHECK_MAX (16u << 20) /* most a pkg check is given */
 #define REQ_MS 30000          /* headers and the start of a body: this long, all told */
 
+static void web_pool_start(void);
+
 static long long now_ms(void) {
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
@@ -48,6 +52,7 @@ int web_listen(void) {
             close(s);
         return -1;
     }
+    web_pool_start();
     return s;
 }
 
@@ -195,6 +200,297 @@ typedef struct {
     long long deadline;
     int post;
 } web_req_t;
+
+
+/* WEBAPI-6: conservative route ownership. Worker routes either have no mutable state or are
+ * already owned by a subsystem with its own locks. Everything else waits for the main loop. */
+int web_route_worker_safe(const char *path, int post) {
+    if (!strncmp(path, "/icon/", 6) || !strncmp(path, "/pic/", 5))
+        return 0;
+    if (!strncmp(path, "/api/", 5)) {
+        if (!strcmp(path, "/api/log") || !strcmp(path, "/api/drive") || !strcmp(path, "/api/links") ||
+            !strcmp(path, "/api/uploads"))
+            return 1;
+        if (post && (!strncmp(path, "/api/drive/", 11) || !strncmp(path, "/api/links/", 11)))
+            return 1;
+        if (post && !strncmp(path, "/api/upload", 11) && (path[11] == 0 || path[11] == '?'))
+            return 1;
+        return 0;
+    }
+    return 1; /* pages and unknown paths: static data or the fixed 404 */
+}
+
+#define WEB_POOL_THREADS 2
+#define WEB_POOL_QUEUE 8
+#define WEB_OWNER_QUEUE 4
+#define WEB_STACK_SIZE (256u << 10)
+
+typedef struct web_owner_job {
+    int fd;
+    web_req_t req;
+    struct web_owner_job *next;
+} web_owner_job_t;
+
+static pthread_mutex_t g_pool_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_pool_cv = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t g_pool_idle_cv = PTHREAD_COND_INITIALIZER;
+static pthread_t g_pool_threads[WEB_POOL_THREADS];
+static int g_pool_nthreads, g_pool_started, g_pool_quit;
+static int g_pool_fds[WEB_POOL_QUEUE], g_pool_head, g_pool_count;
+static int g_pool_active[WEB_POOL_THREADS];
+static unsigned g_pool_inflight;
+static int g_wake_r = -1, g_wake_w = -1;
+
+static pthread_mutex_t g_drive_action_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_links_action_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_owner_mu = PTHREAD_MUTEX_INITIALIZER;
+static web_owner_job_t *g_owner_head, *g_owner_tail;
+static int g_owner_count;
+
+static void web_handle_connection(int fd, int queue_owner);
+static void web_dispatch(int fd, web_req_t *r);
+
+static void nonblock_fd(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags >= 0)
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}
+
+static void web_owner_wake(void) {
+    if (g_wake_w >= 0) {
+        char b = 1;
+        (void)write(g_wake_w, &b, 1); /* nonblocking: a full pipe is already a wake */
+    }
+}
+
+int web_owner_wake_fd(void) { return g_wake_r; }
+
+static void web_owner_drain_wake(void) {
+    char tmp[64];
+    while (g_wake_r >= 0 && read(g_wake_r, tmp, sizeof(tmp)) > 0)
+        ;
+}
+
+/* Copies req into a node owned by the main-loop queue. body points into raw, so it must be
+ * relocated after the copy; leaving it unchanged would hand the owner a pointer to worker stack. */
+static int web_owner_enqueue(int fd, const web_req_t *req) {
+    web_owner_job_t *job = mem_alloc(sizeof(*job));
+    if (!job)
+        return -1;
+    size_t body_at = req->body ? (size_t)(req->body - req->raw) : 0;
+    job->fd = fd;
+    job->req = *req;
+    job->req.body = job->req.raw + body_at;
+    job->next = NULL;
+    pthread_mutex_lock(&g_owner_mu);
+    if (g_owner_count >= WEB_OWNER_QUEUE) {
+        pthread_mutex_unlock(&g_owner_mu);
+        mem_free(job);
+        return -1;
+    }
+    if (g_owner_tail)
+        g_owner_tail->next = job;
+    else
+        g_owner_head = job;
+    g_owner_tail = job;
+    g_owner_count++;
+    pthread_mutex_unlock(&g_owner_mu);
+    web_owner_wake();
+    return 0;
+}
+
+int web_owner_pending(void) {
+    pthread_mutex_lock(&g_owner_mu);
+    int n = g_owner_count;
+    pthread_mutex_unlock(&g_owner_mu);
+    return n;
+}
+
+/* Main-loop owner only: executes every queued parsed request through the same dispatcher as
+ * the historical synchronous path. dispatch closes the fd unless it explicitly transfers it. */
+void web_owner_pump(void) {
+    static int pumping; /* main-loop owner only: registration may pump events recursively */
+    if (pumping)
+        return;
+    pumping = 1;
+    web_owner_drain_wake();
+    for (;;) {
+        pthread_mutex_lock(&g_owner_mu);
+        web_owner_job_t *job = g_owner_head;
+        if (job) {
+            g_owner_head = job->next;
+            if (!g_owner_head)
+                g_owner_tail = NULL;
+            g_owner_count--;
+        }
+        pthread_mutex_unlock(&g_owner_mu);
+        if (!job)
+            break;
+        web_dispatch(job->fd, &job->req);
+        mem_free(job);
+    }
+    web_owner_drain_wake();
+    pumping = 0;
+}
+
+static void *web_pool_worker(void *arg) {
+    int slot = (int)(intptr_t)arg;
+    for (;;) {
+        pthread_mutex_lock(&g_pool_mu);
+        while (!g_pool_count && !g_pool_quit)
+            pthread_cond_wait(&g_pool_cv, &g_pool_mu);
+        if (!g_pool_count && g_pool_quit) {
+            pthread_mutex_unlock(&g_pool_mu);
+            break;
+        }
+        int fd = g_pool_fds[g_pool_head];
+        g_pool_head = (g_pool_head + 1) % WEB_POOL_QUEUE;
+        g_pool_count--;
+        g_pool_active[slot] = fd;
+        pthread_mutex_unlock(&g_pool_mu);
+
+        web_handle_connection(fd, 1);
+
+        pthread_mutex_lock(&g_pool_mu);
+        g_pool_active[slot] = -1;
+        if (g_pool_inflight)
+            g_pool_inflight--;
+        if (!g_pool_inflight)
+            pthread_cond_broadcast(&g_pool_idle_cv);
+        pthread_mutex_unlock(&g_pool_mu);
+    }
+    return NULL;
+}
+
+static void web_pool_start(void) {
+    pthread_mutex_lock(&g_pool_mu);
+    if (g_pool_started) {
+        pthread_mutex_unlock(&g_pool_mu);
+        return;
+    }
+    for (int i = 0; i < WEB_POOL_THREADS; i++)
+        g_pool_active[i] = -1;
+    int fds[2] = {-1, -1};
+    int wake_ok = !pipe(fds);
+    if (wake_ok) {
+        nonblock_fd(fds[0]);
+        nonblock_fd(fds[1]);
+        int mode0 = fcntl(fds[0], F_GETFL, 0), mode1 = fcntl(fds[1], F_GETFL, 0);
+        wake_ok = mode0 >= 0 && mode1 >= 0 && (mode0 & O_NONBLOCK) && (mode1 & O_NONBLOCK);
+        if (wake_ok) {
+            g_wake_r = fds[0];
+            g_wake_w = fds[1];
+        } else {
+            close(fds[0]);
+            close(fds[1]);
+        }
+    }
+    if (!wake_ok) { /* without the owner wake, threaded parsing would add latency: keep the synchronous fallback */
+        pthread_mutex_unlock(&g_pool_mu);
+        return;
+    }
+    g_pool_quit = 0;
+    pthread_attr_t at;
+    pthread_attr_init(&at);
+    pthread_attr_setstacksize(&at, WEB_STACK_SIZE);
+    int made = 0;
+    for (; made < WEB_POOL_THREADS; made++) {
+        if (pthread_create(&g_pool_threads[made], &at, web_pool_worker, (void *)(intptr_t)made))
+            break;
+    }
+    pthread_attr_destroy(&at);
+    if (made) {
+        g_pool_nthreads = made;
+        g_pool_started = 1;
+    } else if (g_wake_r >= 0) {
+        close(g_wake_r);
+        close(g_wake_w);
+        g_wake_r = g_wake_w = -1;
+    }
+    pthread_mutex_unlock(&g_pool_mu);
+}
+
+/* 0 queued; 1 no worker pool exists (caller keeps the synchronous fallback); -1 full/stopping. */
+static int web_pool_offer(int fd) {
+    int rc = 1;
+    pthread_mutex_lock(&g_pool_mu);
+    if (g_pool_started && !g_pool_quit) {
+        if (g_pool_count >= WEB_POOL_QUEUE)
+            rc = -1;
+        else {
+            size_t at = (size_t)(g_pool_head + g_pool_count) % WEB_POOL_QUEUE;
+            g_pool_fds[at] = fd;
+            g_pool_count++;
+            g_pool_inflight++;
+            pthread_cond_signal(&g_pool_cv);
+            rc = 0;
+        }
+    }
+    pthread_mutex_unlock(&g_pool_mu);
+    return rc;
+}
+
+void web_pool_idle_wait(void) {
+    pthread_mutex_lock(&g_pool_mu);
+    while (g_pool_inflight)
+        pthread_cond_wait(&g_pool_idle_cv, &g_pool_mu);
+    pthread_mutex_unlock(&g_pool_mu);
+}
+
+void web_stop(void) {
+    pthread_t threads[WEB_POOL_THREADS];
+    int nthreads = 0;
+    pthread_mutex_lock(&g_pool_mu);
+    if (g_pool_started) {
+        g_pool_quit = 1;
+        while (g_pool_count) {
+            int fd = g_pool_fds[g_pool_head];
+            g_pool_head = (g_pool_head + 1) % WEB_POOL_QUEUE;
+            g_pool_count--;
+            if (g_pool_inflight)
+                g_pool_inflight--;
+            close(fd); /* never parsed: no application intent is lost */
+        }
+        for (int i = 0; i < WEB_POOL_THREADS; i++)
+            if (g_pool_active[i] >= 0)
+                shutdown(g_pool_active[i], SHUT_RDWR); /* wake the read; the worker still owns close */
+        nthreads = g_pool_nthreads;
+        for (int i = 0; i < nthreads; i++)
+            threads[i] = g_pool_threads[i];
+        pthread_cond_broadcast(&g_pool_cv);
+        pthread_cond_broadcast(&g_pool_idle_cv);
+    }
+    pthread_mutex_unlock(&g_pool_mu);
+    for (int i = 0; i < nthreads; i++)
+        pthread_join(threads[i], NULL);
+
+    pthread_mutex_lock(&g_pool_mu);
+    g_pool_started = g_pool_nthreads = 0;
+    g_pool_quit = 0;
+    g_pool_head = g_pool_count = 0;
+    g_pool_inflight = 0;
+    for (int i = 0; i < WEB_POOL_THREADS; i++)
+        g_pool_active[i] = -1;
+    if (g_wake_r >= 0) {
+        close(g_wake_r);
+        close(g_wake_w);
+        g_wake_r = g_wake_w = -1;
+    }
+    pthread_cond_broadcast(&g_pool_idle_cv);
+    pthread_mutex_unlock(&g_pool_mu);
+
+    pthread_mutex_lock(&g_owner_mu);
+    web_owner_job_t *job = g_owner_head;
+    g_owner_head = g_owner_tail = NULL;
+    g_owner_count = 0;
+    pthread_mutex_unlock(&g_owner_mu);
+    while (job) {
+        web_owner_job_t *next = job->next;
+        close(job->fd);
+        mem_free(job);
+        job = next;
+    }
+}
 
 /* dest=<usb0..usb7, ext0, ext1, internal> of a query: letters and digits only. */
 static int dest_param(const char *path, char *dest, size_t n) {
@@ -350,8 +646,13 @@ static void links_action(int fd, const char *req, const char *path, const char *
 
 void web_serve(int listen_fd) {
     int fd = accept(listen_fd, NULL, NULL);
-    if (fd >= 0)
-        web_handle(fd);
+    if (fd < 0)
+        return;
+    int offered = web_pool_offer(fd);
+    if (offered > 0)
+        web_handle(fd); /* no worker could be created: the historical synchronous path */
+    else if (offered < 0)
+        close(fd); /* bounded overload: kernel memory is never allowed to grow without a cap */
 }
 
 static void web_dispatch(int fd, web_req_t *r);
@@ -449,7 +750,7 @@ static int web_read_request(int fd, web_req_t *r) {
     return 0;
 }
 
-void web_handle(int fd) {
+static void web_handle_connection(int fd, int queue_owner) {
     web_req_t r;
     int rr = web_read_request(fd, &r);
     if (rr > 0) {
@@ -461,8 +762,17 @@ void web_handle(int fd) {
         close(fd);
         return;
     }
-    web_dispatch(fd, &r);
+    if (!queue_owner || web_route_worker_safe(r.path, r.post)) {
+        web_dispatch(fd, &r);
+        return;
+    }
+    if (web_owner_enqueue(fd, &r)) {
+        reply(fd, "503 Service Unavailable", "text/plain", "panel busy\n", 11);
+        close(fd);
+    }
 }
+
+void web_handle(int fd) { web_handle_connection(fd, 0); }
 
 static void web_dispatch(int fd, web_req_t *r) {
     const char *req = r->raw, *path = r->path;
@@ -583,14 +893,18 @@ static void web_dispatch(int fd, web_req_t *r) {
         reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
         buf_free(&b);
     } else if (post && !strncmp(path, "/api/drive/", 11)) {
+        pthread_mutex_lock(&g_drive_action_mu);
         drive_action(fd, path, body);
+        pthread_mutex_unlock(&g_drive_action_mu);
     } else if (!strcmp(path, "/api/links")) {
         buf_t b = {0};
         links_status_json(&b);
         reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
         buf_free(&b);
     } else if (post && !strncmp(path, "/api/links/", 11)) {
+        pthread_mutex_lock(&g_links_action_mu);
         links_action(fd, req, path, body, have, length, deadline);
+        pthread_mutex_unlock(&g_links_action_mu);
     } else if (!strcmp(path, "/api/log")) {
         send_log(fd);
     } else if (!strcmp(path, "/api/nas/scan") && !may_write(fd, req)) {

@@ -1986,15 +1986,18 @@ void drive_status_json(buf_t *out) {
 /* --- panel actions --- */
 
 static int ready(char *msg, size_t n, int need_account) {
-    if (!g_started) {
+    pthread_mutex_lock(&g_mu);
+    int started = g_started, configured = g_client_id[0] != 0, connected = g_refresh[0] != 0;
+    pthread_mutex_unlock(&g_mu);
+    if (!started) {
         snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
         return -1;
     }
-    if (!g_client_id[0]) {
+    if (!configured) {
         snprintf(msg, n, "%s", TR("Enter your Google client ID and secret first", "Pon primero tu ID de cliente y tu secreto de Google"));
         return -1;
     }
-    if (need_account && !g_refresh[0]) {
+    if (need_account && !connected) {
         snprintf(msg, n, "%s", TR("Connect Google Drive first", "Conecta Google Drive primero"));
         return -1;
     }
@@ -2187,7 +2190,10 @@ int drive_forget_client(char *msg, size_t n) {
         snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
         return -1;
     }
-    if (g_refresh[0])
+    pthread_mutex_lock(&g_mu);
+    int connected = g_refresh[0] != 0;
+    pthread_mutex_unlock(&g_mu);
+    if (connected)
         drive_disconnect(msg, n);
     pthread_mutex_lock(&g_mu);
     g_client_id[0] = 0;

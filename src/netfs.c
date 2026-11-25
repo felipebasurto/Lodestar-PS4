@@ -363,6 +363,14 @@ static int link_error(int r) {
            r == -ENETDOWN || r == -ENETUNREACH || r == -EHOSTUNREACH || r == -EFAULT || r == -EIO;
 }
 
+/* Atomic mirrors of the scalars that form nas_active(). The owner state itself remains under
+ * g_lock, but readers of active must never wait behind FUSE/network I/O. */
+static int g_pub_adopted, g_pub_adopt_on, g_pub_mounted, g_pub_backend_active;
+static void publish_adopted(int on) { __atomic_store_n(&g_pub_adopted, on, __ATOMIC_RELEASE); }
+static void publish_adopt_on(int on) { __atomic_store_n(&g_pub_adopt_on, on, __ATOMIC_RELEASE); }
+static void publish_mounted(int on) { __atomic_store_n(&g_pub_mounted, on, __ATOMIC_RELEASE); }
+static void publish_backend_active(int on) { __atomic_store_n(&g_pub_backend_active, on, __ATOMIC_RELEASE); }
+
 /* 1 when a client is connected again after r. */
 static int redial(int r) {
     if (!g_mounted || !g_have_last || !link_error(r))
@@ -377,6 +385,7 @@ static int redial(int r) {
         g_be->disconnect();
         g_be = NULL;
     }
+    publish_backend_active(0);
     g_gen++;
     char err[192];
     int ok = !connect_any(&g_last, err, sizeof(err));
@@ -429,6 +438,7 @@ static void drop_client(void) {
         g_be->disconnect();
         g_be = NULL;
     }
+    publish_backend_active(0);
     g_gen++;
 }
 
@@ -834,6 +844,7 @@ static void *fuse_thread(void *arg) {
     pthread_mutex_lock(&g_lock);
     g_active = 0;
     g_loop = 0;
+    publish_backend_active(0);
     pthread_mutex_unlock(&g_lock);
     return NULL;
 }
@@ -882,6 +893,7 @@ static int connect_any(const nas_cfg_t *cfg, char *err, size_t n) {
     int same = g_have_last && cfg_same(cfg, &g_last);
     g_be = be;
     g_active = 1;
+    publish_backend_active(1);
     g_gen++;
     if (!same)
         g_cfg_gen++; /* the share itself changed: open files must not follow their paths onto it */
@@ -983,6 +995,7 @@ static int ctl_talk(const char *mnt, const char *cmd) {
     if (!r) {
         const char *a = t->ans + strlen(CTL_MAGIC), *e = strchr(a, '\n');
         g_adopt_on = *a == '1';
+        publish_adopt_on(g_adopt_on);
         if (e)
             snprintf(g_status, sizeof(g_status), "%.*s", (int)strcspn(e + 1, "\n"), e + 1);
     }
@@ -1025,6 +1038,8 @@ static int adopt(const nas_cfg_t *cfg, char *err, size_t n) {
     snprintf(g_mnt, sizeof(g_mnt), "%s", mnt);
     g_mounted = 1;
     g_adopted = 1;
+    publish_mounted(1);
+    publish_adopted(1);
     printf("[nas] %s: mounted by an earlier load, used as it is (%s)\n", mnt, g_status);
     const char *state = strrchr(g_status, ':');
     snprintf(err, n, "%s", state ? state + 2 : g_status);
@@ -1033,10 +1048,13 @@ static int adopt(const nas_cfg_t *cfg, char *err, size_t n) {
 
 /* The adopted mount's state, asked again now and then. */
 static void adopt_refresh(void) {
-    static time_t at;
-    if (!g_adopted || time(NULL) - at < 5)
+    static long long at;
+    time_t now = time(NULL);
+    long long seen = __atomic_load_n(&at, __ATOMIC_RELAXED);
+    if (!__atomic_load_n(&g_pub_adopted, __ATOMIC_ACQUIRE) || now - seen < 5)
         return;
-    at = time(NULL);
+    if (!__sync_bool_compare_and_swap(&at, seen, (long long)now))
+        return; /* another reader is already asking */
     ctl_talk(g_mnt, "");
 }
 
@@ -1052,9 +1070,12 @@ int nas_mounted(void) { return g_mounted; }
 const char *nas_mountpoint(void) { return g_mnt; }
 
 int nas_active(void) {
-    adopt_refresh();
-    return g_adopted ? g_adopt_on : g_mounted && g_active && g_be;
+    if (__atomic_load_n(&g_pub_adopted, __ATOMIC_ACQUIRE))
+        return __atomic_load_n(&g_pub_adopt_on, __ATOMIC_ACQUIRE);
+    return __atomic_load_n(&g_pub_mounted, __ATOMIC_ACQUIRE) && __atomic_load_n(&g_pub_backend_active, __ATOMIC_ACQUIRE);
 }
+
+void nas_refresh(void) { adopt_refresh(); }
 
 const char *nas_status(void) {
     adopt_refresh();
@@ -1077,6 +1098,7 @@ int nas_start(const nas_cfg_t *cfg, char *err, size_t n) {
             g_be->disconnect();
             g_be = NULL;
         }
+        publish_backend_active(0);
         g_gen++;
         int r = connect_any(cfg, err, n);
         status_set(cfg, r ? err : TR("ready", "listo"));
@@ -1154,6 +1176,7 @@ int nas_start(const nas_cfg_t *cfg, char *err, size_t n) {
         return -1;
     }
     g_active = 0; /* the loop has not started yet */
+    publish_backend_active(0);
 
     char *argv[] = {"ps4mount", mnt, "-o", "allow_other", "-o", "rw", "-f", NULL};
     char *mountpoint = NULL;
@@ -1188,11 +1211,15 @@ int nas_start(const nas_cfg_t *cfg, char *err, size_t n) {
     snprintf(g_mnt, sizeof(g_mnt), "%s", mnt);
     g_mounted = 1;
     g_active = 1;
+    publish_mounted(1);
+    publish_backend_active(1);
     status_set(cfg, TR("ready", "listo"));
     g_loop = 1;
     pthread_t th;
     if (pthread_create(&th, NULL, fuse_thread, NULL)) {
         g_loop = 0;
+        g_active = 0;
+        publish_backend_active(0);
         snprintf(err, n, "%s", TR("could not start the FUSE thread", "no se pudo arrancar el hilo de FUSE"));
         status_set(cfg, err);
         pthread_mutex_unlock(&g_lock);
@@ -1216,6 +1243,7 @@ int nas_reconnect(const nas_cfg_t *cfg, char *err, size_t n) {
         g_be->disconnect();
         g_be = NULL;
     }
+    publish_backend_active(0);
     g_gen++;
     int r = connect_any(cfg, err, n);
     status_set(cfg, r ? err : TR("ready", "listo"));
@@ -1237,6 +1265,7 @@ void nas_stop(void) {
         g_be->disconnect();
         g_be = NULL;
     }
+    publish_backend_active(0);
     g_gen++;
     snprintf(g_status, sizeof(g_status), "%s", TR("off", "apagado"));
     pthread_mutex_unlock(&g_lock);
