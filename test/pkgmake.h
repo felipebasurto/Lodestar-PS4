@@ -57,7 +57,7 @@ static size_t make_check_sfo(uint8_t *d, const char *cat, uint32_t sysver, const
 
 /* A pkg with what pkg_check reads: header, entry table, the keys entry (with entry key 3
  * wrapped with the public fake key when fake) and param.sfo. The header declares size
- * bytes; the file holds the first written bytes (all of it when written >= size). */
+ * bytes; the file holds the first written bytes; it may disagree with the declared size. */
 static void make_pkg_ver(const char *path, const char *cid, const char *cat, uint32_t sysver, int fake, uint64_t size,
                          uint64_t written, const char *app_ver) {
     static uint8_t f[0x4000];
@@ -84,7 +84,7 @@ static void make_pkg_ver(const char *path, const char *cid, const char *cat, uin
     if (fake)
         rsa2048_modexp(block, e, k_pkg_key3_n, f + 0x1100 + 0x20 + 7 * 0x20 + 3 * 0x100);
     FILE *o = fopen(path, "wb");
-    uint64_t n = written < size ? written : size;
+    uint64_t n = written;
     fwrite(f, 1, n < sizeof(f) ? (size_t)n : sizeof(f), o);
     for (uint64_t i = sizeof(f); i < n; i++)
         fputc(0, o);

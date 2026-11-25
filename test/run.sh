@@ -112,12 +112,22 @@ echo "== pkgs sent from the panel"
 $CC $FLAGS -Itest -o "$B/upload_test" test/upload_test.c src/upload.c src/lang.c src/mem.c src/check.c src/pkg.c src/build.c src/crypto.c -lpthread
 "$B/upload_test"
 
+echo "== repeated kernel log lines"
+$CC $FLAGS -o "$B/klogdup_test" test/klogdup_test.c src/klogdup.c
+"$B/klogdup_test"
+
 echo "== log with times"
 $CC $FLAGS -o "$B/log_test" test/log_test.c src/logts.c -lpthread
 "$B/log_test"
 
+echo "== drive auditor (tools/driveaudit.py)"
+python3 -m unittest test/driveaudit_test.py
+
 echo "== log analyzer (tools/logcheck.py)"
 bash test/logcheck_test.sh
+
+echo "== drive audit (tools/driveaudit.py)"
+python3 -I test/driveaudit_test.py
 
 echo "== Google Drive backups"
 $CC $FLAGS $BRF -o "$B/drive_test" test/drive_test.c src/drive.c src/https.c src/json.c src/lang.c src/build.c src/mem.c src/crypto.c "$BR/libbearssl.a" -lpthread

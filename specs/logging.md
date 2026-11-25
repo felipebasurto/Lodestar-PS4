@@ -51,6 +51,11 @@ excluded from the log and the panel's notification history.
 Check: test for Drive's notification routing (`test/drive_test.c`), read for the console notification.
 Source: AI-WORKFLOW.md rule 8.
 
+### LOG-8: repeated kernel lines are compressed, not multiplied
+The first relevant kernel line is copied exactly. Exact repeats inside a one-minute window are counted and
+summarized once; different lines are never suppressed. `STATE_DIR/klog_all` remains the full diagnostic mode.
+Check: test (keep bar 3: time/ordering; upstream regression). Test: `test/klogdup_test.c`. Source: upstream v0.8.0 issue #42.
+
 ## Non-goals
 
 - Log levels or a log server: the tag in brackets is the convention.

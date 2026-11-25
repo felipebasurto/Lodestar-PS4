@@ -201,6 +201,11 @@ static int read_one(cat_pkg_t *p, pkg_t *pkg, sfo_t *sfo) {
     int rc = -1;
     size_t len = 0;
     uint8_t *d = NULL;
+    if (!pkg->pkg_size && p->size) {
+        printf("[scan] skip %s (%s: a nonzero pkg whose header declares 0 bytes is damaged)\n", p->path,
+               pkg->content_id);
+        goto out;
+    }
     if (!is_game_id(pkg->title_id) || !pkg_fake_key(pkg))
         goto out;
     d = pkg_entry(pkg, 0x1000, &len);

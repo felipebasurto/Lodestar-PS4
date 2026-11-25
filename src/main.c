@@ -50,11 +50,13 @@
 #include "upload.h"
 #include "crypto.h"
 #include "db.h"
+#include "delete.h"
 #include "drive.h"
 #include "links.h"
 #include "fw.h"
 #include "https.h"
 #include "install.h"
+#include "klogdup.h"
 #include "lang.h"
 #include "logts.h"
 #include "mem.h"
@@ -80,7 +82,7 @@
  * /user is bfs, which has no symlinks; /system_data is ufs. A delete from the
  * console only ever removes these links, never the pkgs. */
 #define HOLD_DIR "/system_data/ps4mount"
-#define MAX_TITLES 256
+#define MAX_TITLES 768
 #define MAX_DLC 64
 #define BATCH_QUIET 10 /* seconds without writes to the system databases between groups */
 #define MAX_DLC_TIDS 8
@@ -112,7 +114,7 @@ static int dlc_skip(uint64_t size, int mode, int big) {
     return mode == DLC_INTERNAL && !big && size > DLC_INSTALL_MAX;
 }
 
-#define MAX_SCAN_PATHS 8
+#define MAX_SCAN_PATHS 64
 #define CONFIG_PATH STATE_DIR "/config.txt"
 #define RESTORED_LIST STATE_DIR "/restored.txt" /* pkgs moved back: not picked up again */
 
@@ -3858,29 +3860,8 @@ static void end_delete_window(void) {
     printf("[delete] window closed, game folders mounted again\n");
 }
 
-/* Screens of the two delete flows: the home screen (Options > Delete) and
- * Settings > Storage. From the first of them until focus leaves both flows the game
- * folders are unmounted, so a delete removes /user/app/<TID> cleanly (a mount point
- * cannot be removed). Returns 2 for a screen that opens the window, 1 for a screen
- * that keeps it open (menus and dialogs on the way), 0 otherwise. */
-static int delete_scene(const char *name) {
-    /* PS5 names, then the PS4's. Options > Delete asks with ConfirmContentDeleteScene and
-     * deletes under Parent_ContentDeleteScene. Settings > Storage lists the games in
-     * storage_data#application (opened there: its menu, confirmation and delete pages,
-     * OptionMenu, Parent_NormalStack and storage_data#application_delete, follow fast) */
-    static const char *opens[] = {"AppDeleteConfirmScene", "console storage delete content", "DeleteDialogScreen",
-                                  "ConfirmContentDeleteScene", "storage_data#application", NULL};
-    static const char *keeps[] = {"AppDeletingScene", "ReactPopupMenu", "Noname", "Render.NPXS40021",
-                                  "storage management", "ContentDeleteScene", "OptionMenu :", "Parent_NormalStack",
-                                  NULL};
-    for (int i = 0; opens[i]; i++)
-        if (strstr(name, opens[i]))
-            return 2;
-    for (int i = 0; keeps[i]; i++)
-        if (strstr(name, keeps[i]))
-            return 1;
-    return 0;
-}
+/* The delete-screen classifier is the host-tested pure contract in delete.h. */
+static int delete_scene(const char *name) { return delete_scene_kind(name); }
 
 static void start_delete_window(void) {
     g_deleting_since = time(NULL);
@@ -3899,8 +3880,9 @@ static void start_delete_window(void) {
     printf("[delete] delete screen open, game folders unmounted\n");
 }
 
-/* Copies klog lines about our titles (and crash/mount errors) into the log; every
- * line while STATE_DIR/klog_all exists (for diagnosis: the kernel log has one reader). */
+/* Copies klog lines about our titles (and crash/mount errors) into the log. Exact repeats
+ * are counted for a minute and summarized, so a kernel loop cannot drown the evidence that
+ * came before it. STATE_DIR/klog_all is the diagnosis switch: it copies everything whole. */
 static void trace_klog(const char *line) {
     static time_t checked;
     static int all;
@@ -3912,19 +3894,26 @@ static void trace_klog(const char *line) {
         printf("[klog] %.300s\n", line);
         return;
     }
+    int copy = 0;
     static const char *keys[] = {"CRASH", "Trophy:Register", "_pfs_mount", "mountpfs", "PrepareProcessLaunch",
                                  "preLaunchCheck", "scePlayGoCore", "process_mount", "process_check", "sqlite",
                                  "SQLITE", "corrupt", "Corrupt", "CORRUPT", "dbr", "DBR", NULL};
-    for (int i = 0; keys[i]; i++)
-        if (strstr(line, keys[i])) {
-            printf("[klog] %.300s\n", line);
-            return;
-        }
-    for (int i = 0; i < MAX_TITLES; i++)
-        if (g_managed[i].used && strstr(line, g_managed[i].tid) && !strstr(line, "BGLayer") && !strstr(line, "PSM.UI")) {
-            printf("[klog] %.300s\n", line);
-            return;
-        }
+    for (int i = 0; keys[i] && !copy; i++)
+        copy = strstr(line, keys[i]) != NULL;
+    for (int i = 0; !copy && i < MAX_TITLES; i++)
+        copy = g_managed[i].used && strstr(line, g_managed[i].tid) && !strstr(line, "BGLayer") && !strstr(line, "PSM.UI");
+    if (!copy)
+        return;
+    static kdup_t dedup;
+    char note[256];
+    time_t now = time(NULL);
+    int action = kdup_line(&dedup, line, now, note, sizeof(note));
+    if (action & KDUP_NOTE)
+        printf("[klog] %s\n", note);
+    if (action & KDUP_WRITE)
+        printf("[klog] %.300s\n", line);
+    while (kdup_flush(&dedup, now, note, sizeof(note)))
+        printf("[klog] %s\n", note);
 }
 
 /* "system file disagree [<TID>]": the system refused to start a game with an update.
@@ -4093,10 +4082,9 @@ static unsigned long long tree_size(const char *path) {
  * deleting them is PS4Mount's own job. 1 deleted, 0 refused. */
 static int delete_game_files(const char *dir, const char *tid, const char *name) {
     for (int i = 0; i < NROOTS; i++) {
-        char root[PATH_MAX], want[64];
+        char root[PATH_MAX];
         root_path(i, root, sizeof(root));
-        snprintf(want, sizeof(want), "%s/ps4/%s", root, tid);
-        if (!is_game_id(tid) || strcmp(dir, want))
+        if (!delete_target_ok(root, tid, dir))
             continue;
         unsigned long long n = tree_size(dir);
         rm_tree(dir);

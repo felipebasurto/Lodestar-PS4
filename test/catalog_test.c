@@ -25,6 +25,7 @@ static int g_failed, g_checks;
 #define GAME_CID "UP0000-CUSA00001_00-TESTGAME00000000"
 #define MERGED_CID "UP0000-CUSA00002_00-TESTGAME00000000"
 #define NOTFAKE_CID "UP0000-CUSA00003_00-TESTGAME00000000"
+#define ZERO_CID "UP0000-CUSA00009_00-ZERODECLARED0000"
 #define CUT_CID "UP0000-CUSA00004_00-TESTGAME00000000"
 #define LEGACY_CID "UP0000-CUSA00005_00-TESTGAME00000000"
 #define ORPHAN_CID "UP0000-CUSA00009_00-TESTGAME00000000"
@@ -128,6 +129,7 @@ static void test_scan(void) {
     pkg_at(root, "orphan/orphan.pkg", ORPHAN_CID, "ac", 1, 0x4000, 0x4000, "01.00");
     /* unusable pkgs: not fake, and cut off (the header claims more than the file has) */
     pkg_at(root, "notfake.pkg", NOTFAKE_CID, "gd", 0, 0x4000, 0x4000, "01.00");
+    pkg_at(root, "zero-declared.pkg", ZERO_CID, "ac", 1, 0, 0x4000, "01.00");
     pkg_at(root, "cut.pkg", CUT_CID, "gd", 1, 0x10000, 0x8000, "01.00");
     /* the layout of older PS4Mount versions keeps working; its replaced update does not */
     pkg_at(root, "ps4/CUSA00005/app.pkg", LEGACY_CID, "gd", 1, 0x4000, 0x4000, "01.04");
@@ -144,16 +146,16 @@ static void test_scan(void) {
 
     catalog_t c = {0};
     int unread = catalog_walk(&c, root, NULL, NULL, NULL, 0);
-    CHECK(unread == 10);
-    CHECK(c.npkgs == 10);
-    CHECK(catalog_read(&c) == 10);
+    CHECK(unread == 11);
+    CHECK(c.npkgs == 11);
+    CHECK(catalog_read(&c) == 11);
     int ok = 0, bad = 0, short_pkgs = 0;
     for (int i = 0; i < c.npkgs; i++) {
         ok += c.pkgs[i].state == CAT_OK;
         bad += c.pkgs[i].state == CAT_BAD;
         short_pkgs += c.pkgs[i].state == CAT_SHORT;
     }
-    CHECK(ok == 8 && bad == 1 && short_pkgs == 1);
+    CHECK(ok == 8 && bad == 2 && short_pkgs == 1);
     /* sorted by path */
     for (int i = 1; i < c.npkgs; i++)
         CHECK(strcmp(c.pkgs[i - 1].path, c.pkgs[i].path) < 0);
@@ -176,7 +178,7 @@ static void test_scan(void) {
     CHECK(catalog_save(&c, saved) == 0);
     catalog_t d = {0};
     /* the cut-off pkg is never saved: the next walk reads it again */
-    CHECK(catalog_load(&d, saved) == 9);
+    CHECK(catalog_load(&d, saved) == 10);
     catalog_free(&c);
     CHECK(catalog_walk(&d, root, NULL, NULL, NULL, 0) == 1);
     CHECK(catalog_read(&d) == 1);

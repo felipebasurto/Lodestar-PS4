@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "autorun.h"
+#include "delete.h"
 #include "build.h"
 #include "check.h"
 #include "crypto.h"
@@ -668,6 +669,68 @@ static void test_stage(void) {
     }
 }
 
+
+/* DEL-1 (specs/delete.md): the console-delete path may remove only the exact organized
+ * library folder of the game. Anything else is user data or foreign data. */
+static void test_delete_target(void) {
+    printf("delete: which folder a console delete may remove\n");
+    static const struct {
+        const char *root, *tid, *dir;
+        int ok;
+    } rows[] = {
+        {"/mnt/usb0", "CUSA00001", "/mnt/usb0/ps4/CUSA00001", 1},
+        {"/mnt/ext0", "SLUS20071", "/mnt/ext0/ps4/SLUS20071", 1},
+        {"/mnt/usb0", "CUSA00001", "/mnt/usb0/ps4/CUSA00001/", 0},
+        {"/mnt/usb0", "CUSA00001", "/mnt/usb0/ps4/cusa00001", 0},
+        {"/mnt/usb0", "CUSA00001", "/mnt/usb0/Games/CUSA00001/app.pkg", 0},
+        {"/mnt/usb0", "CUSA00001", "/mnt/usb0/ps4/CUSA00002", 0},
+        {"/mnt/usb1", "CUSA00001", "/mnt/usb0/ps4/CUSA00001", 0},
+        {"/mnt/usb0", "CUSA0001", "/mnt/usb0/ps4/CUSA0001", 0},
+        {"/mnt/usb0", "NPXS00001", "/mnt/usb0/ps4/NPXS00001", 0},
+        {"/mnt/usb0", "../..", "/mnt/usb0/ps4/../..", 0},
+        {NULL, "CUSA00001", "/mnt/usb0/ps4/CUSA00001", 0},
+        {"/mnt/usb0", NULL, "/mnt/usb0/ps4/CUSA00001", 0},
+        {"/mnt/usb0", "CUSA00001", NULL, 0},
+    };
+    for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++) {
+        int got = delete_target_ok(rows[i].root, rows[i].tid, rows[i].dir);
+        if (got != rows[i].ok)
+            printf("  %s %s %s: %d, wanted %d\n", rows[i].root, rows[i].tid, rows[i].dir, got, rows[i].ok);
+        CHECK(got == rows[i].ok);
+    }
+}
+
+/* DEL-3 (specs/delete.md): the two PS4 delete flows open and keep the delete window;
+ * unrelated screens close it. */
+static void test_delete_scene(void) {
+    printf("delete: which scenes open or keep the delete window\n");
+    static const struct {
+        const char *scene;
+        int kind;
+    } rows[] = {
+        {"ConfirmContentDeleteScene", 2},
+        {"storage_data#application", 2},
+        {"storage_data#application_delete", 2}, /* the delete page contains the list page's prefix */
+        {"Parent_ContentDeleteScene", 1},
+        {"storage management", 1},
+        {"OptionMenu : Delete", 1},
+        {"Parent_NormalStack", 1},
+        {"AppDeleteConfirmScene", 2}, /* inherited PS5 names: harmless, not PS4 evidence */
+        {"DeleteDialogScreen", 2},
+        {"ReactPopupMenu", 1},
+        {"game scene CUSA00001", 0},
+        {"main scene", 0},
+        {"PSMT00001", 0},
+        {"", 0},
+    };
+    for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++) {
+        int got = delete_scene_kind(rows[i].scene);
+        if (got != rows[i].kind)
+            printf("  scene %s: %d, wanted %d\n", rows[i].scene, got, rows[i].kind);
+        CHECK(got == rows[i].kind);
+    }
+}
+
 static void test_emu(void) {
     printf("emulators: which names are mounted over the console's folders\n");
     static const struct {
@@ -718,6 +781,8 @@ int main(void) {
     test_origin();
     test_autorun();
     test_stage();
+    test_delete_target();
+    test_delete_scene();
     test_emu();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;
