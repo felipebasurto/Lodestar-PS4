@@ -16,6 +16,81 @@
 #define VERSION "#titles 1"
 #define LINE_MAX_LEN 16384
 
+/* Add-on descriptors are 52 bytes. A separate mem_alloc for one descriptor would round it
+ * to a whole 16 KiB page, so the cache owns a small size-class pool. A block is one page
+ * minus mem_alloc's header; slots of the same capacity are carved from it and returned to
+ * that class when their cache entry is reused or forgotten. The pool is intentionally kept
+ * at its high-water mark for the lifetime of the cache. */
+#define DLC_POOL_BLOCK 16320u
+#define DLC_POOL_MAGIC 0x74436c64u
+
+typedef struct dlc_slot {
+    struct dlc_slot *next;
+    uint32_t magic;
+    uint32_t cls;
+} dlc_slot_t;
+
+enum { DLC_CLASS_COUNT = 7 };
+
+static const uint8_t g_dlc_caps[DLC_CLASS_COUNT] = {1, 2, 4, 8, 16, 32, 64};
+static dlc_slot_t *g_dlc_free[DLC_CLASS_COUNT];
+static uint8_t *g_dlc_block[DLC_CLASS_COUNT];
+static size_t g_dlc_off[DLC_CLASS_COUNT];
+static size_t g_dlc_mapped;
+
+static size_t dlc_stride(unsigned cls) {
+    size_t n = sizeof(dlc_slot_t) + (size_t)g_dlc_caps[cls] * sizeof(title_dlc_t);
+    return (n + 15u) & ~15u;
+}
+
+static int dlc_class(int n) {
+    for (unsigned i = 0; i < DLC_CLASS_COUNT; i++)
+        if (n <= g_dlc_caps[i])
+            return (int)i;
+    return -1;
+}
+
+static title_dlc_t *dlc_pool_alloc(int n) {
+    int cls = dlc_class(n);
+    if (cls < 0)
+        return NULL;
+    dlc_slot_t *s = g_dlc_free[cls];
+    if (s) {
+        g_dlc_free[cls] = s->next;
+    } else {
+        size_t stride = dlc_stride((unsigned)cls);
+        if (!g_dlc_block[cls] || g_dlc_off[cls] + stride > DLC_POOL_BLOCK) {
+            g_dlc_block[cls] = mem_alloc(DLC_POOL_BLOCK);
+            if (!g_dlc_block[cls])
+                return NULL;
+            g_dlc_off[cls] = 0;
+            g_dlc_mapped += DLC_POOL_BLOCK + 64u;
+        }
+        s = (dlc_slot_t *)(g_dlc_block[cls] + g_dlc_off[cls]);
+        g_dlc_off[cls] += stride;
+    }
+    s->next = NULL;
+    s->magic = DLC_POOL_MAGIC;
+    s->cls = (uint32_t)cls;
+    title_dlc_t *d = (title_dlc_t *)(s + 1);
+    memset(d, 0, (size_t)n * sizeof(*d));
+    return d;
+}
+
+static void dlc_pool_free(title_dlc_t *d) {
+    if (!d)
+        return;
+    dlc_slot_t *s = (dlc_slot_t *)d - 1;
+    if (s->magic != DLC_POOL_MAGIC || s->cls >= DLC_CLASS_COUNT)
+        return; /* not a live pool slot: corruption must not become a second free */
+    unsigned cls = s->cls;
+    s->magic = 0;
+    s->next = g_dlc_free[cls];
+    g_dlc_free[cls] = s;
+}
+
+size_t title_cache_dlc_pool_bytes(void) { return g_dlc_mapped; }
+
 typedef struct {
     int used, dirty; /* dirty: read or changed since the file of the drive was written */
     char root[MAX_ROOT];
@@ -77,7 +152,7 @@ title_info_t *title_cache_add(const char *root, const char *tid, uint64_t fp) {
                 e = &g_entries[i];
     }
     if (e->info.dlc)
-        mem_free(e->info.dlc);
+        dlc_pool_free(e->info.dlc);
     memset(&e->info, 0, sizeof(e->info));
     e->used = 1;
     e->dirty = !g_loading;
@@ -93,9 +168,7 @@ title_dlc_t *title_cache_give_dlc(title_info_t *e, int n) {
         return e->dlc;
     if (n > TITLE_DLC_MAX)
         n = TITLE_DLC_MAX;
-    e->dlc = mem_alloc((size_t)n * sizeof(*e->dlc));
-    if (e->dlc)
-        memset(e->dlc, 0, (size_t)n * sizeof(*e->dlc));
+    e->dlc = dlc_pool_alloc(n);
     return e->dlc;
 }
 
@@ -104,7 +177,7 @@ void title_cache_forget(void) {
         return;
     for (int i = 0; i < g_n; i++) {
         if (g_entries[i].used && g_entries[i].info.dlc)
-            mem_free(g_entries[i].info.dlc);
+            dlc_pool_free(g_entries[i].info.dlc);
         g_entries[i].used = 0;
         g_entries[i].info.dlc = NULL;
     }

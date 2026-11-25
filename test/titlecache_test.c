@@ -130,6 +130,47 @@ int main(void) {
     title_cache_forget();
     CHECK(title_cache_find("/mnt/usb0", "CUSA00001", a) == NULL);
 
+    /* one add-on of a game is 52 bytes, not a page: 64 such games fit in one pool block,
+     * their slots do not overlap, and forgetting/re-adding them reuses those slots */
+    size_t pool_before = title_cache_dlc_pool_bytes();
+    title_info_t *many[64];
+    for (int i = 0; i < 64; i++) {
+        char tid[10];
+        snprintf(tid, sizeof(tid), "CUSA%05d", i + 100);
+        many[i] = title_cache_add("/mnt/usb0", tid, a + 1000 + (uint64_t)i);
+        CHECK(many[i] != NULL);
+        if (!many[i])
+            continue;
+        title_dlc_t *one = title_cache_give_dlc(many[i], 1);
+        CHECK(one != NULL);
+        if (!one)
+            continue;
+        snprintf(one[0].title_id, sizeof(one[0].title_id), "%s", tid);
+        snprintf(one[0].content_id, sizeof(one[0].content_id), "EP0000-%s_00-POOL%012d", tid, i);
+        one[0].install = i + 1;
+        many[i]->ndlc = 1;
+    }
+    size_t pool_after = title_cache_dlc_pool_bytes();
+    CHECK(pool_after - pool_before <= 16384);
+    CHECK(pool_after < pool_before + 64u * 16384u);
+    for (int i = 0; i < 64; i++) {
+        char tid[10], cid[37];
+        snprintf(tid, sizeof(tid), "CUSA%05d", i + 100);
+        snprintf(cid, sizeof(cid), "EP0000-%s_00-POOL%012d", tid, i);
+        CHECK(many[i] && many[i]->dlc && many[i]->dlc[0].install == i + 1 &&
+              !strcmp(many[i]->dlc[0].title_id, tid) && !strcmp(many[i]->dlc[0].content_id, cid));
+    }
+    title_cache_forget();
+    CHECK(title_cache_dlc_pool_bytes() == pool_after);
+    for (int i = 0; i < 64; i++) {
+        char tid[10];
+        snprintf(tid, sizeof(tid), "CUSA%05d", i + 200);
+        title_info_t *again = title_cache_add("/mnt/usb0", tid, a + 2000 + (uint64_t)i);
+        CHECK(again != NULL && title_cache_give_dlc(again, 1) != NULL);
+    }
+    CHECK(title_cache_dlc_pool_bytes() == pool_after);
+    title_cache_forget();
+
     unlink(path);
     unlink("build/test/titles-bad.txt");
     unlink("build/test/titles-bad2.txt");

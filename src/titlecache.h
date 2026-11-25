@@ -6,6 +6,7 @@
 #pragma once
 
 #include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* Add-ons kept per game, and the add-on title IDs mounted for it (MAX_DLC_TIDS in main.c). */
@@ -37,6 +38,10 @@ typedef struct {
     int ndlc;
     title_dlc_t *dlc;
 } title_info_t;
+
+/* Diagnostic: bytes mapped by the internal add-on descriptor pool. It is a high-water
+ * footprint, not the amount currently in use. */
+size_t title_cache_dlc_pool_bytes(void);
 
 /* 64-bit hash of a game's files: starts empty and takes each path with its size and mtime. */
 uint64_t title_fp_start(void);
