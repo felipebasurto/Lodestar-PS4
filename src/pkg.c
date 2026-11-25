@@ -66,9 +66,11 @@ int pkg_open(pkg_t *pkg, const char *path) {
     pkg->fd = open(path, O_RDONLY);
     if (pkg->fd < 0)
         return -1;
-    if (read_at(pkg->fd, pkg->header, sizeof(pkg->header), 0) || be32(pkg->header) != 0x7f434e54)
+    uint8_t header[0x1000];
+    if (read_at(pkg->fd, header, sizeof(header), 0) || be32(header) != 0x7f434e54)
         goto fail;
-    memcpy(pkg->content_id, pkg->header + 0x40, 36);
+    pkg->content_type = header[0x77];
+    memcpy(pkg->content_id, header + 0x40, 36);
     /* content_id lands in file names and paths (licenses, playgo dirs): only the
      * characters a real one uses, so a damaged pkg cannot climb out of them.
      * Homebrew pkgs may have shorter NUL-padded IDs (at least 21 chars so title_id
@@ -91,11 +93,11 @@ int pkg_open(pkg_t *pkg, const char *path) {
             goto fail;
     }
     memcpy(pkg->title_id, pkg->content_id + 7, 9);
-    pkg->pfs_offset = be64(pkg->header + 0x410);
-    pkg->pfs_size = be64(pkg->header + 0x418);
-    pkg->pkg_size = be64(pkg->header + 0x430);
-    memcpy(pkg->digest, pkg->header + 0xfe0, 32);
-    uint32_t count = be32(pkg->header + 0x10), table = be32(pkg->header + 0x18);
+    pkg->pfs_offset = be64(header + 0x410);
+    pkg->pfs_size = be64(header + 0x418);
+    pkg->pkg_size = be64(header + 0x430);
+    memcpy(pkg->digest, header + 0xfe0, 32);
+    uint32_t count = be32(header + 0x10), table = be32(header + 0x18);
     if (count > PKG_MAX_ENTRIES)
         goto fail;
     pkg->entries = count ? malloc(count * sizeof(*pkg->entries)) : NULL;

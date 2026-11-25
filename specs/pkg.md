@@ -31,3 +31,10 @@ Truncated tables, out-of-range offsets, impossible lengths and unreadable entrie
 entry read. They are never partially trusted as valid metadata.
 Check: test. Tests: `test/unit.c` › `test_sfo`, `test_pkg_reader`; fuzz target `test/fuzz/fuzz_pkg.c`.
 Source: existing parser design.
+
+### PKG-4: the 4 KiB PKG header is parse input, not retained state
+`pkg_open` may read the fixed header while parsing, but the open object keeps only decision fields derived
+from it. The full header is not retained for every open pkg. The content-type byte needed for add-on data
+classification is distilled explicitly during the parse.
+Check: test (memory ownership and external file format). Test: `test/unit.c` › `test_pkg_reader`.
+Source: rewrite memory audit 2026-11-25.

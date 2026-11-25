@@ -62,7 +62,7 @@ typedef struct {
 
 typedef struct {
     int fd;
-    uint8_t header[0x1000];
+    uint8_t content_type;
     char content_id[37];
     char title_id[10];
     uint64_t pkg_size, pfs_offset, pfs_size;

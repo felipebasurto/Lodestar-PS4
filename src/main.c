@@ -708,7 +708,7 @@ static void dlc_open(title_src_t *t) {
         while ((f = readdir(l))) {
             if (f->d_name[0] == '.' || strlen(f->d_name) != 16)
                 continue;
-            /* 6 MB: from mapped pages (zeroed), never the host's few MB of heap. A list that
+            /* one bounded mapped array (zeroed), never the host's few MB of heap. A list that
              * could not be had would read as "no add-ons" and register the game again */
             if (!t->dlc && !(t->dlc = mem_alloc(MAX_DLC * sizeof(*t->dlc)))) {
                 printf("[scan] %s: no memory for its add-ons\n", t->dir);
@@ -743,7 +743,7 @@ static void dlc_open(title_src_t *t) {
                 pkg_close(&a->pkg);
                 continue;
             }
-            a->data = a->pkg.header[0x77] == 0x1b; /* content type: 0x1b with data, 0x1c license only */
+            a->data = a->pkg.content_type == 0x1b; /* 0x1b with data, 0x1c license only */
             a->install = g_cfg.dlc_mode == DLC_INTERNAL && (a->pkg.pkg_size <= DLC_INSTALL_MAX || g_cfg.dlc_big);
             t->ndlc++;
             if (a->install)
@@ -790,7 +790,7 @@ static void dlc_open_catalog(title_src_t *t, const catalog_t *c, const cat_game_
         snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", p->content_id);
         if (dup || exists(rm)) /* removed: deleted on the console */
             continue;
-        /* 6 MB: from mapped pages (zeroed), never the host's few MB of heap. A list that
+        /* one bounded mapped array (zeroed), never the host's few MB of heap. A list that
          * could not be had would read as "no add-ons" and register the game again */
         if (!t->dlc && !(t->dlc = mem_alloc(MAX_DLC * sizeof(*t->dlc)))) {
             printf("[scan] %s: no memory for its add-ons\n", t->dir);
@@ -809,7 +809,7 @@ static void dlc_open_catalog(title_src_t *t, const catalog_t *c, const cat_game_
             pkg_close(&a->pkg);
             continue;
         }
-        a->data = a->pkg.header[0x77] == 0x1b; /* content type: 0x1b with data, 0x1c license only */
+        a->data = a->pkg.content_type == 0x1b; /* 0x1b with data, 0x1c license only */
         a->install = g_cfg.dlc_mode == DLC_INTERNAL && (a->pkg.pkg_size <= DLC_INSTALL_MAX || g_cfg.dlc_big);
         t->ndlc++;
         if (a->install)
