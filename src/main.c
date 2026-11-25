@@ -198,6 +198,14 @@ static void cfg_nas_login(char *server, size_t ns, char *user, size_t nu, char *
     snprintf(pass, np, "%s", g_cfg.nas_pass);
     pthread_mutex_unlock(&g_cfg_mu);
 }
+
+/* GET /api/config can run in a web worker: one consistent copy, with no scan or network
+ * work under the mutex. Mutations still publish through config_publish in the owner. */
+static void cfg_snapshot(config_t *out) {
+    pthread_mutex_lock(&g_cfg_mu);
+    *out = g_cfg;
+    pthread_mutex_unlock(&g_cfg_mu);
+}
 #define NAS_RESCAN_MAX 1440 /* minutes: once a day */
 static int g_setup; /* a first start: no game is added until the settings are saved (first_start) */
 /* A first start with nobody at the panel for this long goes on with the default settings:
@@ -5925,7 +5933,9 @@ static void nas_apply(int force) {
         if (!g_nas_fail_at)
             g_nas_fail_at = now;
         if (strcmp(err, g_nas_last)) {
-            printf("[nas] %s: %s\n", nas_status(), err);
+            char nstat[192];
+            nas_status_copy(nstat, sizeof(nstat));
+            printf("[nas] %s: %s\n", nstat, err);
             snprintf(g_nas_last, sizeof(g_nas_last), "%s", err);
             g_nas_told = 0;
         }
@@ -5942,8 +5952,11 @@ static void nas_apply(int force) {
     g_nas_told = 0;
     g_nas_fail_at = 0;
     g_nas_next = now + 3600; /* connected: no need to ask again */
-    if (!g_nas_on)
-        printf("[nas] ready: %s\n", nas_status());
+    if (!g_nas_on) {
+        char nstat[192];
+        nas_status_copy(nstat, sizeof(nstat));
+        printf("[nas] ready: %s\n", nstat);
+    }
     g_nas_on = 1;
     g_walk_now = 1; /* a new drive to walk */
 }
@@ -6077,38 +6090,41 @@ static const char *payload_file(char *out, size_t n);
 static int autorun_apply(int on);
 
 void app_config_json(buf_t *out) {
-    char pfb[PATH_MAX];
+    config_t c;
+    cfg_snapshot(&c);
+    char pfb[PATH_MAX], nstat[192];
     const char *pf = payload_file(pfb, sizeof(pfb));
+    nas_status_copy(nstat, sizeof(nstat));
     buf_printf(out,
                "{\"batch\":%s,\"batch_size\":%d,\"dlc\":%s,\"dlc_mode\":\"%s\",\"dlc_big\":%s,\"internal\":%s,\"organize\":%s,"
                "\"restore_batch\":%d,\"max_restore_batch\":%d,"
                "\"lang\":\"%s\",\"ui_lang\":\"%s\",\"klog\":%s,\"autorun\":%s,\"autorun_ok\":%s,\"autorun_path\":",
-               g_cfg.batch ? "true" : "false", g_cfg.batch_size, g_cfg.dlc ? "true" : "false",
-               dlc_mode_name(g_cfg.dlc_mode), g_cfg.dlc_big ? "true" : "false", g_cfg.internal ? "true" : "false",
-               g_cfg.organize ? "true" : "false", g_cfg.restore_batch, MAX_RESTORE_BATCH,
-               g_cfg.lang >= 0 ? lang_tag(g_cfg.lang) : "auto", lang_tag(lang_current()), g_cfg.klog ? "true" : "false",
-               g_cfg.autorun ? "true" : "false", pf ? "true" : "false");
+               c.batch ? "true" : "false", c.batch_size, c.dlc ? "true" : "false",
+               dlc_mode_name(c.dlc_mode), c.dlc_big ? "true" : "false", c.internal ? "true" : "false",
+               c.organize ? "true" : "false", c.restore_batch, MAX_RESTORE_BATCH,
+               c.lang >= 0 ? lang_tag(c.lang) : "auto", lang_tag(lang_current()), c.klog ? "true" : "false",
+               c.autorun ? "true" : "false", pf ? "true" : "false");
     json_str(out, pf ? pf : "");
     buf_printf(out,
                ",\"nas_supported\":%s,\"nas\":%s,\"nas_proto\":\"%s\",\"nas_port\":%d,"
                "\"nas_rescan\":%d,\"nas_tested\":%s,\"nas_server\":",
-               nas_supported() ? "true" : "false", g_cfg.nas ? "true" : "false",
-               g_cfg.nas_proto == NAS_SMB ? "smb" : "nfs", g_cfg.nas_port, g_cfg.nas_rescan,
+               nas_supported() ? "true" : "false", c.nas ? "true" : "false",
+               c.nas_proto == NAS_SMB ? "smb" : "nfs", c.nas_port, c.nas_rescan,
                nas_fw_tested(g_fw) ? "true" : "false");
-    json_str(out, g_cfg.nas_server);
+    json_str(out, c.nas_server);
     buf_printf(out, ",\"nas_share\":");
-    json_str(out, g_cfg.nas_share);
+    json_str(out, c.nas_share);
     buf_printf(out, ",\"nas_sub\":");
-    json_str(out, g_cfg.nas_sub);
+    json_str(out, c.nas_sub);
     buf_printf(out, ",\"nas_user\":");
-    json_str(out, g_cfg.nas_user);
+    json_str(out, c.nas_user);
     buf_printf(out, ",\"nas_has_pass\":%s,\"nas_reload\":%s,\"nas_status\":",
-               g_cfg.nas_pass[0] ? "true" : "false", nas_need_reload() ? "true" : "false");
-    json_str(out, nas_status());
+               c.nas_pass[0] ? "true" : "false", nas_need_reload() ? "true" : "false");
+    json_str(out, nstat);
     buf_printf(out, ",\"paths\":[");
-    for (int i = 0; i < g_cfg.npaths; i++) {
+    for (int i = 0; i < c.npaths; i++) {
         char shown[130];
-        snprintf(shown, sizeof(shown), "/%s", g_cfg.paths[i]);
+        snprintf(shown, sizeof(shown), "/%s", c.paths[i]);
         buf_printf(out, "%s", i ? "," : "");
         json_str(out, shown);
     }
@@ -6350,10 +6366,11 @@ int app_config_set(const char *body, char *msg, size_t cap) {
     if (nas_changed)
         nas_apply(1);
     scan_request(0);
-    if (nas_changed && c.nas && !nas_active())
-        snprintf(msg, cap, TR("Saved, but the NAS did not connect: %s", "Guardado, pero el NAS no conectó: %s"),
-                 nas_status());
-    else
+    if (nas_changed && c.nas && !nas_active()) {
+        char nstat[192];
+        nas_status_copy(nstat, sizeof(nstat));
+        snprintf(msg, cap, TR("Saved, but the NAS did not connect: %s", "Guardado, pero el NAS no conectó: %s"), nstat);
+    } else
         snprintf(msg, cap, "%s", TR("Settings saved", "Ajustes guardados"));
     return 0;
 }

@@ -92,8 +92,9 @@ int nas_active(void);
 void nas_refresh(void);
 int nas_mounted(void);
 const char *nas_mountpoint(void);
-/* "NFS 192.168.0.19:/ps4share: ready", or why it is not. */
-const char *nas_status(void);
+/* Copies "NFS 192.168.0.19:/ps4share: ready", or why it is not, without starting
+ * the adopted-mount control conversation (the main loop refreshes that explicitly). */
+void nas_status_copy(char *out, size_t n);
 /* 1 when the fuse devices cannot be opened from this process (a payload started by
  * GoldHEN's AutoRun): it has to be loaded again through BinLoader. */
 int nas_need_reload(void);

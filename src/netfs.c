@@ -180,7 +180,13 @@ int nas_fw_tested(uint32_t fw) { return (fw >> 16) == 0x1352 || (fw >> 16) == 0x
 static struct fuse *g_fuse;
 static char g_mnt[PATH_MAX];
 static char g_status[192] = "off";
+/* A mirror for readers outside the netfs owner. g_lock can be held across backend work, so
+ * panel workers never take it just to copy a short status string. Every mutation publishes
+ * the already-updated text here; the copy mutex is never held while taking g_lock. */
+static pthread_mutex_t g_status_mu = PTHREAD_MUTEX_INITIALIZER;
+static char g_status_snap[192] = "off";
 static int g_mounted, g_active, g_loop;
+static void status_publish(void);
 /* The boot context cannot open the fuse devices (ENXIO): the payload has to be loaded
  * again by the console's own loader, in a process of its own. */
 static int g_reload;
@@ -475,6 +481,7 @@ static int ctl_write(const char *buf, size_t size) {
         g_have_last = 0; /* off on purpose: not connected again */
         drop_client();
         snprintf(g_status, sizeof(g_status), "%s", TR("off", "apagado"));
+        status_publish();
         printf("[nas] off, asked by a later load\n");
     } else if (nf == 8 && !strcmp(f[0], "connect")) {
         nas_cfg_t c;
@@ -903,6 +910,12 @@ static int connect_any(const nas_cfg_t *cfg, char *err, size_t n) {
     return 0;
 }
 
+static void status_publish(void) {
+    pthread_mutex_lock(&g_status_mu);
+    snprintf(g_status_snap, sizeof(g_status_snap), "%s", g_status);
+    pthread_mutex_unlock(&g_status_mu);
+}
+
 static void status_set(const nas_cfg_t *cfg, const char *state) {
     if (cfg->proto == NAS_SMB)
         snprintf(g_status, sizeof(g_status), "SMB //%s/%s%s%s: %s", cfg->server, cfg->share,
@@ -910,6 +923,7 @@ static void status_set(const nas_cfg_t *cfg, const char *state) {
     else
         snprintf(g_status, sizeof(g_status), "NFS %s:%s%s%s: %s", cfg->server, cfg->share,
                  cfg->sub[0] ? "/" : "", cfg->sub, state);
+    status_publish();
 }
 
 /* ---- adopting the mount of an earlier load ---- */
@@ -996,8 +1010,10 @@ static int ctl_talk(const char *mnt, const char *cmd) {
         const char *a = t->ans + strlen(CTL_MAGIC), *e = strchr(a, '\n');
         g_adopt_on = *a == '1';
         publish_adopt_on(g_adopt_on);
-        if (e)
+        if (e) {
             snprintf(g_status, sizeof(g_status), "%.*s", (int)strcspn(e + 1, "\n"), e + 1);
+            status_publish();
+        }
     }
     talk_release(t);
     return r;
@@ -1077,12 +1093,15 @@ int nas_active(void) {
 
 void nas_refresh(void) { adopt_refresh(); }
 
-const char *nas_status(void) {
-    adopt_refresh();
-    return g_status;
+void nas_status_copy(char *out, size_t n) {
+    if (!n)
+        return;
+    pthread_mutex_lock(&g_status_mu);
+    snprintf(out, n, "%s", g_status_snap);
+    pthread_mutex_unlock(&g_status_mu);
 }
 
-int nas_need_reload(void) { return g_reload; }
+int nas_need_reload(void) { return __atomic_load_n(&g_reload, __ATOMIC_ACQUIRE); }
 
 int nas_start(const nas_cfg_t *cfg, char *err, size_t n) {
     pthread_mutex_lock(&g_lock);
@@ -1113,6 +1132,7 @@ int nas_start(const nas_cfg_t *cfg, char *err, size_t n) {
     }
 
     snprintf(g_status, sizeof(g_status), "%s", TR("starting", "arrancando"));
+    status_publish();
     if (access("/dev/fuse0", F_OK)) {
         g_kp = kp_for(kernel_get_fw_version());
         errno = 0;
@@ -1149,9 +1169,9 @@ int nas_start(const nas_cfg_t *cfg, char *err, size_t n) {
         }
         g_probe_said = 1;
         if (!ok) {
-            g_reload = enxio;
+            __atomic_store_n(&g_reload, enxio, __ATOMIC_RELEASE);
             snprintf(err, n, "%s",
-                     g_reload ? TR("this start cannot use fusefs: the payload has to be loaded again",
+                     enxio ? TR("this start cannot use fusefs: the payload has to be loaded again",
                                    "este arranque no puede usar fusefs: hay que volver a cargar el payload")
                      : busy   ? TR("the fuse devices are all taken by earlier loads of PS4Mount: restart the console",
                                    "los dispositivos fuse están todos ocupados por cargas anteriores de PS4Mount: reinicia la consola")
@@ -1197,7 +1217,7 @@ int nas_start(const nas_cfg_t *cfg, char *err, size_t n) {
             enxio = fd < 0 && errno == ENXIO;
         }
         if (enxio) {
-            g_reload = 1;
+            __atomic_store_n(&g_reload, 1, __ATOMIC_RELEASE);
             snprintf(err, n, "%s", TR("this start cannot use fusefs: the payload has to be loaded again", "este arranque no puede usar fusefs: hay que volver a cargar el payload"));
             status_set(cfg, err);
             pthread_mutex_unlock(&g_lock);
@@ -1268,6 +1288,7 @@ void nas_stop(void) {
     publish_backend_active(0);
     g_gen++;
     snprintf(g_status, sizeof(g_status), "%s", TR("off", "apagado"));
+    status_publish();
     pthread_mutex_unlock(&g_lock);
 }
 

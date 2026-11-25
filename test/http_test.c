@@ -540,6 +540,30 @@ int main(void) {
         read_response_close(c, resp, sizeof(resp));
         CHECK(status(resp, "200") && strstr(resp, "\"dests\""));
 
+        before = g_stub_calls;
+        c = panel_conn();
+        CHECK(c >= 0);
+        send_req_close_write(c, "GET /api/config HTTP/1.1\r\n\r\n");
+        web_serve(ls);
+        web_pool_idle_wait();
+        CHECK(web_owner_pending() == 0);
+        CHECK(g_stub_calls == before); /* the config stub does not use record(): the response is the evidence */
+        read_response_close(c, resp, sizeof(resp));
+        CHECK(status(resp, "200") && strstr(resp, "\"batch\":true"));
+
+        before = g_stub_calls;
+        c = panel_conn();
+        CHECK(c >= 0);
+        send_req_close_write(c, "POST /api/config HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 15\r\n\r\nrestore_batch=7");
+        web_serve(ls);
+        web_pool_idle_wait();
+        CHECK(web_owner_pending() == 1);
+        CHECK(g_stub_calls == before); /* changing settings remains owner work */
+        web_owner_pump();
+        CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "config"));
+        read_response_close(c, resp, sizeof(resp));
+        CHECK(status(resp, "200"));
+
         close(ls);
         web_stop();
         CHECK(web_owner_pending() == 0);
