@@ -799,10 +799,28 @@ static void test_delete_window(void) {
     CHECK(!delete_user_event_ok(0, 1));
     CHECK(!delete_user_event_ok(1, 0));
     CHECK(!delete_user_event_ok(0, 0));
+    CHECK(delete_playgo_event_kind(1, 1, 0) == 2);
+    CHECK(delete_playgo_event_kind(1, 1, 1) == 2); /* the base content id is not treated as an add-on */
+    CHECK(delete_playgo_event_kind(1, 0, 1) == 1);
+    CHECK(delete_playgo_event_kind(1, 0, 0) == 0);
+    CHECK(delete_playgo_event_kind(0, 1, 1) == 0); /* panel/system uninstall work is not a user delete */
     CHECK(delete_content_id_plain("UP0000-CUSA00001_00-TESTGAME00000000"));
     CHECK(!delete_content_id_plain("UP0000-CUSA00001_00-../GAME"));
     CHECK(!delete_content_id_plain("UP0000/CUSA00001"));
     CHECK(!delete_content_id_plain(""));
+}
+
+/* DEL-5 (specs/delete.md): a valid title id is not ownership. The panel may remove only
+ * a title with PS4Mount evidence, and a real internal install always wins over stale state. */
+static void test_remove_admission(void) {
+    printf("delete: panel removal ownership\n");
+    CHECK(remove_owned_ok(0, 1, 0, 0));
+    CHECK(remove_owned_ok(0, 0, 1, 0));
+    CHECK(remove_owned_ok(0, 0, 0, 1));
+    CHECK(remove_owned_ok(0, 1, 1, 1));
+    CHECK(!remove_owned_ok(0, 0, 0, 0));
+    CHECK(!remove_owned_ok(1, 1, 1, 1));
+    CHECK(!remove_owned_ok(1, 0, 0, 0));
 }
 
 /* P4N-13 (specs/ps4-native.md): the BGFT parser is strict about the external PDB frame and

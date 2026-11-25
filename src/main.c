@@ -4271,7 +4271,7 @@ static void handle_klog_line(const char *line) {
     } else if ((p = after(line, "[PlayGoCore][Uninstall] end ("))) {
         snprintf(id, sizeof(id), "%.36s", p);
         managed_t *m = managed_by(NULL, id);
-        if (m) {
+        if (m && delete_playgo_event_kind(g_deleting, 1, 0) == 2) {
             title_deleted(m);
         } else if (strlen(id) == 36 && g_deleting) {
             /* an add-on of one of our games deleted on a delete screen: keep it out until the
@@ -4640,6 +4640,13 @@ static int uninstall_title(const char *tid) {
 
 int app_remove(const char *tid, char *msg, size_t cap) {
     managed_t *m = managed_by(tid, NULL);
+    char root[PATH_MAX], srcmark[64];
+    snprintf(srcmark, sizeof(srcmark), STATE_DIR "/%s.src", tid);
+    if (!remove_owned_ok(installed_internally(tid), m != NULL, exists(srcmark), !find_root(tid, root, sizeof(root)))) {
+        printf("[web] remove %s refused: no PS4Mount ownership evidence\n", tid);
+        snprintf(msg, cap, TR("%s is not managed by PS4Mount", "%s no está gestionado por PS4Mount"), tid);
+        return -1;
+    }
     if ((m && m->running) || title_running(tid)) {
         printf("[web] remove %s refused: game running\n", tid);
         snprintf(msg, cap, "%s", TR("Close the game before removing it", "Cierra el juego antes de quitarlo"));

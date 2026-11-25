@@ -31,10 +31,18 @@ Source: AI-WORKFLOW.md rule 2.
 ### DEL-4: a delete event outside an open delete window is not a user delete
 System/PS4Mount uninstall work outside the window must not trigger deletion of library files. The window
 opens only on a confirmed delete scene, stays open through its dialogs, closes on unrelated scenes, and a
-`GameWillDelete` event is accepted only while it is open. Content ids used in paths must be plain validated
-characters.
+`GameWillDelete` or `[PlayGoCore][Uninstall] end` event is accepted only while it is open. Content ids used in
+paths must be plain validated characters.
 Check: test (keep bar 2: data loss). Test: `test/unit.c` › `test_delete_window`. Source: regression documented
 in `src/main.c`.
+
+### DEL-5: panel removal requires PS4Mount ownership evidence
+`POST /api/unmount` must never uninstall a normally installed title merely because its title id is valid. Removal
+is admitted only when the title is currently managed, has PS4Mount source state, or is present in a scanned library
+root, and never when the title is installed internally without a PS4Mount mount. Running or still-mounted titles are
+refused before any state changes.
+Check: test (keep bar 2: data loss/security). Test: `test/unit.c` › `test_remove_admission`. Source: delete audit
+2026-11-25.
 
 ## Non-goals
 

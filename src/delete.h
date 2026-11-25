@@ -56,6 +56,25 @@ static inline int delete_window_transition(int kind, int open) {
  * (panel removal or registration replacement) and must not delete library files. */
 static inline int delete_user_event_ok(int window_open, int managed) { return window_open && managed; }
 
+/* A PlayGo uninstall-end event has the same window rule. 0: ignore, 1: an add-on delete,
+ * 2: the base game's delete. Base matches win because their content id is the game's own. */
+static inline int delete_playgo_event_kind(int window_open, int base_managed, int dlc_managed) {
+    if (!window_open)
+        return 0;
+    if (base_managed)
+        return 2;
+    return dlc_managed != 0;
+}
+
+/* Panel removal may uninstall only what PS4Mount owns. Internal real installs are refused
+ * even when stale state exists; otherwise a managed record, source marker or scanned library
+ * location is enough ownership evidence. */
+static inline int remove_owned_ok(int installed_internal, int managed, int src_state, int library_root) {
+    if (installed_internal)
+        return 0;
+    return managed || src_state || library_root;
+}
+
 /* The content id in a kernel-log uninstall line is pkg-controlled text before it is a path
  * component. Only the plain charset of content ids may pass; no slash, dot or control byte. */
 static inline int delete_content_id_plain(const char *id) {
