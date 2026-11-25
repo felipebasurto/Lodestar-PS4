@@ -248,6 +248,8 @@ int web_route_worker_safe(const char *path, int post) {
             return 1;
         if (post && !strcmp(path, "/api/stop"))
             return 1;
+        if (post && !strcmp(path, "/api/nas/reload"))
+            return 1;
         return 0;
     }
     return 1; /* pages and unknown paths: static data or the fixed 404 */

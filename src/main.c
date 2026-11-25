@@ -6073,11 +6073,12 @@ static void config_load(void) {
            g_cfg.organize, g_cfg.npaths);
 }
 
-static const char *payload_file(void);
+static const char *payload_file(char *out, size_t n);
 static int autorun_apply(int on);
 
 void app_config_json(buf_t *out) {
-    const char *pf = payload_file();
+    char pfb[PATH_MAX];
+    const char *pf = payload_file(pfb, sizeof(pfb));
     buf_printf(out,
                "{\"batch\":%s,\"batch_size\":%d,\"dlc\":%s,\"dlc_mode\":\"%s\",\"dlc_big\":%s,\"internal\":%s,\"organize\":%s,"
                "\"restore_batch\":%d,\"max_restore_batch\":%d,"
@@ -7078,6 +7079,10 @@ static int single_instance(void) {
 
 #define NAS_WAIT STATE_DIR "/nas-wait" /* written before asking: the new one takes over */
 
+/* BinLoader posting uses one static chunk buffer and the NAS_WAIT file. Workers may wait on
+ * this mutex; the owner only tries it so its retry can never block the main loop. */
+static pthread_mutex_t g_nas_post_mu = PTHREAD_MUTEX_INITIALIZER;
+
 static int send_all(int s, const void *data, size_t len) {
     const char *p = data;
     while (len) {
@@ -7092,7 +7097,7 @@ static int send_all(int s, const void *data, size_t len) {
 
 /* A payload file that the console's loader takes: the wrapped .bin (or the ELF). Only the
  * first bytes are read: the file is 3 MB and this runs where the heap is small. */
-static const char *payload_file(void) {
+static const char *payload_file(char *out, size_t n) {
     static const char *cand[] = {
         "/data/payloads/ps4mount-ps4.bin",       "/data/payloads/PS4Mount-PS4.bin",
         "/data/GoldHEN/payloads/ps4mount-ps4.bin", "/data/GoldHEN/payloads/PS4Mount-PS4.bin",
@@ -7103,7 +7108,7 @@ static const char *payload_file(void) {
         "/user/data/payloads/ps4mount-ps4.elf",  "/user/data/payloads/PS4Mount-PS4.elf",
         "/data/ps4mount/ps4mount-ps4.elf",       "/data/ps4mount/PS4Mount-PS4.elf",
         NULL};
-    static char found[PATH_MAX];
+    out[0] = 0;
     for (int i = 0; cand[i]; i++) {
         struct stat st;
         if (stat(cand[i], &st) || st.st_size < 4096)
@@ -7112,13 +7117,13 @@ static const char *payload_file(void) {
         int fd = open(cand[i], O_RDONLY);
         if (fd < 0)
             continue;
-        ssize_t n = read(fd, d, sizeof(d));
+        ssize_t rn = read(fd, d, sizeof(d));
         close(fd);
-        if (n < 4)
+        if (rn < 4)
             continue;
         if (!memcmp(d, "\177ELF", 4) || (d[0] == 'U' && d[1] == 'H')) { /* UH: jumps to main */
-            snprintf(found, sizeof(found), "%s", cand[i]);
-            return found;
+            snprintf(out, n, "%s", cand[i]);
+            return out;
         }
     }
     return NULL;
@@ -7132,7 +7137,8 @@ static const char *payload_file(void) {
 /* Makes payloads.ini list (on) or not list (off) the payload under [AutoRun].
  * 0 when it says what the setting says, -1 when there is no payload file or it fails. */
 static int autorun_apply(int on) {
-    const char *me = on ? payload_file() : NULL;
+    char pfb[PATH_MAX];
+    const char *me = on ? payload_file(pfb, sizeof(pfb)) : NULL;
     if (on && !me)
         return -1;
     mkdirs("/data/GoldHEN", 0777);
@@ -7305,7 +7311,7 @@ static void nas_speak(void) {
     notify_running();
 }
 
-static void nas_ask_reload(void) {
+static void nas_ask_reload_locked(void) {
     if (!nas_need_reload())
         return;
     if (uptime_secs() < NAS_TAKEOVER_AFTER)
@@ -7329,7 +7335,8 @@ static void nas_ask_reload(void) {
     if (now < g_nas_ask_at)
         return;
     g_nas_ask_at = now + 10;
-    const char *file = payload_file();
+    char pfb[PATH_MAX];
+    const char *file = payload_file(pfb, sizeof(pfb));
     if (!file) {
         printf("[nas] no payload file to load again\n");
         nas_speak();
@@ -7365,33 +7372,45 @@ static void nas_ask_reload(void) {
     nas_speak();
 }
 
+static void nas_ask_reload(void) {
+    if (pthread_mutex_trylock(&g_nas_post_mu))
+        return; /* a panel reload is already doing the same posting; never wait in the owner */
+    nas_ask_reload_locked();
+    pthread_mutex_unlock(&g_nas_post_mu);
+}
+
 /* The panel: the same request the retry makes, now. */
 int app_nas_reload(char *msg, size_t cap) {
-    const char *file = payload_file();
+    pthread_mutex_lock(&g_nas_post_mu);
+    char pfb[PATH_MAX];
+    const char *file = payload_file(pfb, sizeof(pfb));
+    int rc = 0;
     if (!file) {
         snprintf(msg, cap, "%s", TR("the payload is not where the panel expects it",
                                     "el payload no está donde el panel lo espera"));
-        return 1;
+        rc = 1;
+    } else {
+        char buf[32];
+        int k = snprintf(buf, sizeof(buf), "%ld\n", boot_time());
+        write_file(NAS_WAIT, buf, (size_t)k, 0666);
+        struct in_addr lo, lan;
+        lo.s_addr = htonl(INADDR_LOOPBACK);
+        int where = post_payload(file, lo);
+        if (where == 1 && lan_ip(&lan))
+            where = post_payload(file, lan);
+        if (where) {
+            unlink(NAS_WAIT);
+            snprintf(msg, cap, "%s", where == 1
+                         ? TR("BinLoader is not listening on port 9090",
+                              "BinLoader no está escuchando en el puerto 9090")
+                         : TR("BinLoader turned the load down", "BinLoader rechazó la carga"));
+            rc = 1;
+        } else
+            snprintf(msg, cap, "%s", TR("BinLoader took the payload: loading it again",
+                                        "BinLoader aceptó el payload: cargándolo otra vez"));
     }
-    char buf[32];
-    int k = snprintf(buf, sizeof(buf), "%ld\n", boot_time());
-    write_file(NAS_WAIT, buf, (size_t)k, 0666);
-    struct in_addr lo, lan;
-    lo.s_addr = htonl(INADDR_LOOPBACK);
-    int where = post_payload(file, lo);
-    if (where == 1 && lan_ip(&lan))
-        where = post_payload(file, lan);
-    if (where) {
-        unlink(NAS_WAIT);
-        snprintf(msg, cap, "%s", where == 1
-                     ? TR("BinLoader is not listening on port 9090",
-                          "BinLoader no está escuchando en el puerto 9090")
-                     : TR("BinLoader turned the load down", "BinLoader rechazó la carga"));
-        return 1;
-    }
-    snprintf(msg, cap, "%s", TR("BinLoader took the payload: loading it again",
-                                "BinLoader aceptó el payload: cargándolo otra vez"));
-    return 0;
+    pthread_mutex_unlock(&g_nas_post_mu);
+    return rc;
 }
 
 /* 1 when the instance running asked for this one to replace it. */

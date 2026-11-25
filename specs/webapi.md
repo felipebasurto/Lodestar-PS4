@@ -69,9 +69,12 @@ body quota cannot be reserved the request is answered `503` without entering the
 
 Only routes whose state is static or internally synchronized may complete in a worker in
 this first matrix: the two HTML pages, `/api/log`, Drive status/actions, links
-status/actions, `/api/upload`, `/api/uploads`, `/api/rescan`, `/api/nas/scan` and
-`/api/nas/shares`. `/api/rescan` is worker-safe only because its cache/marker invalidation
-is part of the synchronized scan intent consumed later by the owner epoch.
+status/actions, `/api/upload`, `/api/uploads`, `/api/rescan`, `/api/nas/scan`,
+`/api/nas/shares` and `/api/nas/reload`. `/api/rescan` is worker-safe only because its cache/marker invalidation
+is part of the synchronized scan intent consumed later by the owner epoch. `/api/nas/reload`
+keeps its synchronous BinLoader answer but is serialized with the automatic reload attempt;
+the owner uses a non-blocking trylock and skips its retry while a worker holds that reload,
+so protecting the shared payload-posting path cannot block the main loop.
 The two NAS probe routes may connect to other machines but do not use the mounted backend:
 scan uses fresh sockets, share listing creates its own backend context, their output arrays
 are local, and the saved-login fallback is copied through the configuration mutex. SMB context
@@ -79,7 +82,7 @@ creation/destruction is serialized across the whole process because libsmb2 keep
 active-context list; ordinary operations then use per-context state. The probes may therefore
 wait in workers rather than in the owner. `/api/stop` is also worker-safe: it publishes only
 a one-way atomic stop intent, so the request is not stranded behind a long scan. `/api/check`,
-games/icons/pics, storage, destinations, mounts, restore, configuration, NAS reload and
+games/icons/pics, storage, destinations, mounts, restore, configuration changes and
 `/api/app/close` remain owner routes because they read or mutate library/mount/configuration
 state or call process-control services of the system. Unknown routes are worker safe because
 they produce only the fixed 404 response.
