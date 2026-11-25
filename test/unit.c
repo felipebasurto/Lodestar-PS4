@@ -843,6 +843,34 @@ static void test_delete_window(void) {
     CHECK(!delete_content_id_plain("UP0000-CUSA00001_00-../GAME"));
     CHECK(!delete_content_id_plain("UP0000/CUSA00001"));
     CHECK(!delete_content_id_plain(""));
+
+    /* DEL-6: intent waits; only explicit success or a confirmed registered-to-absent
+     * transition commits. Failure and age can only roll generated pending state back. */
+    static const struct {
+        int report, db, seen;
+        long since_report, since_intent, want;
+    } pend[] = {
+        {-1, 0, 0, 0, 0, 0},  /* no evidence yet */
+        {-1, 1, 0, 0, 0, 0},  /* still registered is not failure proof */
+        {-1, 2, 0, 0, 0, 0},  /* absence without a seen transition may be pre-existing */
+        {-1, 2, 1, 0, 0, 1},  /* normal successful PS4 delete writes no result line */
+        {0, 0, 0, 0, 0, 1},   /* explicit zero result is positive commit evidence */
+        {0, 1, 0, 0, 0, 1},
+        {1, 0, 0, 0, 0, 0},   /* let the database settle after a nonzero result */
+        {1, 0, 0, DELETE_RESULT_SETTLE_SEC - 1, 0, 0},
+        {1, 0, 0, DELETE_RESULT_SETTLE_SEC, 0, -1},
+        {1, 2, 1, DELETE_RESULT_SETTLE_SEC, 0, 1}, /* confirmed transition wins over a confusing rc */
+        {1, 2, 0, DELETE_RESULT_SETTLE_SEC, 0, -1},
+        {-1, 0, 0, 0, DELETE_PENDING_MAX_SEC - 1, 0},
+        {-1, 0, 0, 0, DELETE_PENDING_MAX_SEC, -1}, /* expiry is rollback only */
+        {-1, 1, 1, 0, DELETE_PENDING_MAX_SEC, -1},
+    };
+    for (size_t i = 0; i < sizeof(pend) / sizeof(pend[0]); i++) {
+        int got = delete_pending_decision(pend[i].report, pend[i].db, pend[i].seen, pend[i].since_report, pend[i].since_intent);
+        if (got != pend[i].want)
+            printf("  pending row %zu: %d, wanted %ld\n", i, got, pend[i].want);
+        CHECK(got == pend[i].want);
+    }
 }
 
 /* DEL-5 (specs/delete.md): a valid title id is not ownership. The panel may remove only

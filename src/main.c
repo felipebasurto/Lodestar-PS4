@@ -2016,6 +2016,15 @@ static int g_walk_now;    /* a drive came (the share connected): walked now, wit
 static int g_deleting; /* a delete screen is open: game folders are unmounted */
 static time_t g_deleting_since;
 static time_t g_deleting_close_at; /* set when the uninstall finished */
+/* A validated user delete is pending until the system proves the uninstall outcome.
+ * The state is deliberately memory-only: losing it can re-add a title, never delete data. */
+static char g_will_delete[10];
+static time_t g_will_since, g_will_report_at;
+static int g_will_report = -1; /* -1 no result yet, 0 success, 1 failure */
+static int g_will_seen_registered;
+static int g_will_mount_warned;
+
+static int delete_pending_is(const char *tid) { return g_will_delete[0] && !strcmp(g_will_delete, tid); }
 
 static managed_t *managed_by(const char *tid, const char *cid) {
     for (int i = 0; i < MAX_TITLES; i++)
@@ -2154,6 +2163,21 @@ static void unmount_title(const char *tid, char (*dtids)[10], int ndtids) {
         snprintf(target, sizeof(target), "/user/addcont/%s", dtids[i]);
         unmount_all_layers(target, 1);
     }
+}
+
+/* Postcondition after unmount_title: no app, patch or add-on target still exposes the drive. */
+static int title_detached(const char *tid, char (*dtids)[10], int ndtids) {
+    char target[64];
+    snprintf(target, sizeof(target), "/user/app/%s", tid);
+    int app_mounted = mounted_from(target, NULL, 0) != 0;
+    snprintf(target, sizeof(target), "/user/patch/%s", tid);
+    int patch_mounted = mounted_from(target, NULL, 0) != 0;
+    int addcont_mounted = 0;
+    for (int i = 0; i < ndtids; i++) {
+        snprintf(target, sizeof(target), "/user/addcont/%s", dtids[i]);
+        addcont_mounted |= mounted_from(target, NULL, 0) != 0;
+    }
+    return remove_detached_ok(app_mounted, patch_mounted, addcont_mounted);
 }
 
 /* Add-ons installed the normal way: their folder is never covered by a mount. */
@@ -2311,7 +2335,7 @@ static uint32_t title_bgft_error(const char *tid) {
 
 static int title_state(const title_info_t *t) {
     const char *tid = t->title_id;
-    if (installed_internally(tid) || removed(tid))
+    if (installed_internally(tid) || removed(tid) || delete_pending_is(tid))
         return -1;
     if (served_elsewhere(t)) {
         if (first_time(t->app_path))
@@ -3492,7 +3516,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             break;
         int n = 0;
         for (; i < count && n < size; i++)
-            if (titles[i].state == 1)
+            if (titles[i].state == 1 && !delete_pending_is(titles[i].tid))
                 members[n++] = i;
         if (!n)
             break;
@@ -3516,6 +3540,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             title_t *t = &titles[members[k]];
             title_src_t src;
             prepared[k] = 0;
+            if (delete_pending_is(t->tid))
+                continue;
             activity_set("registering", label, t->name, t->tid, done + k + 1, pending, group, groups);
             if (!grouped) {
                 char extra[64] = "";
@@ -3543,7 +3569,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         for (int k = 0; k < n; k++) {
             title_t *t = &titles[members[k]];
             title_src_t src;
-            if (!prepared[k] || src_open(&src, root, t->tid))
+            if (!prepared[k] || delete_pending_is(t->tid) || src_open(&src, root, t->tid))
                 continue;
             if (register_finish(&src)) {
                 int first = retry_failed(t->tid);
@@ -4214,10 +4240,6 @@ static int delete_game_files(const char *dir, const char *tid, const char *name)
     return 0;
 }
 
-/* The console delete kept the pkgs (they are used where they are): the game must not be
- * added again by the scan that finishes the uninstall. */
-static int g_delete_kept;
-
 /* A game of ours deleted on the console's delete screens: deleted for real, as an
  * installed game would be, files included (Remove from library on the panel is the way
  * to take a game off the console and keep its pkgs). In-place pkgs are the user's files:
@@ -4230,21 +4252,83 @@ static void title_deleted(managed_t *m) {
     unlink(path);
     clean_holds(m->tid, m->dlc_tids, m->ndlc_tids);
     bgft_remove(m->tid);
-    g_delete_kept = !delete_game_files(m->dir, m->tid, m->name);
-    if (g_delete_kept) {
+    int kept = !delete_game_files(m->dir, m->tid, m->name);
+    if (kept) {
         write_file(path, m->tid, strlen(m->tid), 0666); /* not added again until asked */
         printf("[delete] %s: its pkg stays where it is: %s\n", m->tid, m->dir);
     }
     m->used = 0;
 }
 
-/* PS4: "GameWillDelete(<TID>)" names the game the system is deleting (only that line: a
- * delete that works writes nothing after it). Inside a delete window it is the user's
- * delete, and the game leaves the library there and then; PS4Mount's own uninstalls
- * (removing on the panel, adding a game again) happen outside those windows. A delete
- * that failed, "AppUnInstallMainExecute ret = [<code>]" (the folder was still mounted:
- * the screens came too fast), is finished by the main loop as a removal on the panel. */
-static char g_will_delete[10], g_delete_tid[10];
+/* PS4: "GameWillDelete(<TID>)" is the start of the system's uninstall, not proof that it
+ * finished. User files and ownership state therefore stay intact until delete_pending_step
+ * sees positive commit evidence; failure or age can only drop the pending suppression. */
+static void delete_pending_clear(void) {
+    g_will_delete[0] = 0;
+    g_will_since = 0;
+    g_will_report_at = 0;
+    g_will_report = -1;
+    g_will_seen_registered = 0;
+    g_will_mount_warned = 0;
+}
+
+static void delete_pending_begin(managed_t *m) {
+    if (delete_pending_is(m->tid))
+        return;
+    if (g_will_delete[0]) {
+        printf("[delete] %s: delete of %s is still pending, not tracking another one yet\n", m->tid, g_will_delete);
+        return;
+    }
+    snprintf(g_will_delete, sizeof(g_will_delete), "%s", m->tid);
+    g_will_since = time(NULL);
+    g_will_report_at = 0;
+    g_will_report = -1;
+    g_will_seen_registered = db_confirms_registered(m->tid);
+    g_will_mount_warned = 0;
+    printf("[delete] %s: user delete pending system outcome\n", m->tid);
+}
+
+static void delete_pending_rollback(const char *why) {
+    printf("[delete] %s: user data kept (%s)\n", g_will_delete, why);
+    delete_pending_clear();
+}
+
+static int delete_pending_commit(void) {
+    managed_t *m = managed_by(g_will_delete, NULL);
+    if (!m) {
+        delete_pending_rollback("its ownership evidence was lost");
+        return 0;
+    }
+    unmount_title(m->tid, m->dlc_tids, m->ndlc_tids);
+    if (!title_detached(m->tid, m->dlc_tids, m->ndlc_tids)) {
+        if (!g_will_mount_warned) {
+            g_will_mount_warned = 1;
+            printf("[delete] %s: uninstall confirmed, but its mounts are still busy; local delete waits\n", m->tid);
+        }
+        return 0;
+    }
+    printf("[delete] %s: system uninstall confirmed, committing local delete\n", m->tid);
+    title_deleted(m);
+    delete_pending_clear();
+    return 1;
+}
+
+static void delete_pending_step(void) {
+    if (!g_will_delete[0])
+        return;
+    time_t now = time(NULL);
+    int registered = db_confirms_registered(g_will_delete);
+    if (registered)
+        g_will_seen_registered = 1;
+    int db_state = db_confirms_unregistered(g_will_delete) ? 2 : registered ? 1 : 0;
+    long since_report = g_will_report >= 0 ? (long)(now - g_will_report_at) : 0;
+    int action = delete_pending_decision(g_will_report, db_state, g_will_seen_registered, since_report,
+                                         (long)(now - g_will_since));
+    if (action > 0)
+        delete_pending_commit();
+    else if (action < 0)
+        delete_pending_rollback(g_will_report == 1 ? "the system reported an uninstall error" : "the outcome timed out");
+}
 
 static void handle_klog_line(const char *line) {
     const char *p;
@@ -4294,20 +4378,15 @@ static void handle_klog_line(const char *line) {
         snprintf(id, sizeof(id), "%.9s", p);
         managed_t *found = g_deleting ? managed_by(id, NULL) : NULL;
         managed_t *m = delete_user_event_ok(g_deleting, found != NULL) ? found : NULL;
-        g_will_delete[0] = 0; /* a delete that worked wrote nothing more: forget the last one */
-        if (m) {
-            printf("[delete] %s deleted on the console\n", id);
-            snprintf(g_will_delete, sizeof(g_will_delete), "%s", id);
-            title_deleted(m);
-        }
+        if (m)
+            delete_pending_begin(m);
     } else if ((p = after(line, "AppUnInstallMainExecute ret = [")) && g_will_delete[0]) {
         unsigned long rc = strtoul(p, NULL, 16);
         printf("[delete] %s: the system's delete returned 0x%08lx\n", g_will_delete, rc);
-        if (rc) /* out of the library already: finish the uninstall */
-            snprintf(g_delete_tid, sizeof(g_delete_tid), "%s", g_will_delete);
-        else
-            g_delete_kept = 0; /* the delete finished: a removal on the panel next time */
-        g_will_delete[0] = 0;
+        if (g_will_report < 0) {
+            g_will_report = rc != 0;
+            g_will_report_at = time(NULL);
+        }
         if (g_deleting)
             g_deleting_close_at = time(NULL) + 3;
     } else if ((p = after(line, "system file disagree ["))) {
@@ -4330,7 +4409,7 @@ static void handle_klog_line(const char *line) {
         snprintf(id, sizeof(id), "%.36s", p);
         managed_t *m = managed_by(NULL, id);
         if (m && delete_playgo_event_kind(g_deleting, 1, 0) == 2) {
-            title_deleted(m);
+            delete_pending_begin(m);
         } else if (strlen(id) == 36 && g_deleting) {
             /* an add-on of one of our games deleted on a delete screen: keep it out until the
              * drive is reconnected. Outside those screens the uninstall is the system's own:
@@ -4742,15 +4821,7 @@ int app_remove(const char *tid, char *msg, size_t cap) {
     char dtids[MAX_DLC_TIDS][10];
     int ndtids = removal_dlc_tids(root, tid, m, dtids);
     unmount_title(tid, dtids, ndtids);
-    char a[64], b[64], d[64];
-    snprintf(a, sizeof(a), "/user/app/%s", tid);
-    snprintf(b, sizeof(b), "/user/patch/%s", tid);
-    int addcont_mounted = 0;
-    for (int i = 0; i < ndtids; i++) {
-        snprintf(d, sizeof(d), "/user/addcont/%s", dtids[i]);
-        addcont_mounted |= mounted_from(d, NULL, 0) != 0;
-    }
-    if (!remove_detached_ok(mounted_from(a, NULL, 0), mounted_from(b, NULL, 0), addcont_mounted)) {
+    if (!title_detached(tid, dtids, ndtids)) {
         /* never let the system uninstall run while the USB content is reachable */
         snprintf(msg, cap, TR("Could not unmount %s; nothing was removed", "No se pudo desmontar %s; no se quitó nada"), tid);
         return -1;
@@ -7209,23 +7280,7 @@ int main(void) {
             g_restore_all = 0;
             continue;
         }
-        if (g_delete_tid[0] && !g_deleting) {
-            char tid[10], msg[256];
-            int kept = g_delete_kept;
-            snprintf(tid, sizeof(tid), "%s", g_delete_tid);
-            g_delete_tid[0] = 0;
-            g_delete_kept = 0;
-            pump_events(2000); /* let the system close its error dialog */
-            /* the files went when the delete started: finish taking it off the console */
-            if (app_remove(tid, msg, sizeof(msg)))
-                notify_kind(NOTIFY_WARN, "%s", msg);
-            if (!kept) { /* a pkg used where it is stayed: keep the game out of the library */
-                char rm[64];
-                snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", tid);
-                unlink(rm);
-            }
-            continue;
-        }
+        delete_pending_step();
         if (g_readd_tid[0] && !g_deleting) {
             char tid[10];
             snprintf(tid, sizeof(tid), "%s", g_readd_tid);

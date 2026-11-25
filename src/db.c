@@ -126,6 +126,14 @@ int db_is_registered(const char *title_id) {
     return db_app_ver(title_id) != NULL;
 }
 
+int db_confirms_registered(const char *title_id) {
+    pthread_mutex_lock(&g_mu);
+    refresh();
+    int present = g_read_valid && find_title(title_id) != NULL;
+    pthread_mutex_unlock(&g_mu);
+    return present;
+}
+
 int db_confirms_unregistered(const char *title_id) {
     pthread_mutex_lock(&g_mu);
     refresh();

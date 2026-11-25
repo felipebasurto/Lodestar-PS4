@@ -12,6 +12,8 @@
  * may be decided from that (a read can fail, for one with no memory left). */
 int db_ready(void);
 int db_is_registered(const char *title_id);
+/* 1 only when the latest database read succeeded and found this title. */
+int db_confirms_registered(const char *title_id);
 /* 1 only when the latest database read succeeded and did not find this title. */
 int db_confirms_unregistered(const char *title_id);
 /* The APP_VER the system registered for title_id ("" when it has none), NULL when the
