@@ -1,0 +1,18 @@
+Archivo: test/data/logs/pkg_size_zero.log  (2 líneas)
+Desde 2026-11-25 19:00:00 hasta 2026-11-25 19:00:10
+
+== Versión y consola
+  [main] firmware 14.00 (0x14008001), AppInstallTitleDir present, registration: AppInstallAll
+  0 arranque(s) de PS4Mount en este log
+
+== Líneas por módulo
+  [main] 1  [scan] 1
+
+== Qué hay que mirar
+  [ERROR] Un pkg ocupa espacio pero su cabecera dice que ocupa 0 bytes: está dañado. No se entrega al instalador del sistema porque puede bloquear la cola; copia ese pkg otra vez desde el origen.
+        1 vez/veces; primera línea: [scan] skip /mnt/usb0/ps4/CUSA02320/addcont/CUSA02320/NATHANDRAKEPACK1/ac.pkg (UP0002-CUSA02320_00-NATHANDRAKEPACK1: a nonzero pkg whose header declares 0 bytes
+
+== Archivos temporales que PS4Mount borró de la memoria interna
+  Ninguno.
+
+Resultado: 1 error(es) y 0 aviso(s) conocidos. Léelos arriba.
