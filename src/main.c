@@ -1222,7 +1222,7 @@ static uint64_t fp_addons(uint64_t h, const char *root, const char *tid) {
 
 /* The hash of the files of tid on root, from stats only: over a share, reading a pkg is
  * a megabyte where each of these is one getattr. */
-static uint64_t title_files_fp(const char *root, const char *tid) {
+static uint64_t title_files_fp(const char *root, const char *tid, int dlc, int dlc_mode, int dlc_big) {
     char app[PATH_MAX], patch[PATH_MAX];
     app[0] = patch[0] = 0;
     if (in_place(root)) {
@@ -1245,8 +1245,8 @@ static uint64_t title_files_fp(const char *root, const char *tid) {
     /* an update left out (or tried again) changes what the game is */
     char mark[96];
     h = fp_stat(h, badpatch_path(tid, mark, sizeof(mark)));
-    h = title_fp_add(h, g_cfg.dlc ? "add-ons" : "no add-ons", 0, g_cfg.dlc_mode | (g_cfg.dlc_big ? 4 : 0));
-    return g_cfg.dlc ? fp_addons(h, root, tid) : h;
+    h = title_fp_add(h, dlc ? "add-ons" : "no add-ons", 0, dlc_mode | (dlc_big ? 4 : 0));
+    return dlc ? fp_addons(h, root, tid) : h;
 }
 
 static void info_from_src(const title_src_t *t, title_info_t *e) {
@@ -1306,8 +1306,8 @@ static const title_info_t *title_info_fp(const char *root, const char *tid, uint
     return e;
 }
 
-static const title_info_t *title_info(const char *root, const char *tid) {
-    return title_info_fp(root, tid, title_files_fp(root, tid));
+static const title_info_t *title_info(const char *root, const char *tid, const config_t *cfg) {
+    return title_info_fp(root, tid, title_files_fp(root, tid, cfg->dlc, cfg->dlc_mode, cfg->dlc_big));
 }
 
 static void write_meta(pkg_t *pkg, const char *meta_dir, int *rc) {
@@ -3967,7 +3967,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             pump_now(); /* the panel answers while a library is walked */
         activity_set("scanning", label, NULL, NULL, k, nt, 0, 0);
         const char *tid = tids[k];
-        uint64_t fp = title_files_fp(root, tid);
+        uint64_t fp = title_files_fp(root, tid, g_cfg.dlc, g_cfg.dlc_mode, g_cfg.dlc_big);
         const title_info_t *info = title_info_fp(root, tid, fp);
         if (!info)
             continue;
@@ -5154,7 +5154,7 @@ void app_games_json(buf_t *out) {
         int nt = titles_on_root(root, tids, MAX_TITLES);
         for (int k = 0; k < nt; k++) {
             const char *tid = tids[k];
-            const title_info_t *t = title_info(root, tid);
+            const title_info_t *t = title_info(root, tid, &cfg);
             if (!t)
                 continue;
             const char *state, *mount = "";
