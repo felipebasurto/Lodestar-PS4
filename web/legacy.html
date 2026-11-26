@@ -3,50 +3,50 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PS4Mount</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23060d1c'/%3E%3Crect x='25' y='5' width='14' height='11' rx='2' fill='%23c9d3e6'/%3E%3Crect x='16' y='14' width='32' height='44' rx='8' fill='%230070d1'/%3E%3Cpath d='M27 26v20l15-10z' fill='%23f4f6fb' stroke='%23f4f6fb' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>Lodestar</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050b18'/%3E%3Ccircle cx='32' cy='32' r='23' fill='none' stroke='%231d3252' stroke-width='2'/%3E%3Cpath d='M32 9l4.6 18.4L55 32l-18.4 4.6L32 55l-4.6-18.4L9 32l18.4-4.6z' fill='%2322d3ee'/%3E%3Cpath d='M32 9l4.6 18.4L32 32l-4.6-4.6z' fill='%23f0a227'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23f0a227'/%3E%3C/svg%3E">
 <!-- Panel for the browser of older firmwares (no <dialog>): plain pages instead of dialogs,
      ES5 and XMLHttpRequest only, no CSS variables or grid. -->
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#060d1c;background-image:linear-gradient(155deg,#122e56,#081a34 65%,#08162d);background-attachment:fixed;color:#eef3fb;font:15px/1.45 sans-serif}
-header{position:relative;padding:12px 4%;background:#0c1f3c;border-bottom:1px solid #274569;min-height:64px}
+body{margin:0;background:#050b18;background-image:linear-gradient(155deg,#081426,#040b18 65%,#030913);background-attachment:fixed;color:#eef4fc;font:15px/1.45 sans-serif}
+header{position:relative;padding:12px 4%;background:#0a1729;border-bottom:1px solid #2f4e7e;min-height:64px}
 header h1{display:inline-block;vertical-align:middle;margin:8px 0 0}
 #legacy-manage{float:right;margin:0}
-#legacy-tools{position:absolute;z-index:4;right:4%;top:calc(100% + 8px);padding:8px;width:210px;background:#11294e;border:1px solid #345b91;border-radius:8px}
+#legacy-tools{position:absolute;z-index:4;right:4%;top:calc(100% + 8px);padding:8px;width:210px;background:#0d1c33;border:1px solid #3a5f97;border-radius:8px}
 #legacy-tools button{display:block;width:100%;margin:0 0 4px;text-align:left}
 #legacy-tools button:last-child{margin-bottom:0}
 h1{font-size:20px;margin:0 0 8px;font-weight:600}
-h1 small{color:#93a7c7;font-weight:normal;font-size:13px;margin-left:8px}
+h1 small{color:#9fb4d2;font-weight:normal;font-size:13px;margin-left:8px}
 h2{font-size:18px;margin:0 0 12px;font-weight:600}
 h3{font-size:16px;margin:0 0 8px;font-weight:600}
-button{font:inherit;font-weight:500;color:#eef3fb;background:#132342;border:1px solid #1e355c;border-radius:8px;padding:8px 14px;margin:0 6px 6px 0;cursor:pointer}
-button:focus{border-color:#38bdf8;outline:2px solid #38bdf8;outline-offset:2px}
-button.primary{background:#0070d1;border-color:#0070d1}
-button.danger{background:rgba(209,67,67,.14);border-color:rgba(209,67,67,.55)}
+button{font:inherit;font-weight:500;color:#eef4fc;background:#13233e;border:1px solid #1d3252;border-radius:8px;padding:8px 14px;margin:0 6px 6px 0;cursor:pointer}
+button:focus{border-color:#22d3ee;outline:2px solid #22d3ee;outline-offset:2px}
+button.primary{background:#0e7490;border-color:#0e7490}
+button.danger{background:rgba(224,85,85,.14);border-color:rgba(224,85,85,.55)}
 button[disabled]{opacity:.45}
-input,textarea,select{font:inherit;background:#040914;color:#eef3fb;border:1px solid #1e355c;border-radius:8px;padding:8px 10px}
+input,textarea,select{font:inherit;background:#02060f;color:#eef4fc;border:1px solid #1d3252;border-radius:8px;padding:8px 10px}
 select{max-width:100%}
 label select{display:block;margin-top:4px}
 textarea{width:100%;min-height:90px;font-family:monospace}
 .view{padding:24px 4% 36px;display:none}
 .view.on{display:block}
-.summary span{display:inline-block;padding:4px 0;margin:0 12px 0 0;color:#b8c9e3;font-size:13px}
-body:before{content:"";position:fixed;z-index:-1;pointer-events:none;top:150px;right:-145px;width:520px;height:520px;border:1px solid rgba(119,184,255,.17);border-radius:28%;-webkit-transform:rotate(-32deg);transform:rotate(-32deg);outline:1px solid rgba(119,184,255,.08);outline-offset:24px}
+.summary span{display:inline-block;padding:4px 0;margin:0 12px 0 0;color:#a9bcd9;font-size:13px}
+body:before{content:"";position:fixed;z-index:-1;pointer-events:none;top:150px;right:-145px;width:520px;height:520px;border:1px solid rgba(34,211,238,.15);border-radius:28%;-webkit-transform:rotate(-32deg);transform:rotate(-32deg);outline:1px solid rgba(34,211,238,.06);outline-offset:24px}
 .library-heading{font-size:24px;letter-spacing:-.03em}
 .shelf{display:table;width:100%;table-layout:fixed}
 .shelf-games,.inspector{display:table-cell;vertical-align:top}
 .shelf-games{width:55%;padding-right:32px}
 .card{display:inline-block;vertical-align:top;width:32%;margin:0 1% 10px 0}
 .art{display:block;width:100%;padding:0;margin:0;text-align:left;background:transparent;border:0;border-radius:4px}
-.art[aria-pressed=true] .cover{box-shadow:0 0 0 2px #9bc7fb}.art:focus .cover{box-shadow:none}
-.cover,.shelf-art{display:block;background:#0b1832 center/cover no-repeat}
+.art[aria-pressed=true] .cover{box-shadow:0 0 0 2px #22d3ee}.art:focus .cover{box-shadow:none}
+.cover,.shelf-art{display:block;background:#081226 center/cover no-repeat}
 .cover{width:100%;padding-top:75%;border-radius:4px}
 .info{display:block;padding:8px 0 4px;min-height:48px;overflow:hidden}
 .name{display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meta{color:#b8c9e3;font-size:13px;word-wrap:break-word}
-.badge{display:block;color:#b8c9e3;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.b-restart,.b-pending{color:#ffe0ad}
+.meta{color:#a9bcd9;font-size:13px;word-wrap:break-word}
+.badge{display:block;color:#a9bcd9;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b-restart,.b-pending{color:#ffd88f}
 .shelf-art{padding-top:56.25%;border-radius:4px}
 .inspector-body{padding:20px 0 24px}
 .inspector h3{font-size:32px;line-height:1.14;margin:6px 0;word-wrap:break-word}
@@ -54,32 +54,32 @@ body:before{content:"";position:fixed;z-index:-1;pointer-events:none;top:150px;r
 .actions{margin-top:13px}
 .tv button,.tv select{min-height:42px}
 .tv .name{font-size:16px}.tv .badge{font-size:13px}
-.tv :focus{outline:3px solid #a5d6ff;outline-offset:3px}
+.tv :focus{outline:3px solid #22d3ee;outline-offset:3px}
 @media(max-width:850px){.card{width:48%}.shelf-games{width:61%}}
 @media(max-width:580px){.shelf,.shelf-games,.inspector{display:block;width:100%}.shelf-games{padding:0}.inspector{margin-top:8px}}
-.warn{color:#d08c1e;font-size:13px;background:rgba(208,140,30,.12);border:1px solid rgba(208,140,30,.45);border-radius:8px;padding:6px 8px;margin-top:4px}
-#restart-banner{border-bottom:1px solid #516077;color:#ffe0ad;padding:0 0 12px;margin:0 0 24px}
+.warn{color:#ffd88f;font-size:13px;background:rgba(240,162,39,.12);border:1px solid rgba(240,162,39,.45);border-radius:8px;padding:6px 8px;margin-top:4px}
+#restart-banner{border-bottom:1px solid #4a6286;color:#ffd88f;padding:0 0 12px;margin:0 0 24px}
 #restart-banner .rb-main{font-weight:600}
-#actbar{border:1px solid #1e355c;background:#0c1830;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:14px}
+#actbar{border:1px solid #1d3252;background:#0c1830;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:14px}
 #actbar .db-main{font-weight:600;display:block}
-#actbar .db-sub{color:#93a7c7;font-size:13px;display:block;margin-top:4px}
-#act-prog{display:block;width:100%;height:10px;margin-top:8px;accent-color:#0070d1}
-.box{border:1px solid #1e355c;border-radius:12px;padding:12px 14px;margin:0 0 14px}
+#actbar .db-sub{color:#9fb4d2;font-size:13px;display:block;margin-top:4px}
+#act-prog{display:block;width:100%;height:10px;margin-top:8px;accent-color:#0e7490}
+.box{border:1px solid #1d3252;border-radius:12px;padding:12px 14px;margin:0 0 14px}
 .box h3{margin:0 0 8px;font-size:16px}
-.hint{color:#93a7c7;font-size:13px;display:block;margin:4px 0 8px}
-.note{color:#d08c1e;font-size:13px;margin:0 0 10px}
+.hint{color:#9fb4d2;font-size:13px;display:block;margin:4px 0 8px}
+.note{color:#ffd88f;font-size:13px;margin:0 0 10px}
 label{display:block;margin:0 0 10px}
 table{width:100%;border-collapse:collapse;font-size:14px;margin:0 0 10px}
-th,td{border-bottom:1px solid #1e355c;padding:8px 6px;text-align:left;vertical-align:top}
+th,td{border-bottom:1px solid #1d3252;padding:8px 6px;text-align:left;vertical-align:top}
 td.c,th.c{width:36px;text-align:center}
-pre{white-space:pre-wrap;font-size:12px;background:#040914;padding:12px;border-radius:8px}
-#msg{display:none;margin:8px 0 0;padding:8px 12px;border:1px solid #1e355c;border-radius:8px;background:#0c1830}
+pre{white-space:pre-wrap;font-size:12px;background:#02060f;padding:12px;border-radius:8px}
+#msg{display:none;margin:8px 0 0;padding:8px 12px;border:1px solid #1d3252;border-radius:8px;background:#0c1830}
 [hidden]{display:none!important}
 </style>
 </head>
 <body>
 <header>
-  <h1>PS4Mount</h1>
+  <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true" style="vertical-align:middle;margin:6px 8px 0 0"><circle cx="32" cy="32" r="23" fill="none" stroke="#1d3252" stroke-width="2"/><path d="M32 9l4.6 18.4L55 32l-18.4 4.6L32 55l-4.6-18.4L9 32l18.4-4.6z" fill="#22d3ee"/><path d="M32 9l4.6 18.4L32 32l-4.6-4.6z" fill="#f0a227"/><circle cx="32" cy="32" r="4" fill="#f0a227"/></svg><h1>Lodestar</h1>
   <button id="legacy-manage" aria-controls="legacy-tools" aria-expanded="false">Manage</button>
   <div id="legacy-tools" hidden>
     <button id="nav-games">Games</button>
@@ -346,7 +346,7 @@ $('inspector').onclick = function (e) {
   var tid = b.getAttribute('data-t'), a = b.getAttribute('data-a');
   if (a === 'unmount' && !confirm(t('Remove {0} from the library? Its pkgs stay where they are (deleting it on the console deletes them).', tid))) return;
   if (a === 'restore' && !confirm(t('Restore the original files of {0}?\n\nThe game leaves the console and its pkgs (game, update and add-ons) go back ' +
-      'where they were, with the names they had. The open game is closed first. PS4Mount stops using these pkgs. Nothing is ' +
+      'where they were, with the names they had. The open game is closed first. Lodestar stops using these pkgs. Nothing is ' +
       'deleted.', tid))) return;
   busy[tid] = 1;
   render();
@@ -381,7 +381,7 @@ $('nav-log').onclick = function () {
 };
 $('l-back').onclick = function () { show('v-games'); };
 $('stop').onclick = function () {
-  if (!confirm(t('Stop PS4Mount? The games stay unavailable until it is loaded again.'))) return;
+  if (!confirm(t('Stop Lodestar? The games stay unavailable until it is loaded again.'))) return;
   api('/api/stop', 'POST', null, function (err, j) { say(err ? t('Error: {0}', err) : j.message); });
 };
 
@@ -462,8 +462,8 @@ $('s-restore').onclick = function () {
   var size = restoreSize();
   if (!size) return;
   if (!confirm(t('WARNING: this restores the original files of ALL {0} games: their pkgs (game, update and add-ons) go back ' +
-      'where they were, with the names they had.\n\nThe open game is closed now, without saving. All PS4Mount games leave ' +
-      'the console, {1} at a time, and PS4Mount stops using these pkgs. Nothing is deleted.\n\nContinue?', games.length, size))) return;
+      'where they were, with the names they had.\n\nThe open game is closed now, without saving. All Lodestar games leave ' +
+      'the console, {1} at a time, and Lodestar stops using these pkgs. Nothing is deleted.\n\nContinue?', games.length, size))) return;
   startRestore(size, '');
 };
 $('s-forget').onclick = function () {
@@ -490,7 +490,7 @@ $('s-pick').onclick = function () {
       '<td>' + esc(g.name) + '<div class="meta">' + g.title_id + ' · ' + esc(g.source) + '</div></td>' +
       '<td>' + esc(movedBack(g)) + '</td></tr>';
   }
-  $('p-rows').innerHTML = rows || '<tr><td colspan="3">' + t('No PS4Mount games on the connected drives') + '</td></tr>';
+  $('p-rows').innerHTML = rows || '<tr><td colspan="3">' + t('No Lodestar games on the connected drives') + '</td></tr>';
   var b = boxes();
   for (var k = 0; k < b.length; k++) b[k].onclick = pickUpdate;
   pickUpdate();

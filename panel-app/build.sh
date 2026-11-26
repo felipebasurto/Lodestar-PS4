@@ -1,8 +1,11 @@
 #!/bin/bash
-# Builds build/panel-app/IV0000-PSMT00001_00-PS4MOUNTPANEL000.pkg (the panel app) with the
+# Builds build/panel-app/IV0000-LDST00001_00-LODESTARPANEL000.pkg (the panel app) with the
 # OpenOrbis toolchain (https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain, v0.5.4): its
-# create-fself, create-gp4 and PkgTool.Core, a clang and an ld.lld. PS4Mount downloads it
-# from the release (ps4mount-panel.pkg) and installs it.
+# create-fself, create-gp4 and PkgTool.Core, a clang and an ld.lld. Lodestar downloads it
+# from the release (lodestar-panel.pkg) and installs it.
+# Rebrand note: the title id changed with the Lodestar rebrand (PSMT00001 -> LDST00001).
+# PANEL_APP_TID in src/main.c must name the same id, or the payload will not find, install
+# or open this app.
 # Set OO_PS4_TOOLCHAIN to the toolchain root, CC and LD when clang and ld.lld are not in PATH, and
 # SSL_LIBS to a folder with OpenSSL 1.1 when the system has only 3 (PkgTool.Core needs it).
 set -e
@@ -11,8 +14,8 @@ O=${OO_PS4_TOOLCHAIN:?set OO_PS4_TOOLCHAIN to the OpenOrbis toolchain}
 T=$O/bin/linux
 CC=${CC:-clang}
 LD=${LD:-ld.lld}
-TITLE_ID=PSMT00001 # PANEL_APP_TID in src/main.c
-CONTENT_ID=IV0000-${TITLE_ID}_00-PS4MOUNTPANEL000
+TITLE_ID=LDST00001 # must match PANEL_APP_TID in src/main.c
+CONTENT_ID=IV0000-${TITLE_ID}_00-LODESTARPANEL000
 VER=01.00
 W=../build/panel-app
 export OO_PS4_TOOLCHAIN=$O DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
@@ -36,7 +39,7 @@ sfo CATEGORY --type Utf8 --maxsize 4 --value gd
 sfo CONTENT_ID --type Utf8 --maxsize 48 --value $CONTENT_ID
 sfo DOWNLOAD_DATA_SIZE --type Integer --maxsize 4 --value 0
 sfo SYSTEM_VER --type Integer --maxsize 4 --value 0
-sfo TITLE --type Utf8 --maxsize 128 --value PS4Mount
+sfo TITLE --type Utf8 --maxsize 128 --value Lodestar
 sfo TITLE_ID --type Utf8 --maxsize 12 --value $TITLE_ID
 sfo VERSION --type Utf8 --maxsize 8 --value $VER
 "$T/create-gp4" -out pkg.gp4 --content-id=$CONTENT_ID \

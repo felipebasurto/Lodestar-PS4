@@ -23,7 +23,8 @@
 /* The unfinished copy of a pkg being received: deleted only when no transfer is running. */
 #define INSTALL_PART_STALE_SECONDS 7200
 #define UPLOAD_PART_NAME ".ps4mount-upload.part"
-#define PANEL_PART_NAME "ps4mount-panel.part"
+#define PANEL_PART_NAME "lodestar-panel.part"
+#define LEGACY_PANEL_PART_NAME "ps4mount-panel.part"
 
 typedef enum {
     STAGE_KEEP = 0,       /* leave it: not ours, or too young */
@@ -74,7 +75,7 @@ static inline int stage_installed_ok(int tid_valid, int target_unmounted, int db
  * receiving: 1 while a pkg is being received from the panel. */
 static inline stage_action_t stage_action(const char *name, long age, int receiving) {
     size_t l = strlen(name);
-    if (!strcmp(name, UPLOAD_PART_NAME) || !strcmp(name, PANEL_PART_NAME))
+    if (!strcmp(name, UPLOAD_PART_NAME) || !strcmp(name, PANEL_PART_NAME) || !strcmp(name, LEGACY_PANEL_PART_NAME))
         return !receiving && age >= INSTALL_PART_STALE_SECONDS ? STAGE_DELETE_PART : STAGE_KEEP;
     if (l < 5 || strcmp(name + l - 4, ".pkg"))
         return STAGE_KEEP; /* anything else is not ours to delete */

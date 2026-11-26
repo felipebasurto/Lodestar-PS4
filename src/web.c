@@ -29,6 +29,7 @@
 #include "pkg.h"
 
 #define LOG_PATH "/data/ps4mount/log.txt"
+#define LOG_TAIL_BYTES 16384
 #define CHECK_MAX (16u << 20) /* most a pkg check is given */
 #define REQ_MS 30000          /* headers and the start of a body: this long, all told */
 
@@ -134,14 +135,19 @@ static int title_param(const char *path, char *tid) {
 
 static void send_log(int fd) {
     buf_t b = {0}, j = {0};
+    int truncated = 0;
     int f = open(LOG_PATH, O_RDONLY);
     if (f >= 0) {
-        off_t end = lseek(f, 0, SEEK_END), start = end > 16384 ? end - 16384 : 0;
+        off_t end = lseek(f, 0, SEEK_END), start = end > LOG_TAIL_BYTES ? end - LOG_TAIL_BYTES : 0;
+        truncated = start > 0;
         lseek(f, start, SEEK_SET);
+        off_t left = end - start;
         char tmp[4096];
         ssize_t n;
-        while ((n = read(f, tmp, sizeof(tmp))) > 0)
+        while (left > 0 && (n = read(f, tmp, left > (off_t)sizeof(tmp) ? sizeof(tmp) : (size_t)left)) > 0) {
             buf_put(&b, tmp, (size_t)n);
+            left -= n;
+        }
         close(f);
     }
     buf_printf(&j, "{\"log\":\"");
@@ -155,15 +161,16 @@ static void send_log(int fd) {
         } else if ((unsigned char)c >= 0x20)
             buf_put(&j, &c, 1);
     }
-    buf_printf(&j, "\"}");
+    buf_printf(&j, "\",\"bytes\":%zu,\"truncated\":%s,\"path\":\"%s\"}", b.len, truncated ? "true" : "false", LOG_PATH);
     reply(fd, "200 OK", "application/json; charset=utf-8", j.data, j.len);
     buf_free(&b);
     buf_free(&j);
 }
 
 /* Requests that write files: from the local network only, and with the panel's own
- * header, which a page of another site cannot send without the panel agreeing (CORS
- * preflight): no site the browser opens can push files to the console. */
+ * X-Lodestar header (or the legacy X-PS4Mount alias), which a page of another site cannot
+ * send without the panel agreeing (CORS preflight): no site the browser opens can push
+ * files to the console. */
 static int may_write(int fd, const char *req) {
     const char *h = req;
     int header = 0;
@@ -173,7 +180,7 @@ static int may_write(int fd, const char *req) {
         h++;
         if (*h == '\r' || *h == '\n')
             break; /* the empty line that ends the headers */
-        if (!strncasecmp(h, "X-PS4Mount:", 11)) {
+        if (!strncasecmp(h, "X-Lodestar:", 11) || !strncasecmp(h, "X-PS4Mount:", 11)) {
             header = 1;
             break;
         }
@@ -233,7 +240,8 @@ typedef struct {
  * already owned by a subsystem with its own locks. Everything else waits for the main loop. */
 int web_route_worker_safe(const char *path, int post) {
     if (!strncmp(path, "/api/", 5)) {
-        if (!strcmp(path, "/api/log") || !strcmp(path, "/api/drive") || !strcmp(path, "/api/links") ||
+        if (!strcmp(path, "/api/agent") || !strcmp(path, "/api/status") || !strcmp(path, "/api/log") ||
+            !strcmp(path, "/api/drive") || !strcmp(path, "/api/links") ||
             !strcmp(path, "/api/uploads") || !strcmp(path, "/api/dests") || !strcmp(path, "/api/storage") ||
             !strcmp(path, "/api/nas/scan") ||
             (!post && (!strcmp(path, "/api/config") || !strcmp(path, "/api/games"))) ||
@@ -295,6 +303,138 @@ static pthread_mutex_t g_owner_mu = PTHREAD_MUTEX_INITIALIZER;
 static web_owner_job_t *g_owner_head, *g_owner_tail;
 static int g_owner_count;
 static size_t g_owner_body_bytes;
+
+typedef struct {
+    const char *method, *path, *summary;
+    int mutating;
+} agent_endpoint_t;
+
+/* The panel-port HTTP surface, in one static table so an agent can discover what exists
+ * without inferring it from the HTML. mutating means intentionally starting or changing
+ * application/system state or work; read-only probes can still require the write header
+ * because they contact other machines. */
+static const agent_endpoint_t k_agent_endpoints[] = {
+    {"GET", "/", "panel HTML", 0},
+    {"GET", "/legacy", "legacy panel HTML", 0},
+    {"GET", "/api/agent", "machine-readable agent manifest", 0},
+    {"GET", "/api/status", "lightweight daemon status snapshot", 0},
+    {"GET", "/api/games", "full library, activity and notices", 0},
+    {"GET", "/api/config", "current settings", 0},
+    {"POST", "/api/config", "save settings", 1},
+    {"GET", "/api/log", "tail of the Lodestar log with metadata", 0},
+    {"GET", "/api/uploads", "state of the pkg upload", 0},
+    {"POST", "/api/check", "validate the first bytes of a pkg using a temporary file", 0},
+    {"POST", "/api/upload", "receive a pkg onto a destination drive", 1},
+    {"GET", "/api/dests", "destination drives and free space", 0},
+    {"GET", "/api/storage", "console storage used by managed content", 0},
+    {"POST", "/api/rescan", "request a fresh scan", 1},
+    {"POST", "/api/mount?title_id=<title_id>", "add a game to the library", 1},
+    {"POST", "/api/unmount?title_id=<title_id>", "remove a game from the library without deleting its pkgs", 1},
+    {"POST", "/api/restore", "move game pkgs back to their source locations", 1},
+    {"POST", "/api/restored/forget", "forget restored pkgs so a scan can adopt them again", 1},
+    {"GET", "/icon/<title_id>", "game icon PNG", 0},
+    {"GET", "/pic/<title_id>", "game background PNG", 0},
+    {"GET", "/api/drive", "Google Drive connection, job and library status", 0},
+    {"POST", "/api/drive/client", "store or remove the user OAuth client", 1},
+    {"POST", "/api/drive/connect", "start Google Drive sign-in", 1},
+    {"POST", "/api/drive/disconnect", "revoke Google Drive access", 1},
+    {"POST", "/api/drive/upload", "queue one game or the library for Drive upload", 1},
+    {"POST", "/api/drive/download", "queue a Drive game download", 1},
+    {"POST", "/api/drive/trash", "move a Drive game to trash", 1},
+    {"POST", "/api/drive/refresh", "refresh Drive state", 1},
+    {"POST", "/api/drive/cancel", "cancel the Drive transfer and empty its queue", 1},
+    {"POST", "/api/drive/forget_client", "remove the stored OAuth client", 1},
+    {"GET", "/api/links", "link download jobs and progress", 0},
+    {"POST", "/api/links/add", "queue downloads from pasted links", 1},
+    {"POST", "/api/links/cancel", "cancel a link download and delete its partial files", 1},
+    {"POST", "/api/links/retry", "retry a failed link download", 1},
+    {"GET", "/api/nas/scan", "probe the local network for NAS hosts; requires the write header", 0},
+    {"POST", "/api/nas/shares", "list shares on a chosen NAS host", 0},
+    {"POST", "/api/nas/reload", "ask BinLoader for a payload reload", 1},
+    {"POST", "/api/app/close", "close the panel app", 1},
+    {"POST", "/api/stop", "stop the payload", 1},
+};
+
+static void send_agent_manifest(int fd) {
+    buf_t b = {0};
+    buf_printf(&b, "{\"product\":\"%s\",\"version\":\"%s\",\"api_version\":%d,", LODESTAR_PRODUCT, LODESTAR_VERSION,
+               LODESTAR_API_VERSION);
+    buf_printf(&b, "\"panel\":{\"scheme\":\"http\",\"port\":%d},", WEB_PORT);
+    buf_printf(&b, "\"write_auth\":{\"type\":\"local_network_header\",\"header\":\"X-Lodestar\",\"value\":\"1\","
+                   "\"validation\":\"header presence\",\"legacy_aliases\":[\"X-PS4Mount\"],\"token\":false,"
+                   "\"methods\":[\"POST\"],\"additional_get_paths\":[\"/api/nas/scan\"],"
+                   "\"applies_to\":\"all POST requests and GET /api/nas/scan\","
+                   "\"peer\":\"private, loopback, link-local or carrier-grade NAT IPv4\"},");
+    buf_put(&b, "\"endpoints\":[", 13);
+    for (size_t i = 0; i < sizeof(k_agent_endpoints) / sizeof(k_agent_endpoints[0]); i++) {
+        const agent_endpoint_t *e = &k_agent_endpoints[i];
+        buf_printf(&b, "%s{\"method\":\"%s\",\"path\":\"%s\",\"mutating\":%s,\"summary\":\"%s\"}", i ? "," : "",
+                   e->method, e->path, e->mutating ? "true" : "false", e->summary);
+    }
+    buf_put(&b, "],", 2);
+    buf_printf(&b, "\"safety_rails\":{\"system_databases_read_only\":true,"
+                   "\"system_delete_never_reaches_pkg\":true,"
+                   "\"owner_mutations\":\"library, mount, restore and configuration changes execute in the main-loop owner\","
+                   "\"unauthenticated_panel\":true,\"write_peer_restricted\":true,"
+                   "\"panel_exposure\":\"no password or token; use only on a trusted LAN and stop the payload when done\","
+                   "\"check_body_max_bytes\":%u,"
+                   "\"agent_polling\":\"prefer /api/status; enumerate /api/games only when the library is needed\"}}",
+               CHECK_MAX);
+    reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
+    buf_free(&b);
+}
+
+/* The application owner installs one status-state writer before the workers start. The web
+ * layer owns the envelope and queue counters, so tests and fallback behavior cannot drift
+ * from the route contract. */
+static pthread_mutex_t g_status_mu = PTHREAD_MUTEX_INITIALIZER;
+static web_status_state_fn g_status_state;
+
+void web_status_provider(web_status_state_fn fn) {
+    pthread_mutex_lock(&g_status_mu);
+    g_status_state = fn;
+    pthread_mutex_unlock(&g_status_mu);
+}
+
+static web_status_state_fn status_state_provider(void) {
+    pthread_mutex_lock(&g_status_mu);
+    web_status_state_fn fn = g_status_state;
+    pthread_mutex_unlock(&g_status_mu);
+    return fn;
+}
+
+static void default_status_state(buf_t *out) {
+    static const char empty_state[] = "\"setup\":false,\"activity\":{\"busy\":false,\"phase\":\"\",\"drive\":\"\","
+                                      "\"title\":\"\",\"title_id\":\"\",\"done\":0,\"total\":0,\"group\":0,\"groups\":0,"
+                                      "\"dlc_pending\":[]},\"notices\":[]";
+    buf_put(out, empty_state, sizeof(empty_state) - 1);
+}
+
+static void send_status(int fd) {
+    buf_t b = {0};
+    static const char key_endpoints[] = ",\"endpoints\":{\"agent\":\"/api/agent\",\"status\":\"/api/status\","
+                                        "\"games\":\"/api/games\",\"config\":\"/api/config\",\"log\":\"/api/log\","
+                                        "\"uploads\":\"/api/uploads\",\"dests\":\"/api/dests\",\"storage\":\"/api/storage\","
+                                        "\"drive\":\"/api/drive\",\"links\":\"/api/links\"}";
+    buf_printf(&b, "{\"product\":\"%s\",\"version\":\"%s\",\"api_version\":%d,", LODESTAR_PRODUCT, LODESTAR_VERSION,
+               LODESTAR_API_VERSION);
+    web_status_state_fn state = status_state_provider();
+    if (state)
+        state(&b);
+    else
+        default_status_state(&b);
+
+    int owner_pending = web_owner_pending();
+    pthread_mutex_lock(&g_pool_mu);
+    unsigned write_pending = g_write_count, write_active = g_write_active;
+    pthread_mutex_unlock(&g_pool_mu);
+    buf_printf(&b, ",\"queues\":{\"web_owner_pending\":%d,\"web_write_pending\":%u,\"web_write_active\":%u}",
+               owner_pending, write_pending, write_active);
+    buf_put(&b, key_endpoints, sizeof(key_endpoints) - 1);
+    buf_put(&b, "}", 1);
+    reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
+    buf_free(&b);
+}
 
 static void web_handle_connection(int fd, int queue_owner, int slot);
 static void web_dispatch(int fd, web_req_t *r, int slot);
@@ -1008,6 +1148,10 @@ static void web_dispatch(int fd, web_req_t *r, int slot) {
         reply(fd, "200 OK", "text/html; charset=utf-8", index_html, sizeof(index_html));
     } else if (!strcmp(path, "/legacy") || !strcmp(path, "/legacy.html")) {
         reply(fd, "200 OK", "text/html; charset=utf-8", legacy_html, sizeof(legacy_html));
+    } else if (!strcmp(r->method, "GET") && !strcmp(path, "/api/agent")) {
+        send_agent_manifest(fd);
+    } else if (!strcmp(r->method, "GET") && !strcmp(path, "/api/status")) {
+        send_status(fd);
     } else if (!strcmp(path, "/api/games")) {
         buf_t b = {0};
         app_games_json(&b);

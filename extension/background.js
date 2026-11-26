@@ -2,7 +2,7 @@
  * Copyright (C) 2026 gasb07
  * Downloads of a pkg, a ZIP or a RAR go to the console instead of the computer: the
  * browser's download is cancelled and its address (after redirects, so a link that only
- * works once is not spent twice) sent to PS4Mount. The parts of a RAR wait in the basket
+ * works once is not spent twice) sent to Lodestar. The parts of a RAR wait in the basket
  * until the popup sends them together, as one download. Chrome (and Brave, Edge) asks
  * through onDeterminingFilename, before its "Save as" window; Firefox has only onCreated. */
 if (typeof importScripts === 'function') importScripts('common.js', 'relay.js');

@@ -70,9 +70,11 @@ an immutable catalog epoch snapshot published only when a catalog epoch is compl
 worker never takes the catalog lock that a scan may hold while pumping events.
 
 Only routes whose state is static or internally synchronized may complete in a worker in
-this first matrix: the two HTML pages, `/api/log`, Drive status/actions, links
+this first matrix: the two HTML pages, `/api/agent`, `/api/status`, `/api/log`, Drive status/actions, links
 status/actions, `/api/upload`, `/api/uploads`, `/api/rescan`, `/api/dests`, `/api/storage`,
-GET `/api/games`, icons/pics, GET `/api/config`, POST `/api/check`, `/api/nas/scan`, `/api/nas/shares` and `/api/nas/reload`. `/api/rescan` is worker-safe only because its cache/marker invalidation
+GET `/api/games`, icons/pics, GET `/api/config`, POST `/api/check`, `/api/nas/scan`, `/api/nas/shares` and `/api/nas/reload`. `/api/agent` is static. `/api/status` copies only
+atomics, mutex-protected snapshots and web queue counters; it never enters the catalog or
+title-cache locks and never enumerates the library. `/api/rescan` is worker-safe only because its cache/marker invalidation
 is part of the synchronized scan intent consumed later by the owner epoch. `/api/nas/reload`
 keeps its synchronous BinLoader answer but is serialized with the automatic reload attempt;
 the owner uses a non-blocking trylock and skips its retry while a worker holds that reload,
@@ -146,3 +148,48 @@ Check: test through `test/http_test.c` (owner execution ordering, worker-only ro
 completion without owner pumping, owner response writer handoff and pre-read check bodies)
 and `test/sdkcheck.sh`; read for shutdown ownership.
 Source: panel/API architecture audit and WEBAPI-2 implementation design.
+
+### WEBAPI-7: the agent manifest and status endpoints are read-only additive contracts
+The product version exposed through the existing API (`version` in responses such as
+`GET /api/games`) is `Lodestar 2.0.0`. The internal state and log paths remain under
+`/data/ps4mount` for compatibility; this rule does not migrate console state.
+
+`GET /api/agent` returns a machine-readable JSON manifest with `product` (`Lodestar`),
+`version` (`Lodestar 2.0.0`), `api_version` (`1`), the panel scheme/port, the write-header
+model (including that the server checks for the custom header's presence), an endpoint list
+in which every entry has `method`, `path`, `mutating` and `summary`, and safety rails.
+In that list `mutating` means intentionally starting or changing application/system state or
+work; temporary validation files and read-only network probes are not mutations. The manifest
+is static apart from those versioned constants, uses no application locks and is worker-safe.
+
+`GET /api/status` returns a lightweight JSON snapshot with `product`, `version`,
+`api_version`, `setup`, `activity`, `queues`, at most five recent `notices`, and key
+`endpoints`. `activity` has the same fields and meaning as the `activity` object of
+`GET /api/games`, including `dlc_pending`, but `/api/status` must not enumerate the library
+or copy the game list. `queues.web_owner_pending`, `queues.web_write_pending` and
+`queues.web_write_active` are read through the web server's synchronized counters. Status is
+observational: it does not touch the first-setup presence timestamp, start work or mutate
+application state. Both endpoints are GET-only; unknown methods keep the normal method
+handling.
+
+Check: test through the existing real-socket HTTP harness (`test/http_test.c`); read for
+snapshot locking and for the absence of catalog/library enumeration in `/api/status`.
+Source: Lodestar agent control-plane design.
+
+### WEBAPI-8: `X-Lodestar` is the canonical write header and `X-PS4Mount` its legacy alias
+Requests that write files or otherwise change state keep the existing threat model: POSTs
+(and the network-probing NAS scan) must carry the panel header and come from an allowed
+local/non-public IPv4 peer. `X-Lodestar: 1` is accepted everywhere the panel header is
+required. `X-PS4Mount: 1` remains accepted as a legacy alias for existing panels, extensions
+and scripts. This rule does not add a token, change a port, or weaken the network boundary.
+Check: test through `test/http_test.c`; read for header-block-only parsing in `may_write`.
+Source: Lodestar compatibility contract.
+
+### WEBAPI-9: `/api/log` metadata is additive
+`GET /api/log` keeps returning the JSON string field `log` with the same tail of
+`/data/ps4mount/log.txt` as before (at most 16 KiB, with the same escaping). It also returns
+`bytes` (the number of raw log bytes read into that tail before JSON escaping/filtering), `truncated`
+(true when the file had bytes before that tail), and `path` (`/data/ps4mount/log.txt`).
+Clients that only read `log` must keep working. Byte ranges are not part of this contract.
+Check: test through `test/http_test.c`; read for bounded file reading.
+Source: Lodestar agent observability contract.

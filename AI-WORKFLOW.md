@@ -1,31 +1,31 @@
-# Working on PS4Mount PS4 with an AI assistant
+# Working on Lodestar with an AI assistant
 
-This guide is written for an AI assistant (Claude Code, Codex CLI, Gemini CLI or any other with a terminal) and for the person who runs it. Its purpose: connect to a running PS4Mount, watch what it does while a game is added, started or deleted, and fix or improve it with changes that can be tested and shared.
+This guide is written for an AI assistant (Claude Code, Codex CLI, Gemini CLI or any other with a terminal) and for the person who runs it. Its purpose: connect to a running Lodestar, watch what it does while a game is added, started or deleted, and fix or improve it with changes that can be tested and shared.
 
 If you are the person: give the assistant this file as the first instruction, together with the prompt in section 8.
 
 ## 1. What you need
 
-- A jailbroken PS4 with GoldHEN running PS4Mount (see the README), on the same local network as the computer where the assistant runs. GoldHEN's FTP server (port 2121) helps a lot: logs, state files, pkgs.
+- A jailbroken PS4 with GoldHEN running Lodestar (see the README), on the same local network as the computer where the assistant runs. GoldHEN's FTP server (port 2121) helps a lot: logs, state files, pkgs.
 - On that computer: a terminal the assistant can use, `curl`, `bash`, a C compiler, `xxd`, Node.js (for the panel tests) and the [ps4-payload-sdk](https://github.com/ps4-payload-dev/sdk) **built from git** at the commit in `SDK_COMMIT` of `.github/workflows/build.yml` or later. The v0.9 release does not start on 13.52.
-- A way to send the new ELF: GoldHEN's payloader on port 9090 stays open (`cat build/ps4mount-ps4.elf > /dev/tcp/<ip>/9090`), or Payload Guest with the `.bin` in `/data/payloads/`.
+- A way to send the new ELF: GoldHEN's payloader on port 9090 stays open (`cat build/lodestar-ps4.elf > /dev/tcp/<ip>/9090`), or Payload Guest with the `.bin` in `/data/payloads/`.
 
 A chat in a web browser cannot reach your console: the assistant must be an agent with a terminal on your network.
 
 ## 2. Rules that are not negotiable
 
-1. **Never write to the system databases** (`/system_data/priv/mms/*.db`). ShellCore keeps them open with its own cache and flags a database written from outside as corrupted. PS4Mount only reads them (`mode=ro&nolock=1`); what has to be in them is written by the system (`sceAppInstUtilAppInstallAll` for games, a BGFT install for add-ons). `bash test/policy.sh` enforces it.
-2. **The system's delete must never reach a pkg.** Deleting a game made the system follow the `app.pkg` link and empty the user's pkg. The game folders are unmounted while the console's delete screens are open, and PS4Mount deletes the files itself, only `<root>/ps4/<TID>` of a game the user deleted there. A read-only view of the pkgs is no answer: BGFT opens a game's pkg for writing when the game starts, records EROFS in the game task (record `0x68`) and refuses the game. **After any change to how games are mounted or linked, restart the console and start a game before calling it done.**
+1. **Never write to the system databases** (`/system_data/priv/mms/*.db`). ShellCore keeps them open with its own cache and flags a database written from outside as corrupted. Lodestar only reads them (`mode=ro&nolock=1`); what has to be in them is written by the system (`sceAppInstUtilAppInstallAll` for games, a BGFT install for add-ons). `bash test/policy.sh` enforces it.
+2. **The system's delete must never reach a pkg.** Deleting a game made the system follow the `app.pkg` link and empty the user's pkg. The game folders are unmounted while the console's delete screens are open, and Lodestar deletes the files itself, only `<root>/ps4/<TID>` of a game the user deleted there. A read-only view of the pkgs is no answer: BGFT opens a game's pkg for writing when the game starts, records EROFS in the game task (record `0x68`) and refuses the game. **After any change to how games are mounted or linked, restart the console and start a game before calling it done.**
 3. **One change per version, and test it on the console before the next.** If something gets worse, go back to the last version that worked.
 4. **Run the checks before every commit:** `bash test/run.sh`, `bash test/policy.sh`, `bash test/sdkcheck.sh` (compiles `src/main.c` and the rest against the real SDK headers, which `test/run.sh` cannot) and `cd test/web && npm test`. `SANITIZE=1 bash test/run.sh` and `bash test/fuzz/run.sh 30 pkg http` for changes to pkg reading, uploads or the panel server.
 5. **The payload runs inside a borrowed system process.** Never call `exit()` (it ends that process). Its libc heap is about 3 MB in all: anything large (pkg entries, artwork, request bodies, lists of add-ons) comes from `mem_alloc` (mmap), never `malloc`.
 6. **Only your own console, your own network and pkgs of games you own.** Never scan or connect to other people's devices. Never ask for, share or link pkgs.
-7. **The panel has no password.** Anyone on the network can use it while PS4Mount runs. Stop it when you are done.
-8. **Google credentials never leave the console.** PS4Mount ships no OAuth client: each user's client ID and secret live only in `/data/ps4mount/drive_client.txt`, their access in `drive.txt`. Never commit them, paste them in an issue or a log, or send them anywhere; the panel never returns the secret.
+7. **The panel has no password.** Anyone on the network can use it while Lodestar runs. Stop it when you are done.
+8. **Google credentials never leave the console.** Lodestar ships no OAuth client: each user's client ID and secret live only in `/data/ps4mount/drive_client.txt`, their access in `drive.txt`. Never commit them, paste them in an issue or a log, or send them anywhere; the panel never returns the secret.
 
 ## 3. Connecting
 
-PS4Mount shows a notification with the panel's address (port 8770). The API, with `curl` (requests that write files need the header `X-PS4Mount: 1`):
+Lodestar shows a notification with the panel's address (port 8770). The API, with `curl` (requests that write files need the header `X-PS4Mount: 1`):
 
 | Request | Does |
 | --- | --- |
@@ -40,7 +40,7 @@ PS4Mount shows a notification with the panel's address (port 8770). The API, wit
 | `POST /api/config` | Change settings (form fields: `batch`, `batch_size`, `dlc`, `internal`, `lang`, `restore_batch`, `paths`) |
 | `POST /api/check?size=N` | Check the first bytes (up to 16 MB) of a pkg of N bytes: what it is and whether this console can use it |
 | `POST /api/upload?dest=<id>&name=<file>` | Send a whole pkg (the body) to `dest` (`usb0`… or `internal`) |
-| `POST /api/stop` | Stop PS4Mount |
+| `POST /api/stop` | Stop Lodestar |
 | `GET /api/dests` | The drives a pkg can go to, with their free space |
 | `GET /api/drive` | Google Drive: `client`, `connected`, `email`, quota, `login` (code shown), `job` (op, phase, `game_done`/`game_total`, `speed`, `queued`), `games` in Drive |
 | `POST /api/drive/client` | Body `client_id=…&client_secret=…`: the user's OAuth client (`forget_client` removes it) |
@@ -51,7 +51,7 @@ PS4Mount shows a notification with the panel's address (port 8770). The API, wit
 | Port 8771 (or the next free one: `relay_port` in `GET /api/links`): `POST /claim`, `/put?job=&vol=&block=`, `/drop?...` | A helper (the browser extension, `extension/relay.js`) takes a block to fetch, delivers it whole, or gives it back; header `X-PS4Mount: 1` |
 | `POST /api/links/cancel?id=`, `retry?id=` | Stop or drop a download (its files deleted), try a failed one again (with `X-PS4Mount-Password`: with that password; `jobs[].locked` says it failed for want of one) |
 
-Files on the console (FTP): `/data/ps4mount/log.txt`, `config.txt`, `<TID>.src` (where each game comes from), `<TID>.removed`, `<TID>.restart`; an empty `/data/ps4mount/stop` stops PS4Mount; `drive_client.txt`, `drive.txt` (Google: never share them), `drive_queue.txt` and `drive_upload.txt` (unfinished transfers, resumed at load), `<scan folder>/.ps4mount-drive/<id>.dl` (a download in progress); `links_queue.txt`, `passwords.txt` (archive passwords that worked, tried on the next ones) and `<scan folder>/.ps4mount-links/<n>/` (downloads from links: `vNNN.dl` parts, `out/` the pkgs extracted so far); an empty `/data/ps4mount/klog_all` copies the whole kernel log into PS4Mount's log, which is how the system's side of every problem in this project was found. The kernel log server (port 3232) takes one reader: PS4Mount is that reader while it runs.
+Files on the console (FTP): `/data/ps4mount/log.txt`, `config.txt`, `<TID>.src` (where each game comes from), `<TID>.removed`, `<TID>.restart`; an empty `/data/ps4mount/stop` stops Lodestar; `drive_client.txt`, `drive.txt` (Google: never share them), `drive_queue.txt` and `drive_upload.txt` (unfinished transfers, resumed at load), `<scan folder>/.ps4mount-drive/<id>.dl` (a download in progress); `links_queue.txt`, `passwords.txt` (archive passwords that worked, tried on the next ones) and `<scan folder>/.ps4mount-links/<n>/` (downloads from links: `vNNN.dl` parts, `out/` the pkgs extracted so far); an empty `/data/ps4mount/klog_all` copies the whole kernel log into Lodestar's log, which is how the system's side of every problem in this project was found. The kernel log server (port 3232) takes one reader: Lodestar is that reader while it runs.
 
 GoldHEN's FTP reports the size of files over 4 GB modulo 4 GiB; the console itself sees the real size.
 
@@ -73,9 +73,9 @@ GoldHEN's FTP reports the size of files over 4 GB modulo 4 GiB; the console itse
 | `[drive] N transfer(s) left by the last run` | The saved queue was resumed at load |
 | `[links] <name>: downloading <link> …`, `extracting …`, `<name> se descargó: …` | A download from links, the pkgs coming out of it, its end; `the server limits connections`, `the link gave a new address` are servers answering 429/503 and links that expired |
 
-`python3 tools/logcheck.py log.txt` applies this table to a copy of the log and explains what it finds in plain words (Spanish by default, `--lang en`); a file PS4Mount deleted on its own shows as a `[clean]` line.
+`python3 tools/logcheck.py log.txt` applies this table to a copy of the log and explains what it finds in plain words (Spanish by default, `--lang en`); a file Lodestar deleted on its own shows as a `[clean]` line.
 
-## 5. How PS4Mount is organised
+## 5. How Lodestar is organised
 
 `src/main.c` (scan, registration, mounts, BGFT game tasks, klog events, deletes, panel actions), `src/install.c` (BGFT installs, for add-ons), `src/check.c` (what a pkg is and whether this console can use it), `src/upload.c` (pkgs sent from the panel), `src/pkg.c` (pkg reader), `src/build.c` (install files, BGFT task records), `src/db.c` (read-only lookups in `app.db`), `src/drive.c` (Google Drive: sign-in, uploads, downloads, the queue), `src/links.c` (downloads from links: grouping RAR volumes, ranged downloads, extraction with libarchive while they arrive), `src/https.c` (HTTPS with BearSSL: Google's roots in `src/google_ca.h` for Drive, Mozilla's in `src/public_roots.h` for links; kept connections), `src/la_alloc.c` (libarchive's and zlib's memory: large blocks on mapped pages), `src/json.c` (reading Google's answers), `src/lang.c` (languages), `src/mem.c` (mapped buffers), `src/web.c` with `web/index.html`, `web/legacy.html` (the PS4's browser: ES5, no `<dialog>`) and `web/lang.js` (the panel's translations).
 
@@ -86,7 +86,7 @@ Facts that cost time to learn:
 - BGFT accepts `/mnt/usb…` and `/user/data/…` paths in a task, not `/data/…` (`invalid content_url`).
 - `/user/app/<TID>` is a nullfs mount of `/system_data/ps4mount/app/<TID>`, whose `app.pkg` links to the pkg. `readlink` fails for payloads here (`0xffffffd1`): links are checked by following them (`stat`).
 - The delete screens are `ConfirmContentDeleteScene` / `Parent_ContentDeleteScene` (Options > Delete) and `storage_data#application…` / `Parent_NormalStack` (Settings > Storage). `GameWillDelete(<TID>)` names the game; a delete that works logs nothing after it.
-- Add-ons are listed from `addcont.db`, which only an install fills: PS4Mount installs add-ons up to 256 MB with BGFT (`sceBgftServiceIntDownloadRegisterTaskByStorageEx`). The content type byte cannot tell a small add-on from one with data.
+- Add-ons are listed from `addcont.db`, which only an install fills: Lodestar installs add-ons up to 256 MB with BGFT (`sceBgftServiceIntDownloadRegisterTaskByStorageEx`). The content type byte cannot tell a small add-on from one with data.
 - GoldHEN runs payloads in ScePartyDaemon, or SceSpZeroConf when that one is gone. A service another payload left open there (BGFT) answers `0x80990001`: close it and open it again.
 - The payload resolves names with libSceNet's resolver (there is no `resolv.conf`); BearSSL's AES-NI and PCLMUL code runs at >1 GB/s on the console, so TLS is never the bottleneck.
 - One TCP connection of the console gets about 1.2-1.6 MB/s from the internet whatever the line; several add up to a ceiling of about 15 MB/s (12 connections). Downloads therefore use 12 kept connections in 8 MB blocks; uploads (Drive takes a file as one stream) use 32 MB chunks on one kept connection, which fills a home upload line.
@@ -97,25 +97,25 @@ Facts that cost time to learn:
 
 ## 6. Making a change
 
-1. **Reproduce it with the log**: turn on `klog_all`, do the thing on the console, read both PS4Mount's lines and the system's.
+1. **Reproduce it with the log**: turn on `klog_all`, do the thing on the console, read both Lodestar's lines and the system's.
 2. **Find the system's own behaviour first** (a normal install, the console's own files and records) and copy it, instead of guessing.
 3. **Write the change and a test** in `test/` that fails without it (`test/unit.c`, `test/upload_test.c`, `test/http_test.c`, `test/web/panel.test.js`). Texts for people go through `TR("English", "Español")` in C and `t('English')` in the pages, with the translation in the same change.
-4. **Run the checks** (rule 5), build, stop PS4Mount, load the new ELF, test on the console, watching the log.
+4. **Run the checks** (rule 5), build, stop Lodestar, load the new ELF, test on the console, watching the log.
 5. **Share it** (section 7).
 
 ## 7. Sharing the result
 
-Open an [issue](https://github.com/Vld439/PS4Mount-PS4/issues) or a pull request with:
+Open an [issue](https://github.com/felipebasurto/Lodestar-PS4/issues) or a pull request with:
 
-- the console firmware, the jailbreak, the PS4Mount version and the game (`CUSAxxxxx`);
+- the console firmware, the jailbreak, the Lodestar version and the game (`CUSAxxxxx`);
 - what did not work, and the relevant log lines (reviewed first: no account names or anything private);
 - what you changed and why, and how you tested it (the checks and the real console);
 - if an AI helped you, say so, and let it write the explanation of the system's behaviour and of the change.
 
-PS4Mount PS4 is a port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07, under GPL-3.0-or-later: keep the notices, distribute changes under the same license, and please mention the original project.
+Lodestar is an independent project that began as a PS4 port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07, under GPL-3.0-or-later: keep the notices, distribute changes under the same license, and keep the attribution to gasb07/PS4Mount as the origin project. Since the 2.0.0 rebrand the artifacts are `lodestar-ps4.elf`/`lodestar-ps4.bin`, but the operational names on the console stay as before for compatibility: `/data/ps4mount/`, the `PS4Mount` scan folders and the `X-PS4Mount` protocol headers of the API above.
 
 ## 8. Prompt to start with
 
 Copy this to the assistant:
 
-> You are going to help me with PS4Mount PS4. Read `AI-WORKFLOW.md` and `README.md` in this repository completely before doing anything, and follow the rules of section 2. My PS4 is at `<ip>` with GoldHEN (FTP on 2121, payloader on 9090) and runs PS4Mount (its version is at the top of the panel). The problem: `<what happens>`. Start by reading `/data/ps4mount/log.txt` and `GET /api/games`; ask me before turning on `klog_all` or doing anything on the console. Explain what happens, propose one change, test it with the checks, build the ELF and tell me how to load it. At the end, write the explanation I will post in an issue, saying that an AI helped.
+> You are going to help me with Lodestar. Read `AI-WORKFLOW.md` and `README.md` in this repository completely before doing anything, and follow the rules of section 2. My PS4 is at `<ip>` with GoldHEN (FTP on 2121, payloader on 9090) and runs Lodestar (its version is at the top of the panel). The problem: `<what happens>`. Start by reading `/data/ps4mount/log.txt` and `GET /api/games`; ask me before turning on `klog_all` or doing anything on the console. Explain what happens, propose one change, test it with the checks, build the ELF and tell me how to load it. At the end, write the explanation I will post in an issue, saying that an AI helped.

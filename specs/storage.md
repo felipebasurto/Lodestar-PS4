@@ -49,11 +49,11 @@ Whatever else is true. A paused install of a big game can wait days; 3 days is t
 Check: test (keep bar 2). Test: `test/unit.c` › `test_stage`. Source: user (2026-11-24), value chosen in this PR.
 
 ### STORE-5: an unfinished transfer is deleted after 2 hours, and never while one runs
-`.ps4mount-upload.part` and `ps4mount-panel.part` belong to PS4Mount's uploads and panel download.
+`.ps4mount-upload.part`, `lodestar-panel.part` and the legacy `ps4mount-panel.part` belong to Lodestar's uploads and panel download.
 Check: test (keep bar 2). Test: `test/unit.c` › `test_stage`. Source: user (2026-11-24), value chosen in this PR.
 
 ### STORE-6: anything else in the install folder is left alone
-Keep any file other than a staged `*.pkg` or one of the two temporary names in STORE-5.
+Keep any file other than a staged `*.pkg` or one of the temporary names in STORE-5.
 Check: test (keep bar 2). Test: `test/unit.c` › `test_stage`. Source: AI-WORKFLOW.md rule 2.
 
 ### STORE-7: a pkg the system's installer refuses is deleted at once

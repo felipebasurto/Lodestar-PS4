@@ -77,7 +77,7 @@
 #include "web.h"
 #include "icon_data.h"
 
-#define VERSION "PS4Mount 0.7.4-fix"
+#define VERSION LODESTAR_VERSION
 #define LOCK_PORT 9032
 #define SCAN_SECONDS 10
 /* A full walk of the drive is slower on drives with many files: the catalog is brought
@@ -2217,8 +2217,8 @@ static int dlc_install(dlc_src_t *a) {
     int no_room = a->pkg.pkg_size > usable || g_dlc_install_reserved > usable - a->pkg.pkg_size;
     if (no_room || g_ndlc_pending == MAX_DLC_PENDING) {
         const char *dlc_name = a->meta.title_valid ? a->meta.title : a->pkg.content_id;
-        notify_kind(NOTIFY_WARN, TR("Not enough space on the console to install the add-on %s (%llu MB): free some space and load PS4Mount again",
-                  "No hay espacio en la consola para instalar el DLC %s (%llu MB): libera espacio y vuelve a cargar PS4Mount"),
+        notify_kind(NOTIFY_WARN, TR("Not enough space on the console to install the add-on %s (%llu MB): free some space and load Lodestar again",
+                  "No hay espacio en la consola para instalar el DLC %s (%llu MB): libera espacio y vuelve a cargar Lodestar"),
                dlc_name, (unsigned long long)(a->pkg.pkg_size >> 20));
         if (g_ndlc_failed < MAX_DLC_FAILED)
             snprintf(g_dlc_failed[g_ndlc_failed++], sizeof(g_dlc_failed[0]), "%s", a->pkg.content_id);
@@ -2313,9 +2313,9 @@ static void install_title_dlc(title_src_t *t) {
                t->name, started, (unsigned long long)(bytes * 10 >> 30) / 10, (unsigned long long)(bytes * 10 >> 30) % 10);
     if (left)
         notify_kind(NOTIFY_WARN, TR("%s: %d add-on(s) could not be installed now; the game is added without them and they are tried again "
-                  "the next time PS4Mount loads",
+                  "the next time Lodestar loads",
                   "%s: %d DLC no se pudieron instalar ahora; el juego se añade sin ellos y se vuelven a intentar la "
-                  "próxima vez que cargues PS4Mount"),
+                  "próxima vez que cargues Lodestar"),
                t->name, left);
 }
 
@@ -5419,6 +5419,68 @@ static int find_root_snapshot(const char *tid, char *root, size_t n, const confi
     return find_root_impl(tid, root, n, 1, cfg);
 }
 
+/* `"notices":[...]`, newest first, capped at max entries. The whole array is copied under
+ * the notification mutex and formatted after it, so a web worker never shares the live ring. */
+static void notices_json(buf_t *out, int max) {
+    notice_entry_t nsnap[NOTICE_MAX];
+    int nn;
+    pthread_mutex_lock(&g_notice_mu);
+    nn = g_nnotices;
+    memcpy(nsnap, g_notices, sizeof(notice_entry_t) * (size_t)nn);
+    pthread_mutex_unlock(&g_notice_mu);
+    if (nn > max)
+        nn = max;
+    buf_put(out, "\"notices\":[", 11);
+    for (int i = 0; i < nn; i++) {
+        buf_printf(out, "%s{\"ts\":%lld,\"kind\":\"%s\",\"text\":", i ? "," : "", (long long)nsnap[i].ts,
+                   notify_kind_name(nsnap[i].kind));
+        json_str(out, nsnap[i].text);
+        buf_printf(out, "}");
+    }
+    buf_put(out, "]", 1);
+}
+
+/* `"activity":{...}` exactly as the library response exposes it, but without touching the
+ * catalog or title cache: one mutex-protected snapshot of the owner state. */
+static void activity_json(buf_t *out) {
+    dlc_pending_t dpsnap[MAX_DLC_PENDING];
+    activity_t act;
+    int ndp;
+    pthread_mutex_lock(&g_act_mu);
+    act = g_activity;
+    ndp = g_ndlc_pending;
+    memcpy(dpsnap, g_dlc_pending, sizeof(dlc_pending_t) * (size_t)ndp);
+    pthread_mutex_unlock(&g_act_mu);
+    buf_printf(out, "\"activity\":{\"busy\":%s,\"phase\":\"%s\",\"drive\":", (act.phase[0] || ndp) ? "true" : "false",
+               act.phase);
+    json_str(out, act.drive);
+    buf_printf(out, ",\"title\":");
+    json_str(out, act.title);
+    buf_printf(out, ",\"title_id\":");
+    json_str(out, act.title_id);
+    buf_printf(out, ",\"done\":%d,\"total\":%d,\"group\":%d,\"groups\":%d,\"dlc_pending\":[", act.done, act.total,
+               act.group, act.groups);
+    time_t now = time(NULL);
+    for (int i = 0; i < ndp; i++) {
+        buf_printf(out, "%s{\"content_id\":", i ? "," : "");
+        json_str(out, dpsnap[i].content_id);
+        buf_printf(out, ",\"name\":");
+        json_str(out, dpsnap[i].name);
+        buf_printf(out, ",\"size\":%llu,\"elapsed\":%lld}", (unsigned long long)dpsnap[i].size,
+                   (long long)(now > dpsnap[i].since ? now - dpsnap[i].since : 0));
+    }
+    buf_printf(out, "]}");
+}
+
+/* The application-owned fields of /api/status. It is observational: unlike a library
+ * request it does not mark the first setup as seen, and it never enumerates games. */
+static void app_status_state_json(buf_t *out) {
+    buf_printf(out, "\"setup\":%s,", setup_active() ? "true" : "false");
+    activity_json(out);
+    buf_put(out, ",", 1);
+    notices_json(out, 5);
+}
+
 void app_games_json(buf_t *out) {
     config_t cfg;
     cfg_snapshot(&cfg);
@@ -5544,48 +5606,12 @@ void app_games_json(buf_t *out) {
         closedir(sd);
     buf_printf(out, "],\"dlc_mode\":\"%s\"", dlc_mode_name(cfg.dlc_mode));
     /* the last notifications the console was sent, newest first */
-    notice_entry_t nsnap[NOTICE_MAX];
-    int nn;
-    pthread_mutex_lock(&g_notice_mu);
-    nn = g_nnotices;
-    memcpy(nsnap, g_notices, sizeof(notice_entry_t) * (size_t)nn);
-    pthread_mutex_unlock(&g_notice_mu);
-    buf_printf(out, ",\"notices\":[");
-    for (int i = 0; i < nn; i++) {
-        buf_printf(out, "%s{\"ts\":%lld,\"kind\":\"%s\",\"text\":", i ? "," : "", (long long)nsnap[i].ts,
-                   notify_kind_name(nsnap[i].kind));
-        json_str(out, nsnap[i].text);
-        buf_printf(out, "}");
-    }
-    buf_put(out, "]", 1);
+    buf_put(out, ",", 1);
+    notices_json(out, NOTICE_MAX);
     /* what the daemon is doing now, and the add-ons the system is still installing */
-    dlc_pending_t dpsnap[MAX_DLC_PENDING];
-    activity_t act;
-    int ndp;
-    pthread_mutex_lock(&g_act_mu);
-    act = g_activity;
-    ndp = g_ndlc_pending;
-    memcpy(dpsnap, g_dlc_pending, sizeof(dlc_pending_t) * (size_t)ndp);
-    pthread_mutex_unlock(&g_act_mu);
-    buf_printf(out, ",\"activity\":{\"busy\":%s,\"phase\":\"%s\",\"drive\":", (act.phase[0] || ndp) ? "true" : "false",
-               act.phase);
-    json_str(out, act.drive);
-    buf_printf(out, ",\"title\":");
-    json_str(out, act.title);
-    buf_printf(out, ",\"title_id\":");
-    json_str(out, act.title_id);
-    buf_printf(out, ",\"done\":%d,\"total\":%d,\"group\":%d,\"groups\":%d,\"dlc_pending\":[", act.done, act.total,
-               act.group, act.groups);
-    time_t now = time(NULL);
-    for (int i = 0; i < ndp; i++) {
-        buf_printf(out, "%s{\"content_id\":", i ? "," : "");
-        json_str(out, dpsnap[i].content_id);
-        buf_printf(out, ",\"name\":");
-        json_str(out, dpsnap[i].name);
-        buf_printf(out, ",\"size\":%llu,\"elapsed\":%lld}", (unsigned long long)dpsnap[i].size,
-                   (long long)(now > dpsnap[i].since ? now - dpsnap[i].since : 0));
-    }
-    buf_printf(out, "]}}");
+    buf_put(out, ",", 1);
+    activity_json(out);
+    buf_put(out, "}", 1);
 }
 
 static int app_art(const char *tid, const char *name, uint32_t id, buf_t *out);
@@ -5731,7 +5757,7 @@ int app_remove(const char *tid, char *msg, size_t cap) {
     snprintf(srcmark, sizeof(srcmark), STATE_DIR "/%s.src", tid);
     if (!remove_owned_ok(installed_internally(tid), m != NULL, exists(srcmark), !find_root(tid, root, sizeof(root)))) {
         printf("[web] remove %s refused: no PS4Mount ownership evidence\n", tid);
-        snprintf(msg, cap, TR("%s is not managed by PS4Mount", "%s no está gestionado por PS4Mount"), tid);
+        snprintf(msg, cap, TR("%s is not managed by Lodestar", "%s no está gestionado por Lodestar"), tid);
         return -1;
     }
     if ((m && m->running) || title_running(tid)) {
@@ -6008,7 +6034,7 @@ int sceKernelGetAppInfo(pid_t pid, app_info_t *info);
 int sceSystemServiceKillApp(uint32_t app_id, int how, int reason, int core_dump);
 
 /* The panel app (panel-app/): a home screen tile that shows the panel. It is no game. */
-#define PANEL_APP_TID "PSMT00001"
+#define PANEL_APP_TID "LDST00001"
 
 /* Open apps: processes named eboot.bin (PS4 and PS5 games alike), the games or only the
  * panel app. Fills up to max app ids and title ids, returns how many are open. */
@@ -6149,7 +6175,7 @@ static void run_restore(char (*only)[10], int nonly, int remember) {
     memset(move_failed, 0, sizeof(move_failed));
     int n = restore_collect(only, nonly, items, MAX_TITLES), moved = 0, failed = 0, done = 0, kept = 0;
     if (!n) {
-        notify("%s", TR("No PS4Mount games to restore", "No hay juegos de PS4Mount que restaurar"));
+        notify("%s", TR("No Lodestar games to restore", "No hay juegos de Lodestar que restaurar"));
         return;
     }
     if (close_open_games()) {
@@ -6362,8 +6388,8 @@ static int clean_scan_path(const char *in, char *out, size_t n, char *why, size_
         }
     if (!strncasecmp(out, "ps4", 3) && (!out[3] || out[3] == '/')) {
         snprintf(why, wn, "%s",
-                 TR("the ps4 folder holds the games PS4Mount already moved; choose another folder",
-                    "la carpeta ps4 guarda los juegos que PS4Mount ya movió; elige otra carpeta"));
+                 TR("the ps4 folder holds the games Lodestar already moved; choose another folder",
+                    "la carpeta ps4 guarda los juegos que Lodestar ya movió; elige otra carpeta"));
         return -1;
     }
     return 0;
@@ -7150,7 +7176,7 @@ static void install_cleanup(void) {
  * When the console does not have it, its pkg is downloaded from this version's release and
  * installed like an app sent with "Send and install"; a first start opens it. Once it was
  * installed, a tile the player deleted is not put back (PANEL_APP_DONE). */
-#define PANEL_APP_URL "https://github.com/Vld439/PS4Mount-PS4/releases/download/v%s/ps4mount-panel.pkg"
+#define PANEL_APP_URL "https://github.com/felipebasurto/Lodestar-PS4/releases/download/v%s/lodestar-panel.pkg"
 #define PANEL_APP_DONE STATE_DIR "/panel-app"
 #define PANEL_APP_DELAY 15 /* seconds after the start: the network is up by then */
 
@@ -7164,8 +7190,8 @@ static int panel_app_sink(void *ctx, const uint8_t *data, size_t len) {
 static void *panel_app_fetch(void *arg) {
     (void)arg;
     char url[2048], err[192] = "";
-    const char *part = INSTALL_DIR "/" PANEL_PART_NAME, *pkg = INSTALL_DIR "/ps4mount-panel.pkg";
-    snprintf(url, sizeof(url), PANEL_APP_URL, &VERSION[sizeof("PS4Mount ") - 1]);
+    const char *part = INSTALL_DIR "/" PANEL_PART_NAME, *pkg = INSTALL_DIR "/lodestar-panel.pkg";
+    snprintf(url, sizeof(url), PANEL_APP_URL, &VERSION[sizeof("Lodestar ") - 1]);
     mkdir(INSTALL_DIR, 0777);
     FILE *f = fopen(part, "wb");
     int status = 0;
@@ -7528,7 +7554,7 @@ static const char k_panel_param[] =
     "    \"localizedParameters\": {\n"
     "        \"defaultLanguage\": \"en-US\",\n"
     "        \"en-US\": {\n"
-    "            \"titleName\": \"PS4Mount\"\n"
+    "            \"titleName\": \"Lodestar\"\n"
     "        }\n"
     "    }\n"
     "}\n";
@@ -7567,7 +7593,7 @@ __attribute__((unused)) static void install_panel_shortcut(void) {
     rc = register_call(PANEL_ID);
     printf("[panel] shortcut install rc=0x%08x\n", rc);
     if (!rc)
-        notify_kind(NOTIFY_READY, "%s", TR("PS4Mount added to the Media tab", "PS4Mount añadido a la pestaña Multimedia"));
+        notify_kind(NOTIFY_READY, "%s", TR("Lodestar added to the Media tab", "Lodestar añadido a la pestaña Multimedia"));
 }
 
 static int g_klog = -1, g_web = -1;
@@ -7634,6 +7660,14 @@ static int send_all(int s, const void *data, size_t len) {
  * first bytes are read: the file is 3 MB and this runs where the heap is small. */
 static const char *payload_file(char *out, size_t n) {
     static const char *cand[] = {
+        "/data/payloads/lodestar-ps4.bin",       "/data/payloads/Lodestar-PS4.bin",
+        "/data/GoldHEN/payloads/lodestar-ps4.bin", "/data/GoldHEN/payloads/Lodestar-PS4.bin",
+        "/user/data/payloads/lodestar-ps4.bin",  "/user/data/payloads/Lodestar-PS4.bin",
+        "/data/ps4mount/lodestar-ps4.bin",       "/data/ps4mount/Lodestar-PS4.bin",
+        "/data/payloads/lodestar-ps4.elf",       "/data/payloads/Lodestar-PS4.elf",
+        "/data/GoldHEN/payloads/lodestar-ps4.elf", "/data/GoldHEN/payloads/Lodestar-PS4.elf",
+        "/user/data/payloads/lodestar-ps4.elf",  "/user/data/payloads/Lodestar-PS4.elf",
+        "/data/ps4mount/lodestar-ps4.elf",       "/data/ps4mount/Lodestar-PS4.elf",
         "/data/payloads/ps4mount-ps4.bin",       "/data/payloads/PS4Mount-PS4.bin",
         "/data/GoldHEN/payloads/ps4mount-ps4.bin", "/data/GoldHEN/payloads/PS4Mount-PS4.bin",
         "/user/data/payloads/ps4mount-ps4.bin",  "/user/data/payloads/PS4Mount-PS4.bin",
@@ -8236,6 +8270,7 @@ int main(void) {
      * a browser */
     /* left behind if an earlier load stopped mid-check: removed before the panel can ask for one */
     check_temp_cleanup();
+    web_status_provider(app_status_state_json);
     g_web = web_listen();
     drive_begin();
     links_begin();
@@ -8253,7 +8288,7 @@ int main(void) {
             close(lock);
             if ((lock = single_instance()) < 0) {
                 notify_kind(NOTIFY_WARN, "%s",
-                            TR(VERSION " stopped: another PS4Mount is running", VERSION " detenido: hay otro PS4Mount en marcha"));
+                            TR(VERSION " stopped: another Lodestar is running", VERSION " detenido: hay otro Lodestar en marcha"));
                 shutdown_daemon(-1);
                 return 0;
             }

@@ -10,7 +10,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: PS4Mount version
+      label: Lodestar version
       description: Shown at the top of the web panel and in the startup notification.
       placeholder: "0.2.0-beta"
     validations:
@@ -27,10 +27,10 @@ body:
     id: jailbreak
     attributes:
       label: Jailbreak, GoldHEN and other payloads
-      description: The exploit, the GoldHEN version, how you load PS4Mount (Payload Guest, GoldHEN's autoload...) and every other payload you load.
+      description: The exploit, the GoldHEN version, how you load Lodestar (Payload Guest, GoldHEN's autoload...) and every other payload you load.
       placeholder: |
         Lapse, GoldHEN 2.4b18
-        PS4Mount from Payload Guest, AnyPad
+        Lodestar from Payload Guest, AnyPad
     validations:
       required: true
   - type: textarea

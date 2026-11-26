@@ -1,8 +1,15 @@
 #!/bin/bash
-# Builds build/ps4mount-ps4.elf and build/ps4mount-ps4.bin (a raw loader + that ELF) with the PS4 Payload SDK
+# Builds build/lodestar-ps4.elf and build/lodestar-ps4.bin (a raw loader + that ELF) with the PS4 Payload SDK
 # (https://github.com/ps4-payload-dev/sdk): a build with the 13.52 offsets (the v0.9 release
 # stops before main on 13.52; see SDK_COMMIT in .github/workflows/build.yml).
 # Set PS4_PAYLOAD_SDK when the SDK is not in /opt/ps4-payload-sdk.
+#
+# Rebrand note (Lodestar 2.0.0): the build artifacts are named lodestar-ps4.*, but the
+# operational names inside the payload stay as before for compatibility with existing
+# consoles: /data/ps4mount (config, log, state), the PS4Mount scan folder on USB drives,
+# /data/PS4Mount on the internal storage and the X-PS4Mount panel protocol header.
+# (The AutoRun detection accepts the lodestar-ps4.bin/.elf names and the legacy
+# ps4mount-ps4 ones.) Renaming those is a data-migration decision, not a build one.
 set -e
 cd "$(dirname "$0")"
 B=${PS4_PAYLOAD_SDK:-/opt/ps4-payload-sdk}/bin
@@ -120,7 +127,7 @@ if [ ! -f "$FF/libfuse.a" ]; then
 fi
 # A later load adopts the NAS mount of an earlier one only with the same NAS code.
 NETFS_ID=$(cat src/netfs.c src/netfs.h src/netfs_nfs.c src/netfs_smb.c | sha256sum | cut -c1-12)
-$B/orbis-clang -O2 -Wall -Wextra -DFUSE_USE_VERSION=26 -D_FILE_OFFSET_BITS=64 -DNETFS_ID="\"$NETFS_ID\"" -Ibuild -Ithird_party/sqlite -Ithird_party/bearssl/inc -Ithird_party/libarchive -Ithird_party/libfuse/include -Ithird_party/libnfs/include -Ithird_party/libnfs/mount -Ithird_party/libsmb2/include -o build/ps4mount-ps4.elf \
+$B/orbis-clang -O2 -Wall -Wextra -DFUSE_USE_VERSION=26 -D_FILE_OFFSET_BITS=64 -DNETFS_ID="\"$NETFS_ID\"" -Ibuild -Ithird_party/sqlite -Ithird_party/bearssl/inc -Ithird_party/libarchive -Ithird_party/libfuse/include -Ithird_party/libnfs/include -Ithird_party/libnfs/mount -Ithird_party/libsmb2/include -o build/lodestar-ps4.elf \
     src/main.c src/fw.c src/logts.c src/klogdup.c src/web.c src/pkg.c src/build.c src/check.c src/upload.c src/install.c src/lang.c src/mem.c src/db.c src/origin.c src/autorun.c src/crypto.c \
     src/badpatch.c src/bgftscan.c src/catalog.c src/catsnap.c src/shortpath.c src/titlecache.c src/drive.c src/https.c src/json.c src/links.c src/rar5dec.c src/la_alloc.c src/netfs.c src/netfs_nfs.c src/netfs_smb.c "$SQ" "$BR/libbearssl.a" "$LA/libarchive.a" "$FN/libnfs.a" "$FS/libsmb2.a" "$FF/libfuse.a" \
     -lSceUserService -lSceAppInstUtil -lSceSystemService -lkernel_sys
@@ -130,5 +137,5 @@ $B/orbis-clang -c -Os -fPIC -ffreestanding -fno-builtin -fno-jump-tables -fno-st
     -fno-asynchronous-unwind-tables -mstackrealign -Wall -Wextra -o build/binboot.o tools/binboot/binboot.c
 $B/orbis-ld --static -T tools/binboot/binboot.ld -o build/binboot.elf build/binboot.o
 $B/llvm-objcopy -O binary --only-section=.text build/binboot.elf build/binboot.bin
-cat build/binboot.bin build/ps4mount-ps4.elf > build/ps4mount-ps4.bin
-ls -la build/ps4mount-ps4.elf
+cat build/binboot.bin build/lodestar-ps4.elf > build/lodestar-ps4.bin
+ls -la build/lodestar-ps4.elf

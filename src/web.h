@@ -6,6 +6,9 @@
 #include "build.h"
 
 #define WEB_PORT 8770
+#define LODESTAR_PRODUCT "Lodestar"
+#define LODESTAR_VERSION "Lodestar 2.0.0"
+#define LODESTAR_API_VERSION 1
 
 /* Implemented by main.c for the web panel. */
 void app_games_json(buf_t *out);
@@ -47,6 +50,13 @@ void app_dests_json(buf_t *out);
 void app_storage_json(buf_t *out);
 /* /api/uploads: the state of the upload. */
 void app_uploads_json(buf_t *out);
+
+/* Writes the application-owned fields of /api/status, without a leading or trailing comma:
+ * "setup":...,"activity":{...},"notices":[...]. The implementation must use only
+ * synchronized snapshots because status is answered by a web worker. */
+typedef void (*web_status_state_fn)(buf_t *out);
+/* Installs the status-state callback before the worker pool starts (main does this once). */
+void web_status_provider(web_status_state_fn fn);
 
 int web_listen(void);
 /* Serves one connection on the listening socket. */

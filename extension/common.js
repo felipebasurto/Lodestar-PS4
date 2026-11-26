@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 gasb07
  * What the background and the popup share: the settings, the basket of RAR parts and
- * talking to PS4Mount's panel (port 8770) on the console. */
+ * talking to Lodestar's panel (port 8770) on the console. */
 var api = typeof browser !== 'undefined' ? browser : chrome;
 var PORT = 8770;
 
@@ -38,7 +38,7 @@ function baseOf(name) {
   return name.replace(/\.part\d+\.rar$/i, '').replace(/\.(rar|r\d{2,3})$/i, '').toLowerCase();
 }
 
-/* The line PS4Mount takes for a link: the address, and its name when the address lacks it. */
+/* The line Lodestar takes for a link: the address, and its name when the address lacks it. */
 function lineOf(url, name) {
   var inUrl = '';
   try { inUrl = decodeURIComponent(new URL(url).pathname.split('/').pop() || ''); } catch (e) {}
@@ -52,7 +52,9 @@ function panel(host, path, opts) {
   });
 }
 
-/* The links to the console: {ok, message} as PS4Mount answers. */
+/* The links to the console: {ok, message} as Lodestar answers. */
+/* The X-PS4Mount headers are the payload's protocol since before the Lodestar rebrand:
+   the console answers only to those names, so they stay as they are. */
 function sendLinks(host, dest, lines, password) {
   var h = { 'X-PS4Mount': '1', 'Content-Type': 'text/plain; charset=utf-8' };
   if (password) h['X-PS4Mount-Password'] = encodeURIComponent(password);

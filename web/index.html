@@ -3,96 +3,119 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PS4Mount</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23060d1c'/%3E%3Crect x='25' y='5' width='14' height='11' rx='2' fill='%23c9d3e6'/%3E%3Crect x='16' y='14' width='32' height='44' rx='8' fill='%230070d1'/%3E%3Cpath d='M27 26v20l15-10z' fill='%23f4f6fb' stroke='%23f4f6fb' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>Lodestar</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050b18'/%3E%3Ccircle cx='32' cy='32' r='23' fill='none' stroke='%231d3252' stroke-width='2'/%3E%3Cpath d='M32 9l4.6 18.4L55 32l-18.4 4.6L32 55l-4.6-18.4L9 32l18.4-4.6z' fill='%2322d3ee'/%3E%3Cpath d='M32 9l4.6 18.4L32 32l-4.6-4.6z' fill='%23f0a227'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23f0a227'/%3E%3C/svg%3E">
 <script>
 /* The browser of older firmwares has no <dialog>: it gets its own page. */
 if (typeof document.createElement('dialog').showModal !== 'function') location.replace('/legacy' + (/[?&]app=1(?:&|$)/.test(location.search) ? '#app=1' : ''));
 </script>
 <style>
-:root{--bg:#060d1c;--bg-deep:#040914;--panel:#0c1830;--surface:#132342;--surface-hover:#1a2f56;--line:#1e355c;--line-strong:#2c4a7c;--fg:#eef3fb;--muted:#93a7c7;--accent:#0070d1;--accent-hover:#1482e3;--focus:#38bdf8;--ok:#22985a;--warn:#d08c1e;--bad:#d14343;--ease-out:cubic-bezier(0.23,1,0.32,1);--ease-in-out:cubic-bezier(0.77,0,0.175,1)}
+:root{--bg:#050b18;--bg-deep:#02060f;--panel:#0a1424;--panel-2:#0e1c32;--surface:#13233e;--surface-hover:#1b3154;--line:#1d3252;--line-strong:#2f4e7e;--fg:#eef4fc;--muted:#9fb4d2;--accent:#0e7490;--accent-hover:#0f8fb1;--focus:#22d3ee;--amber:#f0a227;--ok:#2fae66;--warn:#e8a33d;--bad:#e05555;--ease-out:cubic-bezier(0.23,1,0.32,1);--ease-in-out:cubic-bezier(0.77,0,0.175,1)}
 *{box-sizing:border-box}
 html{color-scheme:dark}
-body{margin:0;color:var(--fg);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background-color:var(--bg);background-image:linear-gradient(155deg,#122e56,#081a34 65%,#08162d);background-attachment:fixed}
-header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px max(24px,calc((100% - 1320px)/2));background:#0c1f3c;border-bottom:1px solid #274569}
-h1{font-size:20px;margin:0;font-weight:600}
-h1 small{color:var(--muted);font-weight:400;font-size:13px;margin-left:8px}
+body{margin:0;color:var(--fg);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background-color:var(--bg);background-image:radial-gradient(1100px 520px at 88% -8%,rgba(34,211,238,.09),transparent 60%),radial-gradient(900px 500px at -12% 108%,rgba(240,162,39,.05),transparent 55%),linear-gradient(160deg,#081426,#040b18 60%,#030913);background-attachment:fixed}
+::selection{background:rgba(34,211,238,.32)}
+header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between;padding:12px max(24px,calc((100% - 1320px)/2));background:linear-gradient(180deg,rgba(11,23,42,.97),rgba(6,13,26,.97));border-bottom:1px solid var(--line-strong);box-shadow:0 1px 0 rgba(34,211,238,.16),0 12px 32px rgba(0,0,0,.4)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand-mark{width:38px;height:38px;flex:none;filter:drop-shadow(0 0 7px rgba(34,211,238,.4))}
+.brand-t{display:flex;flex-direction:column;min-width:0}
+h1{font-size:21px;margin:0;font-weight:700;letter-spacing:.07em;line-height:1.1}
+h1 small{color:var(--muted);font-weight:400;font-size:13px;margin-left:8px;letter-spacing:0}
+.tagline{color:var(--muted);font-size:11.5px;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mc-status{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg-deep);color:var(--muted);font-size:12px;white-space:nowrap}
+.mc-status:empty{display:none}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--amber);box-shadow:0 0 8px rgba(240,162,39,.8);animation:mc-pulse 1.6s var(--ease-in-out) infinite}
+.dot.ok{background:#35d99a;box-shadow:0 0 8px rgba(53,217,154,.75);animation:none}
+.dot.bad{background:var(--bad);box-shadow:0 0 8px rgba(224,85,85,.75);animation:none}
+@keyframes mc-pulse{50%{opacity:.3}}
 .toolbar-more{position:relative}
-.toolbar-more summary{list-style:none;cursor:pointer;padding:8px 13px;border:1px solid var(--line-strong);border-radius:6px;color:var(--fg);background:var(--panel)}
+.toolbar-more summary{list-style:none;cursor:pointer;padding:8px 14px;border:1px solid var(--line-strong);border-radius:8px;color:var(--fg);background:linear-gradient(180deg,var(--panel-2),var(--panel));font-weight:500;transition:border-color 150ms var(--ease-out),background-color 150ms var(--ease-out)}
 .toolbar-more summary::-webkit-details-marker{display:none}
-.toolbar-more[open] summary{border-color:var(--focus)}
-.toolbar-menu{position:absolute;right:0;top:calc(100% + 8px);width:max-content;min-width:208px;max-width:calc(100vw - 24px);display:grid;gap:4px;padding:6px;background:#11294e;border:1px solid #345b91;border-radius:8px}
+@media (hover:hover) and (pointer:fine){.toolbar-more summary:hover{border-color:var(--focus)}}
+.toolbar-more[open] summary{border-color:var(--focus);box-shadow:0 0 0 1px rgba(34,211,238,.35)}
+.toolbar-menu{position:absolute;right:0;top:calc(100% + 8px);width:max-content;min-width:208px;max-width:calc(100vw - 24px);display:grid;gap:4px;padding:8px;background:#0d1c33;border:1px solid #345b91;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.5)}
 .toolbar-menu button{text-align:left}
 .toolbar-menu .summary{margin:0;padding:4px;gap:4px}
 .toolbar-menu input[type=search]{width:100%}
 .toolbar-menu .storage{margin:0;padding:4px}
 .toolbar-menu .storage .schip{padding:4px 0;background:transparent;border:0}
 .tv .toolbar-more summary{min-height:41px;padding-block:9px}
-button{font:inherit;font-weight:500;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 16px;cursor:pointer;transition:background-color 150ms var(--ease-out),border-color 150ms var(--ease-out),color 150ms var(--ease-out),transform 140ms var(--ease-out)}
+button{font:inherit;font-weight:500;color:var(--fg);background:linear-gradient(180deg,var(--surface),#101e37);border:1px solid var(--line);border-radius:9px;padding:8px 16px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(190,220,255,.07),0 1px 2px rgba(0,0,0,.35);transition:background-color 150ms var(--ease-out),border-color 150ms var(--ease-out),color 150ms var(--ease-out),transform 140ms var(--ease-out),box-shadow 150ms var(--ease-out)}
 button:focus{outline:none}
-@media (hover:hover) and (pointer:fine){button:hover{background:var(--surface-hover);border-color:var(--line-strong)}}
+@media (hover:hover) and (pointer:fine){button:hover{background:linear-gradient(180deg,var(--surface-hover),#14273f);border-color:var(--line-strong)}}
 button:active:not(:disabled){transform:scale(.97)}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-@media (hover:hover) and (pointer:fine){button.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}}
-button.danger{background:rgba(209,67,67,.14);border-color:rgba(209,67,67,.55)}
-@media (hover:hover) and (pointer:fine){button.danger:hover{background:rgba(209,67,67,.26);border-color:var(--bad)}}
+button.primary{background:linear-gradient(180deg,var(--accent-hover),var(--accent));border-color:#1599bd;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.3)}
+@media (hover:hover) and (pointer:fine){button.primary:hover{background:linear-gradient(180deg,#14a3c7,#0e7f9e);border-color:#2bb5d8}}
+button.danger{background:rgba(224,85,85,.13);border-color:rgba(224,85,85,.55)}
+@media (hover:hover) and (pointer:fine){button.danger:hover{background:rgba(224,85,85,.24);border-color:var(--bad)}}
 button:disabled{opacity:.45;cursor:default}
 summary:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible,.summary span:focus-visible,.art:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-main{padding:28px 24px 40px;max-width:1368px;margin:0 auto}
+main{padding:28px 24px 44px;max-width:1368px;margin:0 auto}
 .summary{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;color:var(--muted)}
-.summary span{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:4px 8px;font-size:13px;cursor:pointer;transition:border-color 150ms var(--ease-out),color 150ms var(--ease-out)}
-.summary span.on{border-color:var(--accent);color:var(--fg)}
+.summary span{background:rgba(10,20,36,.85);border:1px solid var(--line);border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;transition:border-color 150ms var(--ease-out),color 150ms var(--ease-out),background-color 150ms var(--ease-out)}
+.summary span.on{border-color:var(--focus);color:var(--fg);background:rgba(34,211,238,.1);box-shadow:0 0 0 1px rgba(34,211,238,.25)}
 @media (hover:hover) and (pointer:fine){.summary span:hover{border-color:var(--line-strong)}}
 .storage{display:flex;flex-wrap:wrap;gap:8px}
 .schip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;color:var(--muted);white-space:nowrap}
 .schip .sl{color:var(--fg);font-weight:500}
 .sbar{display:inline-block;width:48px;height:4px;border-radius:999px;background:var(--line);overflow:hidden;flex:none}
-.sbar span{display:block;height:100%;background:var(--accent);border-radius:999px}
-#restart-banner{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;border-bottom:1px solid #516077;color:#ffe0ad;padding:0 0 12px;margin-bottom:24px}
+.sbar span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--focus));border-radius:999px}
+#restart-banner{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;border:1px solid rgba(240,162,39,.5);border-left:4px solid var(--amber);border-radius:10px;background:rgba(240,162,39,.09);color:#ffe0ad;padding:12px 14px;margin-bottom:24px}
 #restart-banner .rb-main{font-weight:500}
 .card .art{cursor:pointer}
-.hero{height:220px;border-radius:12px;background:var(--bg-deep) center/cover no-repeat;margin:0 0 16px;position:relative}
-.hero .icon{position:absolute;left:16px;bottom:-24px;width:96px;height:96px;border-radius:12px;border:3px solid var(--panel);background:var(--bg-deep) center/cover no-repeat}
+.hero{height:220px;border-radius:12px;background:var(--bg-deep) center/cover no-repeat;margin:0 0 16px;position:relative;border:1px solid var(--line)}
+.hero .icon{position:absolute;left:16px;bottom:-24px;width:96px;height:96px;border-radius:12px;border:3px solid var(--panel);background:var(--bg-deep) center/cover no-repeat;box-shadow:0 8px 20px rgba(0,0,0,.45)}
 #g-name{margin:0 0 0 124px;min-height:30px}
 .facts{display:grid;grid-template-columns:max-content 1fr;gap:8px 16px;margin:24px 0 16px;font-size:14px}
 .facts dt{color:var(--muted)}.facts dd{margin:0;word-break:break-all}
-body:before{content:"";position:fixed;z-index:-1;pointer-events:none;top:150px;right:-145px;width:520px;height:520px;border:1px solid rgba(119,184,255,.17);border-radius:28%;transform:rotate(-32deg);outline:1px solid rgba(119,184,255,.08);outline-offset:24px}
-.library-heading{margin:0 0 20px;font-size:24px;font-weight:600;letter-spacing:-.035em}
+body:before{content:"";position:fixed;z-index:-1;pointer-events:none;top:130px;right:-160px;width:560px;height:560px;border:1px dashed rgba(34,211,238,.16);border-radius:50%;box-shadow:0 0 0 26px rgba(34,211,238,.03),inset 0 0 0 26px rgba(34,211,238,.02)}
+body:after{content:"";position:fixed;z-index:-1;pointer-events:none;left:-140px;bottom:-180px;width:420px;height:420px;border:1px dashed rgba(240,162,39,.1);border-radius:50%}
+.library-heading{display:flex;align-items:center;gap:10px;margin:0 0 20px;font-size:15px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.library-heading:before{content:"";width:14px;height:14px;flex:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 6l5.6 20.4L58 32l-20.4 5.6L32 58l-5.6-20.4L6 32l20.4-5.6z' fill='%2322d3ee'/%3E%3C/svg%3E") center/contain no-repeat}
+.library-heading:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line-strong),transparent)}
 .shelf{display:grid;grid-template-columns:minmax(0,1.14fr) minmax(240px,1fr);gap:36px;align-items:start}
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .card{min-width:0}
-.card .art{display:block;width:100%;padding:0;text-align:left;background:transparent;border:0;border-radius:4px}
-.card .art[aria-pressed=true] .cover{box-shadow:0 0 0 2px #9bc7fb}.card .art:focus .cover{box-shadow:none}
+.card .art{display:block;width:100%;padding:0;text-align:left;background:transparent;border:0;border-radius:12px;box-shadow:none}
+.card .art[aria-pressed=true] .cover{border-color:var(--focus);box-shadow:0 0 0 2px var(--focus),0 8px 24px rgba(34,211,238,.18)}
+.card .art:focus .cover{box-shadow:none}
 .art:focus-visible{outline-offset:2px}
-.cover{display:block;aspect-ratio:4/3;border-radius:4px;background:#0b1832 center/cover no-repeat;position:relative}
+.cover{display:block;aspect-ratio:4/3;border-radius:10px;background:#081226 center/cover no-repeat;position:relative;border:1px solid rgba(150,185,225,.16);box-shadow:0 3px 12px rgba(0,0,0,.4);transition:transform 160ms var(--ease-out),border-color 160ms var(--ease-out),box-shadow 160ms var(--ease-out)}
+@media (hover:hover) and (pointer:fine){.card .art:hover .cover{transform:translateY(-2px);border-color:rgba(150,185,225,.4);box-shadow:0 8px 22px rgba(0,0,0,.5)}}
 .badge{display:flex;align-items:center;gap:6px;font-size:12px;color:#b8cee8}
-.b-restart,.b-pending{color:#ffe0ad}
+.b-restart,.b-pending{color:#ffd88f}
 .card .b-drive{top:6px;right:6px;border-radius:4px}
-.info{display:block;padding:8px 0 4px;min-height:48px}
+.info{display:block;padding:9px 2px 4px;min-height:48px}
 .badge{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .name{display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
-.inspector{position:sticky;top:85px;min-width:0;background:transparent}
-.shelf-art{aspect-ratio:16/9;border-radius:4px;background:#0b1832 center/cover no-repeat}
-.inspector-body{padding:20px 0 24px}
+.inspector{position:sticky;top:92px;min-width:0;background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px 16px 20px;box-shadow:0 20px 44px rgba(0,0,0,.4),inset 0 1px 0 rgba(190,220,255,.06)}
+.shelf-art{aspect-ratio:16/9;border-radius:10px;background:#081226 center/cover no-repeat;border:1px solid rgba(150,185,225,.14)}
+.inspector-body{padding:18px 2px 4px}
 .inspector h3{margin:6px 0;font-size:clamp(26px,3vw,42px);line-height:1.08;letter-spacing:-.035em;overflow-wrap:anywhere}
 .inspector .actions{margin-top:13px}
 .inspector .meta{margin:5px 0 0}
-.tv main{padding:28px 4% 40px}
+.tv main{padding:30px 4% 48px}
 .tv header{padding-left:4%;padding-right:4%}
 .tv button,.tv input,.tv select{min-height:41px}
-.tv button:focus,.tv input:focus,.tv select:focus,.tv textarea:focus,.tv [tabindex]:focus{outline:3px solid #a5d6ff;outline-offset:3px}
-.tv .name{font-size:17px}.tv .badge{font-size:13px}
+.tv button{font-size:16px}
+.tv button:focus,.tv input:focus,.tv select:focus,.tv textarea:focus,.tv [tabindex]:focus{outline:3px solid var(--focus);outline-offset:3px}
+.tv .grid{gap:18px}
+.tv .name{font-size:18px}.tv .badge{font-size:14px}
+.tv .meta{font-size:14px}
+.tv .library-heading{font-size:17px}
+.tv .card .art:focus .cover{transform:scale(1.03)}
 @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.inspector{position:static}}
-@media(max-width:620px){.toolbar-more{position:static}.toolbar-menu{right:14px;top:calc(100% - 3px)}main{padding:20px 14px}.shelf{display:block}.inspector{display:none}.library-heading{font-size:25px}header{position:relative;padding:12px 14px}.top{flex-wrap:wrap}}
+@media(max-width:720px){.tagline{display:none}}
+@media(max-width:620px){.toolbar-more{position:static}.toolbar-menu{right:14px;top:calc(100% - 3px)}main{padding:20px 14px}.shelf{display:block}.inspector{display:none}.library-heading{font-size:14px}header{position:relative;padding:12px 14px}.top{flex-wrap:wrap}}
 .empty{color:var(--muted);text-align:center;padding:48px 0}
-.warn{color:var(--warn);font-size:13px;background:rgba(208,140,30,.12);border:1px solid rgba(208,140,30,.45);border-radius:8px;padding:8px 12px;margin-top:4px}
-dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line-strong);border-radius:12px;max-width:95vw;max-width:min(900px,95vw);width:900px;padding:20px;transform-origin:center;opacity:1;transform:none;transition:opacity 180ms var(--ease-out),transform 200ms var(--ease-out)}
+.warn{color:#ffd88f;font-size:13px;background:rgba(240,162,39,.1);border:1px solid rgba(240,162,39,.45);border-radius:8px;padding:8px 12px;margin-top:4px}
+dialog{background:linear-gradient(180deg,var(--panel-2),var(--panel));color:var(--fg);border:1px solid var(--line-strong);border-radius:16px;box-shadow:0 28px 70px rgba(0,0,0,.55),inset 0 1px 0 rgba(190,220,255,.07);max-width:95vw;max-width:min(900px,95vw);width:900px;padding:22px;transform-origin:center;opacity:1;transform:none;transition:opacity 180ms var(--ease-out),transform 200ms var(--ease-out)}
 @starting-style{dialog[open]{opacity:0;transform:scale(.96)}}
-dialog::backdrop{background:rgba(0,0,0,.6)}
-dialog h3{margin:0 0 16px;font-size:18px;font-weight:600}
+dialog::backdrop{background:rgba(1,4,10,.68)}
+dialog h3{margin:0 0 16px;font-size:18px;font-weight:600;letter-spacing:.02em}
 pre{white-space:pre-wrap;font-size:12px;max-height:60vh;overflow:auto;background:var(--bg-deep);border:1px solid var(--line);padding:12px;border-radius:8px}
 form.settings{display:flex;flex-direction:column;gap:16px}
 form.settings label{display:flex;flex-direction:column;gap:6px}
@@ -101,16 +124,17 @@ a{color:var(--focus)}
 input[type=search]{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;min-width:200px}
 form.settings textarea,form.settings select,form.settings input[type=number],form.settings input[type=text],form.settings input[type=password]{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
 form.settings textarea{min-height:90px;resize:vertical;font-family:ui-monospace,Consolas,monospace}
+form.settings textarea:focus,form.settings select:focus,form.settings input:focus,input[type=search]:focus{border-color:var(--focus)}
 form.settings .hint{color:var(--muted);font-size:13px}
 form.settings .row{display:flex;gap:8px;justify-content:flex-end}
-form.settings fieldset{border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
-form.settings legend{font-weight:600;padding:0 8px}
+form.settings fieldset{border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;background:rgba(5,11,24,.45)}
+form.settings legend{font-weight:600;padding:0 8px;color:var(--focus);font-size:12.5px;letter-spacing:.09em;text-transform:uppercase}
 form.settings input.num{width:6em}
 form.settings .nasgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
 @media(max-width:560px){form.settings .nasgrid{grid-template-columns:1fr}}
 form.settings .naslist{display:flex;flex-wrap:wrap;gap:8px}
 form.settings .naslist:empty{display:none}
-form.settings .naslist button.on{border-color:var(--accent)}
+form.settings .naslist button.on{border-color:var(--focus);box-shadow:0 0 0 1px rgba(34,211,238,.3)}
 form.settings details.nashelp p{margin:8px 0;font-size:13px;color:var(--muted)}
 form.settings details.nashelp summary{cursor:pointer}
 .picker{width:100%;border-collapse:collapse;font-size:14px}
@@ -118,49 +142,50 @@ form.settings details.nashelp summary{cursor:pointer}
 .picker td.c,.picker th.c{width:36px;text-align:center}
 .picker .meta{font-size:12px}
 .pickwrap{max-height:55vh;overflow:auto;margin:12px 0}
-.note{color:var(--warn);font-size:13px}
-.drop{border:2px dashed var(--line-strong);border-radius:12px;padding:24px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color 150ms var(--ease-out),color 150ms var(--ease-out)}
-.drop.over{border-color:var(--accent);color:var(--fg)}
+.note{color:#ffd88f;font-size:13px}
+.drop{border:2px dashed var(--line-strong);border-radius:12px;padding:24px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color 150ms var(--ease-out),color 150ms var(--ease-out),background-color 150ms var(--ease-out)}
+.drop.over{border-color:var(--focus);color:var(--fg);background:rgba(34,211,238,.06)}
 .queue{display:flex;flex-direction:column;gap:12px;margin:16px 0;max-height:50vh;overflow:auto}
 .item{border:1px solid var(--line);border-radius:12px;padding:12px 16px;background:var(--bg-deep)}
 .item .top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
 .item .file{font-weight:600;word-break:break-all}
 .item .st{font-size:13px;white-space:nowrap}
-.st-ok{color:var(--ok)}.st-bad{color:#ff9e9e}.st-wait{color:var(--muted)}.st-send{color:var(--accent-hover)}
-.bad{color:#ff9e9e;font-size:13px;background:rgba(209,67,67,.12);border:1px solid rgba(209,67,67,.45);border-radius:8px;padding:8px 12px;margin-top:8px}
-progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent)}
+.st-ok{color:#4ad98d}.st-bad{color:#ff9e9e}.st-wait{color:var(--muted)}.st-send{color:var(--focus)}
+.bad{color:#ff9e9e;font-size:13px;background:rgba(224,85,85,.12);border:1px solid rgba(224,85,85,.45);border-radius:8px;padding:8px 12px;margin-top:8px}
+progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
 .sendbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
 #d-dest,.sendbar select{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
 button.small{padding:4px 12px;font-size:13px}
 .gd{display:inline-flex;align-items:center;gap:6px}
 .gd svg{width:16px;height:16px}
-#drivebar,#linkbar,#actbar{display:none;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line);font-size:14px}
+#drivebar,#linkbar,#actbar{display:none;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:12px 20px;background:rgba(10,20,36,.96);border-bottom:1px solid var(--line);box-shadow:inset 3px 0 0 var(--accent-hover);font-size:14px}
 #drivebar progress,#linkbar progress{width:220px;margin:0}
 #act-prog{width:160px;margin:0;flex:none}
 #drivebar .db-main,#linkbar .db-main,#actbar .db-main{font-weight:600}
 #drivebar .db-sub,#linkbar .db-sub,#actbar .db-sub{color:var(--muted);font-size:13px;flex-basis:100%}
 #l-text{width:100%;min-height:140px;white-space:pre;overflow-wrap:normal;overflow-x:auto}
 #l-dest{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
-.code{font:600 30px/1.2 ui-monospace,Consolas,monospace;letter-spacing:3px;background:var(--bg-deep);border:1px solid var(--line);border-radius:12px;padding:12px 18px;display:inline-block;margin:8px 0;user-select:all}
+.code{font:600 30px/1.2 ui-monospace,Consolas,monospace;letter-spacing:3px;background:var(--bg-deep);border:1px solid var(--focus);border-radius:12px;padding:12px 18px;display:inline-block;margin:8px 0;user-select:all;box-shadow:0 0 18px rgba(34,211,238,.14)}
 .drive-acct{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin-bottom:12px}
 .quota{height:8px;background:var(--bg-deep);border-radius:999px;overflow:hidden;width:220px;border:1px solid var(--line)}
-.quota div{height:100%;background:var(--accent)}
-.b-drive{position:absolute;right:12px;top:12px;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:600;background:var(--accent-hover)}
-#toast{position:fixed;right:20px;bottom:20px;background:var(--panel);border:1px solid var(--line-strong);border-radius:12px;padding:12px 16px;display:none;max-width:420px;opacity:1;transform:none;transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
+.quota div{height:100%;background:linear-gradient(90deg,var(--accent),var(--focus))}
+.b-drive{position:absolute;right:12px;top:12px;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:600;background:#0b5d74;border:1px solid rgba(140,220,240,.35)}
+#toast{position:fixed;right:20px;bottom:20px;background:var(--panel-2);border:1px solid var(--line-strong);border-left:4px solid var(--focus);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:12px 16px;display:none;max-width:420px;opacity:1;transform:none;transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
 @starting-style{#toast{opacity:0;transform:translateY(8px)}}
-.notifpop{position:absolute;top:calc(100% + 8px);right:20px;z-index:6;width:340px;max-width:calc(100vw - 40px);max-height:60vh;overflow:auto;background:var(--panel);border:1px solid var(--line-strong);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.45);padding:8px;transform-origin:top right;opacity:1;transform:none;transition:opacity 150ms var(--ease-out),transform 150ms var(--ease-out)}
+.notifpop{position:absolute;top:calc(100% + 8px);right:20px;z-index:6;width:340px;max-width:calc(100vw - 40px);max-height:60vh;overflow:auto;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.45);padding:8px;transform-origin:top right;opacity:1;transform:none;transition:opacity 150ms var(--ease-out),transform 150ms var(--ease-out)}
 @starting-style{.notifpop{opacity:0;transform:scale(.96)}}
 .nitem{display:flex;gap:8px;align-items:baseline;padding:8px;border-bottom:1px solid var(--line);font-size:13px}
 .nitem:last-child{border-bottom:0}
 .nkind{flex:none;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:600;background:var(--surface);color:var(--muted)}
-.nkind.k-ready{background:rgba(34,152,90,.25)}
-.nkind.k-warn{background:rgba(208,140,30,.25)}
-.nkind.k-download,.nkind.k-drive{background:rgba(0,112,209,.4)}
+.nkind.k-ready{background:rgba(47,174,102,.3);color:#8fe3b6}
+.nkind.k-warn{background:rgba(240,162,39,.28);color:#ffd88f}
+.nkind.k-download,.nkind.k-drive{background:rgba(14,116,144,.55);color:#a5e8f5}
 .ntext{flex:1;min-width:0;word-break:break-word}
 .ntime{flex:none;color:var(--muted);font-size:12px}
 .nempty{color:var(--muted);text-align:center;padding:24px 8px;font-size:13px}
-.ncount{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--fg);font-size:11px;font-weight:600;line-height:18px;text-align:center}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-property:opacity,background-color,border-color,color!important}button:active:not(:disabled){transform:none!important}#toast{transform:none!important}.notifpop{transform:none!important}dialog[open]{transform:none!important}}
+.ncount{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:999px;background:#0b5d74;color:#fff;font-size:11px;font-weight:600;line-height:18px;text-align:center}
+@media (prefers-contrast:more){:root{--muted:#c2d3ea;--line:#33538a;--line-strong:#4a70a8}.cover,.shelf-art{border-color:#4a70a8}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-property:opacity,background-color,border-color,color!important}button:active:not(:disabled){transform:none!important}.tv .card .art:focus .cover{transform:none!important}#toast{transform:none!important}.notifpop{transform:none!important}dialog[open]{transform:none!important}}
 /* last: over any display rule (form.settings is flex), also where !important or
  * specificity are not applied */
 [hidden],form.settings[hidden]{display:none!important}
@@ -168,8 +193,15 @@ button.small{padding:4px 12px;font-size:13px}
 </head>
 <body>
 <header>
-  <h1>PS4Mount</h1>
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="23" fill="none" stroke="#1d3252" stroke-width="2"/><path d="M32 9l4.6 18.4L55 32l-18.4 4.6L32 55l-4.6-18.4L9 32l18.4-4.6z" fill="#22d3ee"/><path d="M32 9l4.6 18.4L32 32l-4.6-4.6z" fill="#f0a227"/><circle cx="32" cy="32" r="4" fill="#f0a227"/></svg>
+    <div class="brand-t">
+      <h1>Lodestar</h1>
+      <span class="tagline">external game library control for PlayStation 4</span>
+    </div>
+  </div>
   <div class="bar">
+    <span class="mc-status" id="mc-status"><span class="dot" id="mc-dot"></span><span id="mc-ver"></span></span>
     <details id="library-filters" class="toolbar-more">
       <summary tabindex="0">Search and filter</summary>
       <div class="toolbar-menu">
@@ -249,7 +281,7 @@ button.small{padding:4px 12px;font-size:13px}
     </label>
     <label class="check" id="s-dlcbig-row" hidden><input type="checkbox" id="s-dlcbig"> Also install big add-ons (over 256 MB)</label>
     <span class="hint">External mode mounts add-on packages from the source drive. Console storage
-      installs add-ons up to 256 MB each, or any size with the big-add-ons option. Off disables add-ons managed by PS4Mount.</span>
+      installs add-ons up to 256 MB each, or any size with the big-add-ons option. Off disables add-ons managed by Lodestar.</span>
   </fieldset>
   <fieldset><legend>System and GoldHEN</legend>
     <label class="check"><input type="checkbox" id="s-klog"> Read the console's log (game start and stop)</label>
@@ -264,21 +296,21 @@ button.small{padding:4px 12px;font-size:13px}
     <span class="hint">Pkgs sent to the console's storage are added from there, with no install to wait for. They still take internal space.</span>
     <details class="nashelp"><summary>Where the games are</summary>
       <p>Nothing is installed: each game plays straight from its .pkg files on a USB drive, a NAS share, or the console's
-        /data/PS4Mount when the internal-storage option is on. PS4Mount only adds it to the home screen; the pkgs are never
+        /data/PS4Mount when the internal-storage option is on. Lodestar only adds it to the home screen; the pkgs are never
         copied for it.</p>
       <p>Add-ons come from the drive too: external mode mounts their packages from the source drive, console storage installs them on the
-        console (up to 256 MB each, or any size with the big-add-ons option), off disables add-ons managed by PS4Mount. Removing a game from the
+        console (up to 256 MB each, or any size with the big-add-ons option), off disables add-ons managed by Lodestar. Removing a game from the
         library, or restoring its files, never deletes a .pkg.</p>
     </details>
   </fieldset>
-  <fieldset id="storagebox"><legend>What PS4Mount keeps on the console's drive</legend>
+  <fieldset id="storagebox"><legend>What Lodestar keeps on the console's drive</legend>
     <span class="hint" id="st-free"></span>
     <div id="st-rows"></div>
-    <span class="hint">Read only: this list measures, it deletes nothing. PS4Mount cleans its own temporary files by itself and writes each one to the log.</span>
+    <span class="hint">Read only: this list measures, it deletes nothing. Lodestar cleans its own temporary files by itself and writes each one to the log.</span>
   </fieldset>
   <fieldset id="nasbox"><legend>NAS (NFS or SMB)</legend>
     <span class="hint" id="nas-unsupported" hidden>Not available on this firmware: there is no FUSE patch for it.</span>
-    <span class="warn" id="nas-experimental" hidden>Experimental on this firmware: its FUSE patch is itemzflow's and was not tried with PS4Mount (it was on 13.52 and 6.72). If the console freezes when the share is mounted, restart it and turn the NAS off.</span>
+    <span class="warn" id="nas-experimental" hidden>Experimental on this firmware: its FUSE patch is itemzflow's and was not tried with Lodestar (it was on 13.52 and 6.72). If the console freezes when the share is mounted, restart it and turn the NAS off.</span>
     <label class="check"><input type="checkbox" id="s-nas"> Use a network share (read only)</label>
     <span class="hint" style="margin-top:-8px">Firmware 5.05 to 13.52, and only with pkgs used where they are: the share
       is never renamed or moved. It needs a wired console or a good Wi-Fi: games read at the speed of the network.</span>
@@ -369,10 +401,10 @@ button.small{padding:4px 12px;font-size:13px}
 <dialog id="drivedlg"><h3>Google Drive</h3>
 <div id="d-off">
   <p class="hint" style="color:var(--muted)">Copies of your games in your own Google Drive: back up the library, send a game, and
-    download it back to any drive of the console. PS4Mount can only see the files it puts in Drive (folder PS4Mount), nothing
+    download it back to any drive of the console. Lodestar can only see the files it puts in Drive (folder PS4Mount), nothing
     else of your Drive.</p>
   <form class="settings" id="d-setup" hidden>
-    <div class="note">First, your own Google client (once). PS4Mount comes with none: yours stays on this console only.</div>
+    <div class="note">First, your own Google client (once). Lodestar comes with none: yours stays on this console only.</div>
     <ol class="meta" style="margin:0;padding-left:20px;line-height:1.6">
       <li>Open <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a>, create a project and enable the Google Drive API.</li>
       <li>In Google Auth Platform (OAuth consent screen): audience External, and add your Google email in Audience → Test users (the app stays in Testing).</li>
@@ -632,12 +664,12 @@ function renderStorage() {
   el.hidden = !html;
 }
 
-/* Settings: what PS4Mount keeps on the console's own drive (GET /api/storage, read only). */
+/* Settings: what Lodestar keeps on the console's own drive (GET /api/storage, read only). */
 function sizeText(n) { return n >= 1073741824 ? gbs(n) + ' GB' : (n / 1048576).toFixed(n >= 104857600 ? 0 : 1) + ' MB'; }
 function renderStorageBox() {
   var rows = $('st-rows'), names = {
     install: t('Pkgs sent to install (deleted once installed)'), log: t('Log'),
-    state: t('PS4Mount settings and records'), holds: t("Records of the library's games"),
+    state: t('Lodestar settings and records'), holds: t("Records of the library's games"),
     playgo: t("PlayGo records of the library's games"), appmeta: t("Icons and sounds of the library's games"),
     library: t('Pkgs in the internal library')};
   rows.textContent = '';
@@ -720,7 +752,7 @@ function load() {
   if (loadBusy) { loadAgain = true; return load.last; }
   loadBusy = true;
   load.last = api('/api/games').then(function (j) {
-    /* a new PS4Mount loaded while this page was open: its own page, not this one */
+    /* a new Lodestar loaded while this page was open: its own page, not this one */
     if (load.version && j.version !== load.version) { location.reload(); return; }
     load.version = j.version;
     setLang(j.lang);
@@ -737,8 +769,10 @@ function load() {
     renderActivity();
     renderNotices();
     $('ver').textContent = j.version; $('setupnote').hidden = !j.setup;
+    $('mc-ver').textContent = j.version;
+    $('mc-dot').className = 'dot ok';
   })
-    .catch(function (e) { toast(t('Could not read the list: {0}', e.message)); })
+    .catch(function (e) { toast(t('Could not read the list: {0}', e.message)); $('mc-dot').className = 'dot bad'; })
     .then(function () {
       loadBusy = false;
       if (loadAgain) { loadAgain = false; load(); }
@@ -763,7 +797,7 @@ function onAction(e) {
   var tid = b.getAttribute('data-t'), a = b.getAttribute('data-a');
   if (a === 'unmount' && !confirm(t('Remove {0} from the library? Its pkgs stay where they are (deleting it on the console deletes them).', tid))) return;
   if (a === 'restore' && !confirm(t('Restore the original files of {0}?\n\nThe game leaves the console and its pkgs (game, update and add-ons) go back ' +
-      'where they were, with the names they had. The open game is closed first. PS4Mount stops using these pkgs. Nothing is ' +
+      'where they were, with the names they had. The open game is closed first. Lodestar stops using these pkgs. Nothing is ' +
       'deleted.', tid))) return;
   busy[tid] = 1; render();
   api('/api/' + a + '?title_id=' + tid, 'POST').then(function (j) { toast(j.message); })
@@ -803,7 +837,7 @@ $('settingsbtn').onclick = function () {
     $('s-autorun').disabled = !c.autorun_ok && !c.autorun;
     $('autorun-hint').textContent = c.autorun_ok ?
       t('Payload found: {0}. Enable Settings > GoldHEN > PayLoader > Enable AutoRun. Hold L1 at boot to skip AutoRun.', c.autorun_path) :
-      t('Payload file not found. Copy ps4mount-ps4.bin to /data/payloads/ or /data/GoldHEN/payloads/ to enable AutoRun.');
+      t('Payload file not found. Copy lodestar-ps4.bin to /data/payloads/ or /data/GoldHEN/payloads/ to enable AutoRun.');
     var nasOk = !!c.nas_supported;
     $('s-nas').checked = !!c.nas;
     $('s-nas').disabled = !nasOk;
@@ -950,8 +984,8 @@ $('s-restore').onclick = function () {
   var size = restoreSize();
   if (!size) return;
   if (!confirm(t('WARNING: this restores the original files of ALL {0} games: their pkgs (game, update and add-ons) go back ' +
-      'where they were, with the names they had.\n\nThe open game is closed now, without saving. All PS4Mount games leave ' +
-      'the console, {1} at a time, and PS4Mount stops using these pkgs. Nothing is deleted.\n\nContinue?', games.length, size))) return;
+      'where they were, with the names they had.\n\nThe open game is closed now, without saving. All Lodestar games leave ' +
+      'the console, {1} at a time, and Lodestar stops using these pkgs. Nothing is deleted.\n\nContinue?', games.length, size))) return;
   startRestore(size);
 };
 function pickUpdate() {
@@ -970,7 +1004,7 @@ $('s-pick').onclick = function () {
       '<td>' + esc(g.name) + '<div class="meta">' + g.title_id + ' · ' + esc(g.source) + '</div></td>' +
       '<td>' + esc(movedBack(g)) + '</td></tr>';
   });
-  $('p-rows').innerHTML = rows || '<tr><td colspan="3">' + t('No PS4Mount games on the connected drives') + '</td></tr>';
+  $('p-rows').innerHTML = rows || '<tr><td colspan="3">' + t('No Lodestar games on the connected drives') + '</td></tr>';
   pickUpdate();
   $('pickdlg').showModal();
 };
@@ -1195,7 +1229,7 @@ $('send-close').onclick = function () { $('senddlg').close(); };
 window.addEventListener('beforeunload', function (e) { if (sending) { e.preventDefault(); e.returnValue = ''; } });
 
 $('stop').onclick = function () {
-  if (!confirm(t('Stop PS4Mount? The games stay unavailable until it is loaded again.'))) return;
+  if (!confirm(t('Stop Lodestar? The games stay unavailable until it is loaded again.'))) return;
   api('/api/stop', 'POST').then(function (j) { toast(j.message); });
 };
 load();
@@ -1332,7 +1366,7 @@ function loadDrive() {
     var inDrive = (j.games || []).map(function (g) { return g.title_id; }).join();
     if (inDrive !== loadDrive.seen) { loadDrive.seen = inDrive; render(); } /* the cards' Drive marks */
     renderDrive();
-  }).catch(function () { /* an older PS4Mount: no Drive */ });
+  }).catch(function () { /* an older Lodestar: no Drive */ });
 }
 /* The drives Drive downloads and links can go to, in both selects. */
 function loadDests() {
@@ -1365,7 +1399,7 @@ $('d-setup').onsubmit = function (e) {
 };
 $('d-refresh').onclick = function () { driveAct('refresh'); loadDests(); };
 $('d-disconnect').onclick = function () {
-  if (confirm(t('Disconnect Google Drive? The copies stay in your Drive; PS4Mount forgets the account.'))) driveAct('disconnect');
+  if (confirm(t('Disconnect Google Drive? The copies stay in your Drive; Lodestar forgets the account.'))) driveAct('disconnect');
 };
 $('backupbtn').onclick = $('d-backup').onclick = function () {
   if (confirm(t('Back up the whole library to Google Drive? Games already there are skipped. The console must stay on (not in rest mode) until it ends.'))) driveAct('upload');
@@ -1440,7 +1474,7 @@ function loadLinks() {
     if (linksBusyBefore && !busyNow) load(); /* new pkgs are in the library soon */
     linksBusyBefore = busyNow;
     renderLinks();
-  }).catch(function () { /* an older PS4Mount: no links */ });
+  }).catch(function () { /* an older Lodestar: no links */ });
 }
 $('linkbtn').onclick = function () { $('linkdlg').showModal(); renderLinks(); loadDests(); loadLinks(); };
 $('empty-links').onclick = $('linkbtn').onclick;

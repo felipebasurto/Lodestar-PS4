@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 gasb07
  * The browser as the console's helper: the console's own HTTPS tops out near 10-15 MB/s,
- * its network takes twice that. While a download runs, PS4Mount hands out its blocks on
+ * its network takes twice that. While a download runs, Lodestar hands out its blocks on
  * port 8771: /claim gives one (the address, the range), the browser fetches it at the
  * computer's speed (with its cookies) and delivers it with /put, or gives it back with
  * /drop when it cannot. With the browser closed, the console goes on alone. */
@@ -43,7 +43,7 @@ async function relayWorker(host) {
 function relayKick() {
   settings().then(function (s) {
     if (!s.relay || !s.host || running) return;
-    /* the port PS4Mount listens on (8771, or a next one when that was taken) */
+    /* the port Lodestar listens on (8771, or a next one when that was taken) */
     return panel(s.host, '/api/links').then(function (j) {
       if (!j.relay_port) return;
       relayPort = j.relay_port;

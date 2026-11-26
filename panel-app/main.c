@@ -1,7 +1,9 @@
-/* The panel app: a home screen tile that shows PS4Mount's panel full screen in the in-app
+/* The panel app: a home screen tile that shows Lodestar's panel full screen in the in-app
  * web browser dialog, so the system browser keeps its own page (a WebKit jailbreak host).
- * The dialog has no bar to leave it: Back on the panel's first page asks PS4Mount to close
- * this app (/api/app/close). Without PS4Mount loaded it says so and ends. */
+ * The dialog has no bar to leave it: Back on the panel's first page asks Lodestar to close
+ * this app (/api/app/close). Without Lodestar loaded it says so and ends.
+ * Rebrand note: visible texts say Lodestar; the operational paths stay the legacy ones
+ * (/data/ps4mount is the payload's data folder) and the panel port is unchanged. */
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdarg.h>
@@ -67,7 +69,7 @@ static int user_id(void) {
     return user;
 }
 
-/* PS4Mount answers on its port. */
+/* Lodestar answers on its port. */
 static int panel_up(void) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in a;
@@ -145,9 +147,9 @@ int main(void) {
     int es = lang == 3 || lang == 20; /* lang_from_console in src/lang.c */
     snprintf(url, sizeof(url), "http://127.0.0.1:%d/?app=1", PANEL_PORT);
     if (!panel_up()) {
-        lg("PS4Mount is not running");
-        message(es ? "PS4Mount no está en marcha.\n\nCárgalo con GoldHEN (Payloader o BinLoader) y abre esta app otra vez."
-                   : "PS4Mount is not running.\n\nLoad it with GoldHEN (Payloader or BinLoader), then open this app again.");
+        lg("Lodestar is not running");
+        message(es ? "Lodestar no está en marcha.\n\nCárgalo con GoldHEN (Payloader o BinLoader) y abre esta app otra vez."
+                   : "Lodestar is not running.\n\nLoad it with GoldHEN (Payloader or BinLoader), then open this app again.");
     } else if (show_panel(url)) {
         message(es ? "No se pudo mostrar el panel. Ábrelo en el navegador: http://127.0.0.1:8770"
                    : "The panel could not be shown. Open it in the web browser: http://127.0.0.1:8770");

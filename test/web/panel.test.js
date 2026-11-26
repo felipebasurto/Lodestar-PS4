@@ -135,6 +135,9 @@ function tKeys(file) {
   let { w, d, reqs } = p;
   await tick();
   ok(p.nav.length === 0, 'index with <dialog> stays');
+  ok(d.querySelector('h1').textContent === 'Lodestar' && d.querySelector('.tagline').textContent.includes('PlayStation 4'), 'the brand header names Lodestar and what it is');
+  ok(d.querySelector('.brand-mark') !== null && fs.readFileSync(W + 'index.html', 'utf8').includes('image/svg+xml'), 'the compass-star brand mark and favicon');
+  ok(d.getElementById('mc-ver').textContent === 'PS4Mount test' && d.getElementById('mc-dot').className === 'dot ok', 'the header status pill follows the version the console reports');
   ok(d.querySelectorAll('.card').length === 6, 'six game cards');
   ok(d.querySelector('.card .name').textContent === 'Civ VII', 'cards sorted by name');
   { const c = d.querySelector('[data-g="CUSA34284"]'), pane = d.getElementById('inspector');
@@ -635,6 +638,7 @@ function tKeys(file) {
   await tick();
   ok(d.documentElement.lang === 'es', 'the page takes the language the console reports');
   ok(d.getElementById('rescan').textContent === 'Buscar juegos' && d.getElementById('settingsbtn').textContent === 'Ajustes', 'fixed texts in Spanish');
+  ok(d.querySelector('.tagline').textContent === 'control de la biblioteca externa de juegos para PlayStation 4', 'the tagline in Spanish');
   ok(d.getElementById('q').placeholder === 'Buscar juego o CUSA', 'placeholders in Spanish');
   { const pane = d.getElementById('inspector');
     const c = d.querySelector('[data-g="CUSA34284"]'); c.click();
@@ -673,7 +677,7 @@ function tKeys(file) {
     while ((n = walker.nextNode())) {
       if (/^(SCRIPT|STYLE|PRE|TEXTAREA|OPTION)$/.test(n.parentNode.nodeName)) continue;
       const k = n.nodeValue.replace(/\s+/g, ' ').trim();
-      if (k && /[a-z]{3}/.test(k) && !n.psmEn && !/^(PS4Mount|Log|\.pkg)$/.test(k)) left.push(k);
+      if (k && /[a-z]{3}/.test(k) && !n.psmEn && !/^(PS4Mount|Lodestar|Log|\.pkg)$/.test(k)) left.push(k);
     }
     ok(!left.length, f + ': every fixed text in Spanish' + (left.length ? ': ' + JSON.stringify(left) : ''));
   });
@@ -740,6 +744,7 @@ function tKeys(file) {
   p = page('legacy.html', {}); ({ w, d, reqs } = p);
   await tick();
   ok(d.querySelectorAll('.card').length === 6 && d.getElementById('ver').textContent === 'PS4Mount test', 'legacy lists the games');
+  ok(d.querySelector('h1').textContent === 'Lodestar', 'legacy names Lodestar');
   ok(d.body.textContent.includes('Restart to play') && d.getElementById('restart-banner').textContent.includes('one-time console restart'), 'legacy shows the restart state');
   ok(!/=>|\blet\b|\bconst\b|`|fetch\(|showModal|<dialog/.test(fs.readFileSync(W + 'legacy.html', 'utf8').split('<script>')[1]), 'legacy script is ES5 without fetch or dialog');
   d.getElementById('nav-settings').click(); await tick();

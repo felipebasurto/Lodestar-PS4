@@ -2,6 +2,22 @@
 
 PS4Mount PS4 is a PS4-only port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (PS5); its versions start again at 0.1.0. The history of the original is in its project and in this repository's git history.
 
+## 2.0.0
+
+**Lodestar: the project becomes independent.** PS4Mount PS4 is renamed **Lodestar** and is published as [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4). It is not presented as a fork anymore: it started as a PS4 port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (for the PS5) and keeps, as the GPL requires, the attribution to gasb07/PS4Mount as the origin project, its copyright notices and the GPL-3.0-or-later license.
+
+- **Artifacts renamed**: the payload is `lodestar-ps4.elf` / `lodestar-ps4.bin`, the panel app `lodestar-panel.pkg` (content id `IV0000-LDST00001_00-LODESTARPANEL000`, home screen title "Lodestar") and the browser extension `lodestar-extension.zip`.
+- **Operational names stay for compatibility**: `/data/ps4mount/` (settings, log, state), the `PS4Mount` scan folder on USB drives, `/data/PS4Mount` on the console's storage and the panel protocol headers (`X-PS4Mount`, `X-PS4Mount-Password`) keep their old names, so existing consoles, settings, libraries and extensions keep working. Nothing on a console that already uses it needs to be moved or renamed.
+- **The panel's HTTP API is documented for agents and scripts** (README, and the full route table in AI-WORKFLOW.md section 3): the library, settings, log, scans, uploads, downloads from links and Google Drive can be driven by an agent with a terminal on the local network.
+- **Panel app**: visible texts are now Lodestar's; it still shows the same panel (port 8770 unchanged) and closes with Back on the first page.
+
+**Español**
+
+- **Lodestar: el proyecto se independiza.** PS4Mount PS4 pasa a llamarse **Lodestar** y se publica como [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4). Ya no se presenta como un fork: nació como un port para PS4 de [PS4Mount](https://github.com/gasb07/ps4mount) de gasb07 (para PS5) y conserva, como exige la GPL, la atribución a gasb07/PS4Mount como proyecto origen, sus avisos de copyright y la licencia GPL-3.0-or-later.
+- **Artefactos renombrados**: el payload es `lodestar-ps4.elf` / `lodestar-ps4.bin`, la app del panel `lodestar-panel.pkg` y la extensión del navegador `lodestar-extension.zip`.
+- **Los nombres operativos no cambian, por compatibilidad**: `/data/ps4mount/`, la carpeta `PS4Mount` de los USB, `/data/PS4Mount` en la memoria interna y las cabeceras del protocolo del panel (`X-PS4Mount`) siguen como estaban: las consolas, los ajustes, las bibliotecas y las extensiones que ya lo usan siguen funcionando sin mover ni renombrar nada.
+- **La API HTTP del panel queda documentada para agentes y scripts** (README, y la tabla completa de rutas en AI-WORKFLOW.md, sección 3).
+
 ## 0.7.4-fix
 
 Fixes on top of 0.7.4-beta.

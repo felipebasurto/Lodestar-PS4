@@ -5,6 +5,7 @@
 var LANGS = {
   es: {
     /* fixed texts of the pages */
+    'external game library control for PlayStation 4': 'control de la biblioteca externa de juegos para PlayStation 4',
     'Search game or CUSA': 'Buscar juego o CUSA',
     'Scan for games': 'Buscar juegos',
     'Send games': 'Enviar juegos',
@@ -52,18 +53,18 @@ var LANGS = {
       'Los pkgs enviados a la memoria de la consola se añaden desde ahí, sin esperar una instalación. Ocupan espacio interno.',
     "Console storage: turn on \"Also use pkgs in the console's /data/PS4Mount\" in Settings":
       'Memoria de la consola: activa "Usar también los pkgs de /data/PS4Mount de la consola" en Ajustes',
-    'External mode mounts add-on packages from the source drive. Console storage installs add-ons up to 256 MB each, or any size with the big-add-ons option. Off disables add-ons managed by PS4Mount.':
-      'El modo externo monta los paquetes de DLC desde la unidad de origen. El modo interno instala DLC de hasta 256 MB cada uno, o de cualquier tamaño con la opción de DLC grandes. Apagado desactiva los DLC gestionados por PS4Mount.',
+    'External mode mounts add-on packages from the source drive. Console storage installs add-ons up to 256 MB each, or any size with the big-add-ons option. Off disables add-ons managed by Lodestar.':
+      'El modo externo monta los paquetes de DLC desde la unidad de origen. El modo interno instala DLC de hasta 256 MB cada uno, o de cualquier tamaño con la opción de DLC grandes. Apagado desactiva los DLC gestionados por Lodestar.',
     'System and GoldHEN': 'Sistema y GoldHEN',
-    'Off (the default): the .pkg files are used where they are, anywhere on the drive, grouped by their title ID. They are not renamed or moved; the games PS4Mount organized before go back to where they were.':
-      'Apagado (por defecto): los .pkg se usan donde están, en cualquier parte de la unidad, agrupados por su título. No se renombran ni se mueven; los juegos que PS4Mount organizó antes vuelven a su sitio.',
+    'Off (the default): the .pkg files are used where they are, anywhere on the drive, grouped by their title ID. They are not renamed or moved; the games Lodestar organized before go back to where they were.':
+      'Apagado (por defecto): los .pkg se usan donde están, en cualquier parte de la unidad, agrupados por su título. No se renombran ni se mueven; los juegos que Lodestar organizó antes vuelven a su sitio.',
     "Read the console's log (game start and stop)": 'Leer el log de la consola (inicio y fin de juego)',
     "On by default. Turn it off to leave the log to another payload: AnyPad needs it to tell its virtual pad apart, and only one payload can read it. Games in play are then noticed a few seconds later, from their mount.":
       'Activado por defecto. Desactivalo para dejarle el log a otro payload: AnyPad lo necesita para distinguir su pad virtual, y solo un payload puede leerlo. Los juegos en marcha se notan unos segundos más tarde, por su montaje.',
     'NAS (NFS or SMB)': 'NAS (NFS o SMB)',
     'Not available on this firmware: there is no FUSE patch for it.': 'No disponible en este firmware: no hay parche de FUSE para él.',
-    "Experimental on this firmware: its FUSE patch is itemzflow's and was not tried with PS4Mount (it was on 13.52 and 6.72). If the console freezes when the share is mounted, restart it and turn the NAS off.":
-      'Experimental en este firmware: su parche de FUSE es el de itemzflow y no se ha probado con PS4Mount (sí en 13.52 y 6.72). Si la consola se cuelga al montar el recurso, reiníciala y apaga el NAS.',
+    "Experimental on this firmware: its FUSE patch is itemzflow's and was not tried with Lodestar (it was on 13.52 and 6.72). If the console freezes when the share is mounted, restart it and turn the NAS off.":
+      'Experimental en este firmware: su parche de FUSE es el de itemzflow y no se ha probado con Lodestar (sí en 13.52 y 6.72). Si la consola se cuelga al montar el recurso, reiníciala y apaga el NAS.',
     'Use a network share (read only)': 'Usar un recurso de red (solo lectura)',
     'Firmware 5.05 to 13.52, and only with pkgs used where they are: the share is never renamed or moved. It needs a wired console or a good Wi-Fi: games read at the speed of the network.':
       'Firmware 5.05 a 13.52, y solo con los pkgs usados donde están: el recurso nunca se renombra ni se mueve. Hace falta la consola por cable o un buen Wi-Fi: los juegos leen a la velocidad de la red.',
@@ -150,10 +151,10 @@ var LANGS = {
       'A cada juego elegido se le devuelven sus pkgs donde estaban, con su actualización y todos sus DLC. Antes se cierra el juego abierto.',
     'Files': 'Archivos',
     'Restore the chosen ones': 'Restaurar los elegidos',
-    'Restore the original files of {0}?\n\nThe game leaves the console and its pkgs (game, update and add-ons) go back where they were, with the names they had. The open game is closed first. PS4Mount stops using these pkgs. Nothing is deleted.':
-      '¿Restaurar los archivos originales de {0}?\n\nEl juego sale de la consola y sus pkgs (juego, actualización y DLC) vuelven donde estaban, con el nombre que tenían. Antes se cierra el juego abierto. PS4Mount deja de usar esos pkgs. No se borra nada.',
-    'WARNING: this restores the original files of ALL {0} games: their pkgs (game, update and add-ons) go back where they were, with the names they had.\n\nThe open game is closed now, without saving. All PS4Mount games leave the console, {1} at a time, and PS4Mount stops using these pkgs. Nothing is deleted.\n\nContinue?':
-      'ATENCIÓN: esto restaura los archivos originales de LOS {0} juegos: sus pkgs (juego, actualización y DLC) vuelven donde estaban, con el nombre que tenían.\n\nEl juego abierto se cierra ahora, sin guardar. Todos los juegos de PS4Mount salen de la consola, de {1} en {1}, y PS4Mount deja de usar esos pkgs. No se borra nada.\n\n¿Continuar?',
+    'Restore the original files of {0}?\n\nThe game leaves the console and its pkgs (game, update and add-ons) go back where they were, with the names they had. The open game is closed first. Lodestar stops using these pkgs. Nothing is deleted.':
+      '¿Restaurar los archivos originales de {0}?\n\nEl juego sale de la consola y sus pkgs (juego, actualización y DLC) vuelven donde estaban, con el nombre que tenían. Antes se cierra el juego abierto. Lodestar deja de usar esos pkgs. No se borra nada.',
+    'WARNING: this restores the original files of ALL {0} games: their pkgs (game, update and add-ons) go back where they were, with the names they had.\n\nThe open game is closed now, without saving. All Lodestar games leave the console, {1} at a time, and Lodestar stops using these pkgs. Nothing is deleted.\n\nContinue?':
+      'ATENCIÓN: esto restaura los archivos originales de LOS {0} juegos: sus pkgs (juego, actualización y DLC) vuelven donde estaban, con el nombre que tenían.\n\nEl juego abierto se cierra ahora, sin guardar. Todos los juegos de Lodestar salen de la consola, de {1} en {1}, y Lodestar deja de usar esos pkgs. No se borra nada.\n\n¿Continuar?',
     'Restore the original files of {0} game(s), each with its update and all its add-ons?\n\nThe open game is closed now, without saving. The games leave the console{1}. Nothing is deleted.':
       '¿Restaurar los archivos originales de {0} juego(s), cada uno con su actualización y todos sus DLC?\n\nEl juego abierto se cierra ahora, sin guardar. Los juegos salen de la consola{1}. No se borra nada.',
     'Use the restored pkgs again? They are moved into the ps4 folder and added on the next scan.':
@@ -184,8 +185,8 @@ var LANGS = {
     'measuring the speed…': 'midiendo la velocidad…',
     'running for {0}': 'lleva {0}',
     'less than a minute': 'menos de un minuto',
-    'First, your own Google client (once). PS4Mount comes with none: yours stays on this console only.':
-      'Primero, tu propio cliente de Google (una sola vez). PS4Mount no trae ninguno: el tuyo se queda solo en esta consola.',
+    'First, your own Google client (once). Lodestar comes with none: yours stays on this console only.':
+      'Primero, tu propio cliente de Google (una sola vez). Lodestar no trae ninguno: el tuyo se queda solo en esta consola.',
     'Open': 'Abre',
     ', create a project and enable the Google Drive API.': ', crea un proyecto y activa la Google Drive API.',
     'In Google Auth Platform (OAuth consent screen): audience External, and add your Google email in Audience → Test users (the app stays in Testing).':
@@ -200,8 +201,8 @@ var LANGS = {
     'console.cloud.google.com': 'console.cloud.google.com',
     'Back up to Drive': 'Copia en Drive',
     'Connect Google Drive': 'Conectar Google Drive',
-    'Copies of your games in your own Google Drive: back up the library, send a game, and download it back to any drive of the console. PS4Mount can only see the files it puts in Drive (folder PS4Mount), nothing else of your Drive.':
-      'Copias de tus juegos en tu propio Google Drive: haz una copia de la biblioteca, envía un juego y descárgalo después a cualquier unidad de la consola. PS4Mount solo puede ver los archivos que él pone en Drive (carpeta PS4Mount), nada más de tu Drive.',
+    'Copies of your games in your own Google Drive: back up the library, send a game, and download it back to any drive of the console. Lodestar can only see the files it puts in Drive (folder PS4Mount), nothing else of your Drive.':
+      'Copias de tus juegos en tu propio Google Drive: haz una copia de la biblioteca, envía un juego y descárgalo después a cualquier unidad de la consola. Lodestar solo puede ver los archivos que él pone en Drive (carpeta PS4Mount), nada más de tu Drive.',
     'On your phone or computer, open': 'En el móvil o el ordenador, abre',
     'and type this code:': 'y escribe este código:',
     'Waiting for you to allow it in your Google account…': 'Esperando a que lo permitas en tu cuenta de Google…',
@@ -229,8 +230,8 @@ var LANGS = {
     'Delete from Drive': 'Borrar de Drive',
     "Nothing in Google Drive yet: use Back up the library, or Send to Drive on a game's page.":
       'Aún no hay nada en Google Drive: usa Copiar la biblioteca, o Enviar a Drive en la ficha de un juego.',
-    'Disconnect Google Drive? The copies stay in your Drive; PS4Mount forgets the account.':
-      '¿Desconectar Google Drive? Las copias se quedan en tu Drive; PS4Mount olvida la cuenta.',
+    'Disconnect Google Drive? The copies stay in your Drive; Lodestar forgets the account.':
+      '¿Desconectar Google Drive? Las copias se quedan en tu Drive; Lodestar olvida la cuenta.',
     'Back up the whole library to Google Drive? Games already there are skipped. The console must stay on (not in rest mode) until it ends.':
       '¿Copiar toda la biblioteca a Google Drive? Los juegos que ya están se saltan. La consola debe seguir encendida (no en reposo) hasta que termine.',
     'Stop the Drive transfer? An upload goes on from where it was the next time.':
@@ -247,11 +248,11 @@ var LANGS = {
     'PS4 games': 'Juegos de PS4',
     'Classics': 'Clásicos',
     'Homebrew': 'Homebrew',
-    "What PS4Mount keeps on the console's drive": 'Lo que PS4Mount guarda en el disco de la consola',
-    'Read only: this list measures, it deletes nothing. PS4Mount cleans its own temporary files by itself and writes each one to the log.':
-      'Solo lectura: esta lista mide, no borra nada. PS4Mount limpia solo sus archivos temporales y deja cada uno en el log.',
+    "What Lodestar keeps on the console's drive": 'Lo que Lodestar guarda en el disco de la consola',
+    'Read only: this list measures, it deletes nothing. Lodestar cleans its own temporary files by itself and writes each one to the log.':
+      'Solo lectura: esta lista mide, no borra nada. Lodestar limpia solo sus archivos temporales y deja cada uno en el log.',
     'Pkgs sent to install (deleted once installed)': 'Pkgs enviados para instalar (se borran al instalarse)',
-    'PS4Mount settings and records': 'Ajustes y registros de PS4Mount',
+    'Lodestar settings and records': 'Ajustes y registros de Lodestar',
     "Records of the library's games": 'Registros de los juegos de la biblioteca',
     "PlayGo records of the library's games": 'Registros PlayGo de los juegos de la biblioteca',
     "Icons and sounds of the library's games": 'Iconos y sonidos de los juegos de la biblioteca',
@@ -261,15 +262,15 @@ var LANGS = {
     'Nothing is installed: the game plays straight from its .pkg files.':
       'No está instalado: el juego se juega directamente desde sus .pkg.',
     'Where the games are': 'Dónde están los juegos',
-    'Nothing is installed: each game plays straight from its .pkg files on a USB drive, a NAS share, or the console\'s /data/PS4Mount when the internal-storage option is on. PS4Mount only adds it to the home screen; the pkgs are never copied for it.':
-      'No se instala nada: cada juego se juega directamente desde sus .pkg en un USB, un recurso de red o el /data/PS4Mount de la consola cuando la opción de memoria interna está activada. PS4Mount solo lo añade a la pantalla de inicio; los pkgs nunca se copian para ello.',
-    'Add-ons come from the drive too: external mode mounts their packages from the source drive, console storage installs them on the console (up to 256 MB each, or any size with the big-add-ons option), off disables add-ons managed by PS4Mount. Removing a game from the library, or restoring its files, never deletes a .pkg.':
-      'Los DLC también vienen de la unidad: el modo externo monta los paquetes desde la unidad de origen, la memoria de la consola los instala en la consola (hasta 256 MB cada uno, o cualquier tamaño con la opción de DLC grandes) y apagado desactiva los DLC gestionados por PS4Mount. Quitar un juego de la biblioteca, o devolver sus archivos, nunca borra un .pkg.',
+    'Nothing is installed: each game plays straight from its .pkg files on a USB drive, a NAS share, or the console\'s /data/PS4Mount when the internal-storage option is on. Lodestar only adds it to the home screen; the pkgs are never copied for it.':
+      'No se instala nada: cada juego se juega directamente desde sus .pkg en un USB, un recurso de red o el /data/PS4Mount de la consola cuando la opción de memoria interna está activada. Lodestar solo lo añade a la pantalla de inicio; los pkgs nunca se copian para ello.',
+    'Add-ons come from the drive too: external mode mounts their packages from the source drive, console storage installs them on the console (up to 256 MB each, or any size with the big-add-ons option), off disables add-ons managed by Lodestar. Removing a game from the library, or restoring its files, never deletes a .pkg.':
+      'Los DLC también vienen de la unidad: el modo externo monta los paquetes desde la unidad de origen, la memoria de la consola los instala en la consola (hasta 256 MB cada uno, o cualquier tamaño con la opción de DLC grandes) y apagado desactiva los DLC gestionados por Lodestar. Quitar un juego de la biblioteca, o devolver sus archivos, nunca borra un .pkg.',
     'Start with the console (GoldHEN AutoRun)': 'Arrancar con la consola (AutoRun de GoldHEN)',
     'Payload found: {0}. Enable Settings > GoldHEN > PayLoader > Enable AutoRun. Hold L1 at boot to skip AutoRun.':
       'Payload encontrado: {0}. Activa Ajustes > GoldHEN > PayLoader > Enable AutoRun. Mantén L1 al arrancar para saltar AutoRun.',
-    'Payload file not found. Copy ps4mount-ps4.bin to /data/payloads/ or /data/GoldHEN/payloads/ to enable AutoRun.':
-      'No se encontró el archivo del payload. Copia ps4mount-ps4.bin a /data/payloads/ o /data/GoldHEN/payloads/ para activar AutoRun.',
+    'Payload file not found. Copy lodestar-ps4.bin to /data/payloads/ or /data/GoldHEN/payloads/ to enable AutoRun.':
+      'No se encontró el archivo del payload. Copia lodestar-ps4.bin a /data/payloads/ o /data/GoldHEN/payloads/ para activar AutoRun.',
     'Adding': 'Añadiéndose',
     'On another drive': 'En otra unidad',
     'Drive not connected': 'Unidad no conectada',
@@ -318,7 +319,7 @@ var LANGS = {
     '{0} game(s) selected': '{0} juego(s) elegido(s)',
     ', removed from the library {0} at a time': ', salen de la biblioteca de {0} en {0}',
     'No games selected': 'No hay juegos elegidos',
-    'No PS4Mount games on the connected drives': 'No hay juegos de PS4Mount en las unidades conectadas',
+    'No Lodestar games on the connected drives': 'No hay juegos de Lodestar en las unidades conectadas',
     ', {0} at a time': ', de {0} en {0}',
     '{0} free': '{0} libres',
     'No drive connected': 'No hay ninguna unidad conectada',
@@ -337,8 +338,8 @@ var LANGS = {
     'the connection to the console was lost': 'se perdió la conexión con la consola',
     'cancelled': 'cancelado',
     'Cancel the transfer in progress?': '¿Cancelar el envío en curso?',
-    'Stop PS4Mount? The games stay unavailable until it is loaded again.':
-      '¿Detener PS4Mount? Los juegos no se podrán abrir hasta que se vuelva a cargar.',
+    'Stop Lodestar? The games stay unavailable until it is loaded again.':
+      '¿Detener Lodestar? Los juegos no se podrán abrir hasta que se vuelva a cargar.',
     /* downloads from links */
     'Download links': 'Descargar enlaces',
     'The console downloads them itself (you can close this page): a pkg, a ZIP or a RAR, also in parts. Paste the direct links, the ones that start the download, one per line; all the parts of a RAR (name.part1.rar, name.part2.rar...) become one download. Its pkgs are added to the library when they arrive.':

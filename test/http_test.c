@@ -97,6 +97,24 @@ static const char *postw(const char *path, const char *body) {
     return ask(req);
 }
 
+static int occurrences(const char *text, const char *needle) {
+    int n = 0;
+    while ((text = strstr(text, needle))) {
+        n++;
+        text += strlen(needle);
+    }
+    return n;
+}
+
+/* The application-owned fragment of /api/status, in the shape main.c installs. */
+static void test_status_state(buf_t *out) {
+    static const char state[] = "\"setup\":true,\"activity\":{\"busy\":true,\"phase\":\"scanning\",\"drive\":\"usb0\","
+                                "\"title\":\"Test Game\",\"title_id\":\"CUSA00001\",\"done\":2,\"total\":5,\"group\":1,"
+                                "\"groups\":3,\"dlc_pending\":[{\"content_id\":\"EP0001-CUSA00001_00-TESTDLC000000000\","
+                                "\"name\":\"Test DLC\",\"size\":123,\"elapsed\":4}]},\"notices\":[{\"ts\":123,\"kind\":\"info\","
+                                "\"text\":\"hello\"}]";
+    buf_put(out, state, sizeof(state) - 1);
+}
 
 /* One real TCP client of the listening socket used by web_serve/worker-pool tests. */
 static int panel_conn(void) {
@@ -149,10 +167,10 @@ int main(void) {
     const char *r;
     printf("pages\n");
     r = ask("GET / HTTP/1.1\r\n\r\n");
-    CHECK(status(r, "200") && strstr(r, "text/html") && strstr(r, "<title>PS4Mount</title>"));
+    CHECK(status(r, "200") && strstr(r, "text/html") && strstr(r, "<title>Lodestar</title>"));
     CHECK(strstr(r, "location.replace('/legacy'") != NULL);
     r = ask("GET /?app=1 HTTP/1.1\r\n\r\n"); /* the panel app */
-    CHECK(status(r, "200") && strstr(r, "<title>PS4Mount</title>"));
+    CHECK(status(r, "200") && strstr(r, "<title>Lodestar</title>"));
     r = ask("POST /api/app/close HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 0\r\n\r\n");
     CHECK(status(r, "200") && strstr(r, "\"ok\":true"));
     r = ask("GET /legacy HTTP/1.1\r\n\r\n");
@@ -162,6 +180,44 @@ int main(void) {
     r = ask("GET /api/games HTTP/1.1\r\n\r\n");
     CHECK(status(r, "200") && strstr(r, "application/json") && strstr(r, "\"games\""));
     CHECK(strstr(r, "Cache-Control: no-store") != NULL);
+
+    printf("agent observability\n");
+    r = ask("GET /api/agent HTTP/1.1\r\n\r\n");
+    CHECK(status(r, "200") && strstr(r, "application/json"));
+    CHECK(strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.0\"") &&
+          strstr(r, "\"api_version\":1"));
+    CHECK(strstr(r, "\"panel\":{\"scheme\":\"http\",\"port\":8770}") != NULL);
+    CHECK(strstr(r, "\"header\":\"X-Lodestar\"") && strstr(r, "\"legacy_aliases\":[\"X-PS4Mount\"]") &&
+          strstr(r, "\"additional_get_paths\":[\"/api/nas/scan\"]"));
+    CHECK(strstr(r, "\"safety_rails\"") && strstr(r, "\"system_databases_read_only\":true") &&
+          strstr(r, "\"system_delete_never_reaches_pkg\":true"));
+    int endpoints = occurrences(r, "\"method\"");
+    CHECK(endpoints >= 30 && endpoints == occurrences(r, "\"path\"") && endpoints == occurrences(r, "\"mutating\"") &&
+          endpoints == occurrences(r, "\"summary\""));
+    CHECK(strstr(r, "{\"method\":\"GET\",\"path\":\"/api/status\",\"mutating\":false") != NULL);
+    CHECK(strstr(r, "\"path\":\"/api/upload\",\"mutating\":true") != NULL);
+    r = ask("POST /api/agent HTTP/1.1\r\nX-Lodestar: 1\r\nContent-Length: 0\r\n\r\n");
+    CHECK(status(r, "404"));
+
+    r = ask("GET /api/status HTTP/1.1\r\n\r\n");
+    CHECK(status(r, "200") && strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.0\""));
+    CHECK(strstr(r, "\"setup\":false") && strstr(r, "\"activity\":{\"busy\":false") && strstr(r, "\"notices\":[]"));
+    CHECK(strstr(r, "\"queues\":{\"web_owner_pending\":0,\"web_write_pending\":0,\"web_write_active\":0}") != NULL);
+    CHECK(strstr(r, "\"endpoints\":{\"agent\":\"/api/agent\",\"status\":\"/api/status\"") != NULL);
+    CHECK(!strstr(r, "\"games\":["));
+    web_status_provider(test_status_state);
+    r = ask("GET /api/status HTTP/1.1\r\n\r\n");
+    CHECK(strstr(r, "\"setup\":true") && strstr(r, "\"phase\":\"scanning\"") && strstr(r, "\"dlc_pending\"") &&
+          strstr(r, "\"text\":\"hello\""));
+    CHECK(strstr(r, "\"queues\":{\"web_owner_pending\":0") != NULL);
+    r = ask("POST /api/status HTTP/1.1\r\nX-Lodestar: 1\r\nContent-Length: 0\r\n\r\n");
+    CHECK(status(r, "404"));
+    r = ask("HEAD /api/status HTTP/1.1\r\n\r\n");
+    CHECK(status(r, "404"));
+
+    r = ask("GET /api/log HTTP/1.1\r\n\r\n");
+    CHECK(status(r, "200") && strstr(r, "{\"log\":\"") && strstr(r, "\"bytes\":") && strstr(r, "\"truncated\":") &&
+          strstr(r, "\"path\":\"/data/ps4mount/log.txt\""));
 
     printf("state changes need POST\n");
     const char *changing[] = {"/api/mount?title_id=CUSA00001", "/api/unmount?title_id=CUSA00001", "/api/rescan",
@@ -188,9 +244,15 @@ int main(void) {
     int before = g_stub_calls;
     r = post("/api/config", "x=1\r\nX-PS4Mount: 1");
     CHECK(status(r, "403") && g_stub_calls == before);
+    r = post("/api/config", "x=1\r\nX-Lodestar: 1");
+    CHECK(status(r, "403") && g_stub_calls == before);
+    r = ask("POST /api/rescan HTTP/1.1\r\nX-Lodestar: 1\r\nContent-Length: 0\r\n\r\n");
+    CHECK(status(r, "200") && !strcmp(g_stub_call, "rescan-hard"));
     r = ask("GET /api/nas/scan HTTP/1.1\r\n\r\n");
     CHECK(status(r, "403"));
     r = ask("GET /api/nas/scan HTTP/1.1\r\nX-PS4Mount: 1\r\n\r\n");
+    CHECK(status(r, "200") && strstr(r, "192.168.0.19"));
+    r = ask("GET /api/nas/scan HTTP/1.1\r\nx-lodestar: 1\r\n\r\n");
     CHECK(status(r, "200") && strstr(r, "192.168.0.19"));
 
     printf("title ids\n");
@@ -543,6 +605,24 @@ int main(void) {
         CHECK(web_owner_pending() == 0);
         read_response_close(c, resp, sizeof(resp));
         CHECK(status(resp, "200") && strstr(resp, "\"free\":1"));
+
+        c = panel_conn();
+        CHECK(c >= 0);
+        send_req_close_write(c, "GET /api/agent HTTP/1.1\r\n\r\n");
+        web_serve(ls);
+        web_pool_idle_wait();
+        CHECK(web_owner_pending() == 0);
+        read_response_close(c, resp, sizeof(resp));
+        CHECK(status(resp, "200") && strstr(resp, "\"product\":\"Lodestar\""));
+
+        c = panel_conn();
+        CHECK(c >= 0);
+        send_req_close_write(c, "GET /api/status HTTP/1.1\r\n\r\n");
+        web_serve(ls);
+        web_pool_idle_wait();
+        CHECK(web_owner_pending() == 0);
+        read_response_close(c, resp, sizeof(resp));
+        CHECK(status(resp, "200") && strstr(resp, "\"phase\":\"scanning\"") && strstr(resp, "\"web_owner_pending\":0"));
 
         before = g_stub_calls;
         c = panel_conn();

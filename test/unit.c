@@ -609,9 +609,14 @@ static size_t slurp(const char *path, char *out, size_t cap) {
 
 static void test_autorun(void) {
     printf("autorun ini\n");
-    const char *me = "/data/payloads/PS4Mount-PS4.bin";
+    const char *me = "/data/payloads/lodestar-ps4.bin";
 
-    /* the matcher: our file, any path and case; not comments nor look-alikes */
+    /* the matcher: our file, any path and case; not comments nor look-alikes. The legacy
+     * ps4mount names count too: AutoRun replaces them rather than listing both. */
+    CHECK(ini_ours("/data/payloads/lodestar-ps4.bin = 1"));
+    CHECK(ini_ours("/data/GoldHEN/payloads/lodestar-ps4.elf=1"));
+    CHECK(ini_ours("lodestar-ps4.bin"));
+    CHECK(ini_ours("/x/LODESTAR-PS4.BIN\r"));
     CHECK(ini_ours("/data/payloads/ps4mount-ps4.bin = 1"));
     CHECK(ini_ours("/data/GoldHEN/payloads/ps4mount-ps4.elf=1"));
     CHECK(ini_ours("ps4mount-ps4.bin"));
@@ -629,8 +634,8 @@ static void test_autorun(void) {
     CHECK(!ini_ours("[AutoRun]"));
 
     /* on with nothing there: a new section; off: nothing */
-    ini_result(NULL, me, 1, "[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n");
-    ini_result("", me, 1, "[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n");
+    ini_result(NULL, me, 1, "[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n");
+    ini_result("", me, 1, "[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n");
     ini_result(NULL, NULL, 0, "");
     ini_result("", NULL, 0, "");
     {
@@ -643,24 +648,24 @@ static void test_autorun(void) {
 
     /* an existing [AutoRun]: ours goes right under the header, the rest stays */
     ini_result("[AutoRun]\n/data/payloads/other.bin = 1\n", me, 1,
-               "[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n/data/payloads/other.bin = 1\n");
+               "[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n/data/payloads/other.bin = 1\n");
 
     /* [autorun] any case, spaces round it, CRLF endings */
     ini_result("  [AuToRun]  \r\n/data/other/x.bin = 1\r\n", me, 1,
-               "  [AuToRun]  \r\n/data/payloads/PS4Mount-PS4.bin = 1\n/data/other/x.bin = 1\r\n");
+               "  [AuToRun]  \r\n/data/payloads/lodestar-ps4.bin = 1\n/data/other/x.bin = 1\r\n");
 
     /* an older entry, any path, case or extension: replaced, not duplicated */
     ini_result("[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n"
                "/data/GoldHEN/payloads/ps4mount-ps4.elf = 1\n"
                "/data/payloads/other.bin = 1\n",
                me, 1,
-               "[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n/data/payloads/other.bin = 1\n");
+               "[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n/data/payloads/other.bin = 1\n");
 
     /* other sections and comments stay verbatim; ours goes even from another section */
     ini_result("# mine\n[Other]\n/foo.bin = 1\n/old/ps4mount-ps4.bin = 1\n"
                "[AutoRun]\n# /data/ps4mount-ps4.bin = 1\n   ; ps4mount-ps4.elf\n/x.bin = 1\n",
                me, 1,
-               "# mine\n[Other]\n/foo.bin = 1\n[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n"
+               "# mine\n[Other]\n/foo.bin = 1\n[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n"
                "# /data/ps4mount-ps4.bin = 1\n   ; ps4mount-ps4.elf\n/x.bin = 1\n");
 
     /* off: ours goes, everything else stays */
@@ -672,9 +677,9 @@ static void test_autorun(void) {
 
     /* a last line without a line end stays without one; a bare header gets one */
     ini_result("[AutoRun]\n/x.bin = 1", NULL, 0, "[AutoRun]\n/x.bin = 1");
-    ini_result("[AutoRun]", me, 1, "[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n");
-    ini_result("tail", me, 1, "tail\n\n[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n");
-    ini_result("[X]\n", me, 1, "[X]\n\n[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n");
+    ini_result("[AutoRun]", me, 1, "[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n");
+    ini_result("tail", me, 1, "tail\n\n[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n");
+    ini_result("[X]\n", me, 1, "[X]\n\n[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n");
 
     /* applying it twice changes nothing the second time */
     {
@@ -751,7 +756,8 @@ static void test_stage(void) {
         {".ps4mount-upload.part", 7199, 0, STAGE_KEEP},
         {".ps4mount-upload.part", 7200, 0, STAGE_DELETE_PART},
         {".ps4mount-upload.part", 7200, 1, STAGE_KEEP},
-        {"ps4mount-panel.part", 100 * 86400, 1, STAGE_KEEP},
+        {"lodestar-panel.part", 100 * 86400, 1, STAGE_KEEP},
+        {"lodestar-panel.part", 7200, 0, STAGE_DELETE_PART},
         {"ps4mount-panel.part", 7200, 0, STAGE_DELETE_PART},
         /* anything else in the folder is not PS4Mount's to delete */
         {"notes.txt", 100 * 86400, 0, STAGE_KEEP},
