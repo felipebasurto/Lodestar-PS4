@@ -157,6 +157,9 @@ void bgftscan_load(bgftscan_t *s, const char *dir, uint32_t first, uint32_t last
     s->used = NULL;
     s->used_first = 0;
     s->used_count = 0;
+    s->dirs_scanned = 0;
+    s->pdb_reads = 0;
+    s->pdb_bytes = 0;
     if (first > last)
         return;
     /* Allocation needs the even install id below each odd game id as well as the game id.
@@ -184,6 +187,7 @@ void bgftscan_load(bgftscan_t *s, const char *dir, uint32_t first, uint32_t last
     while ((e = readdir(d))) {
         if (!task_dir_id(e->d_name, used_first, last, &id))
             continue;
+        s->dirs_scanned++;
         mark_used(s, id);
         if (id < first)
             continue; /* install task of the first game id: occupancy only, never a game entry */
@@ -194,6 +198,8 @@ void bgftscan_load(bgftscan_t *s, const char *dir, uint32_t first, uint32_t last
         uint8_t *data = read_task(path, &len);
         if (!data)
             continue;
+        s->pdb_reads++;
+        s->pdb_bytes += len;
         if (!bgftscan_reserve(s, n + 1)) {
             mem_free(data);
             closedir(d);

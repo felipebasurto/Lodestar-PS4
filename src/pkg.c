@@ -19,12 +19,14 @@ static int unwrap_key3(pkg_t *pkg);
 static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
 static uint64_t be64(const uint8_t *p) { return (uint64_t)be32(p) << 32 | be32(p + 4); }
 
-static int read_at(int fd, void *buf, size_t len, uint64_t off) {
+static int read_at(pkg_t *pkg, void *buf, size_t len, uint64_t off) {
     uint8_t *p = buf;
     while (len) {
-        ssize_t n = pread(fd, p, len, (off_t)off);
+        ssize_t n = pread(pkg->fd, p, len, (off_t)off);
+        pkg->read_ops++;
         if (n <= 0)
             return -1;
+        pkg->bytes_read += (uint64_t)n;
         p += n;
         len -= (size_t)n;
         off += (uint64_t)n;
@@ -68,7 +70,7 @@ int pkg_open(pkg_t *pkg, const char *path) {
     if (pkg->fd < 0)
         return -1;
     uint8_t header[0x1000];
-    if (read_at(pkg->fd, header, sizeof(header), 0) || be32(header) != 0x7f434e54)
+    if (read_at(pkg, header, sizeof(header), 0) || be32(header) != 0x7f434e54)
         goto fail;
     pkg->content_type = header[0x77];
     memcpy(pkg->content_id, header + 0x40, 36);
@@ -104,7 +106,7 @@ int pkg_open(pkg_t *pkg, const char *path) {
     pkg->entries = count ? malloc(count * sizeof(*pkg->entries)) : NULL;
     if (count && !pkg->entries)
         goto fail;
-    if (read_at(pkg->fd, pkg->entries, count * 32u, table))
+    if (read_at(pkg, pkg->entries, count * 32u, table))
         goto fail;
     pkg->nentries = (int)count;
     return 0;
@@ -139,7 +141,7 @@ uint8_t *pkg_entry(pkg_t *pkg, uint32_t id, size_t *len) {
             return NULL;
         size_t padded = ((size_t)size + 15u) & ~(size_t)15u;
         uint8_t *buf = mem_alloc(padded + 1);
-        if (!buf || read_at(pkg->fd, buf, padded, offset)) {
+        if (!buf || read_at(pkg, buf, padded, offset)) {
             mem_free(buf);
             return NULL;
         }

@@ -66,11 +66,13 @@
 #include "origin.h"
 #include "pkg.h"
 #include "retention.h"
+#include "scanfilter.h"
 #include "scanreq.h"
 #include "restore.h"
 #include "shortpath.h"
 #include "emu.h"
 #include "stage.h"
+#include "telemetry.h"
 #include "titlecache.h"
 #include "web.h"
 #include "icon_data.h"
@@ -452,6 +454,34 @@ static int mounted_from(const char *mountpoint, char *from, size_t n) {
     return 1;
 }
 
+/* Main-loop scan epoch telemetry (P4N-22). Never touched by web worker threads. */
+static scan_metrics_t g_scan_m;
+
+static uint64_t mono_ms(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts))
+        return 0;
+    return (uint64_t)ts.tv_sec * 1000ull + (uint64_t)ts.tv_nsec / 1000000ull;
+}
+
+static void scan_note_usb_stat(const char *path) {
+    if (g_scan_m.active && is_usb_storage_path(path))
+        g_scan_m.usb_stat++;
+}
+
+static void scan_note_usb_pkg(const char *path, const pkg_t *pkg) {
+    if (!g_scan_m.active || !is_usb_storage_path(path))
+        return;
+    g_scan_m.usb_open++;
+    g_scan_m.usb_read += pkg->read_ops;
+    g_scan_m.usb_bytes += pkg->bytes_read;
+}
+
+static void scan_note_mount_read(void) {
+    if (g_scan_m.active)
+        g_scan_m.mount_reads++;
+}
+
 /* Mounts on path from the mount table. Unlike statfs(path) this also sees a layer
  * whose source drive was disconnected (statfs on it fails). */
 static int layers_on(const char *path) {
@@ -461,6 +491,7 @@ static int layers_on(const char *path) {
     struct statfs *list = mem_alloc(sizeof(*list) * (size_t)(n + 16));
     if (!list)
         return 0;
+    scan_note_mount_read();
     n = getfsstat(list, (long)(sizeof(*list) * (size_t)(n + 16)), MNT_NOWAIT);
     for (int i = 0; i < n; i++)
         if (!strcmp(list[i].f_mntonname, path))
@@ -478,6 +509,7 @@ static int layers_on_failclosed(const char *path) {
     struct statfs *list = mem_alloc(sizeof(*list) * (size_t)(n + 16));
     if (!list)
         return 1;
+    scan_note_mount_read();
     n = getfsstat(list, (long)(sizeof(*list) * (size_t)(n + 16)), MNT_NOWAIT);
     if (n < 0) {
         mem_free(list);
@@ -1264,8 +1296,9 @@ static int src_open_snapshot(title_src_t *t, const char *root, const char *tid, 
 
 /* One file in the hash: its path, size and time. A missing one still counts (a pkg that
  * appears or goes away changes the fingerprint). */
-static uint64_t fp_stat(uint64_t h, const char *path) {
+static uint64_t fp_stat(uint64_t h, const char *path, fp_stat_kind_t kind, fp_counts_t *fc) {
     struct stat st;
+    fp_counts_note_stat(fc, kind, path);
     if (!path[0] || stat(path, &st))
         return title_fp_add(h, path, UINT64_MAX, 0);
     return title_fp_add(h, path, (uint64_t)st.st_size, (int64_t)st.st_mtime);
@@ -1273,7 +1306,8 @@ static uint64_t fp_stat(uint64_t h, const char *path) {
 
 /* The add-ons of the game, added to h; order independent (they come from a folder or a
  * catalog, in no fixed order). */
-static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, int inplace, const catsnap_t *snap) {
+static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, int inplace, const catsnap_t *snap,
+                          fp_counts_t *fc) {
     char x[40];
     uint64_t dh = 0;
     int nd = 0;
@@ -1285,7 +1319,7 @@ static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, int inp
             for (uint32_t k = 0; k < nl; k++) {
                 const catsnap_dlc_t *d = &dlcs[g->first_dlc + k];
                 char rm[96];
-                uint64_t v = fp_stat(title_fp_start(), catsnap_path(snap, d->path_off));
+                uint64_t v = fp_stat(title_fp_start(), catsnap_path(snap, d->path_off), FP_STAT_AC, fc);
                 snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", d->content_id);
                 if (exists(rm)) /* deleted on the console: src_open leaves it out too */
                     v ^= 0x9e3779b97f4a7c15ull;
@@ -1299,7 +1333,7 @@ static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, int inp
             int nl = g ? catalog_dlc_of(g_cat, c, g, list, CAT_MAX_DLC) : 0;
             for (int k = 0; k < nl; k++) {
                 char rm[96];
-                uint64_t v = fp_stat(title_fp_start(), list[k]->path);
+                uint64_t v = fp_stat(title_fp_start(), list[k]->path, FP_STAT_AC, fc);
                 snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", list[k]->content_id);
                 if (exists(rm)) /* deleted on the console: src_open leaves it out too */
                     v ^= 0x9e3779b97f4a7c15ull;
@@ -1324,7 +1358,7 @@ static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, int inp
                     continue;
                 char p[PATH_MAX];
                 snprintf(p, sizeof(p), "%s/%s/ac.pkg", sub, f->d_name);
-                dh ^= fp_stat(title_fp_start(), p);
+                dh ^= fp_stat(title_fp_start(), p, FP_STAT_AC, fc);
                 nd++;
             }
             if (l)
@@ -1339,7 +1373,8 @@ static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, int inp
 
 /* The hash of the files of tid on root, from stats only: reading a pkg is a megabyte
  * where each of these is one getattr. */
-static uint64_t title_files_fp_mode(const char *root, const char *tid, const config_t *cfg, const catsnap_t *snap) {
+static uint64_t title_files_fp_mode(const char *root, const char *tid, const config_t *cfg, const catsnap_t *snap,
+                                    fp_counts_t *fc) {
     char app[PATH_MAX], patch[PATH_MAX];
     int inplace = in_place_cfg(cfg);
     app[0] = patch[0] = 0;
@@ -1367,17 +1402,17 @@ static uint64_t title_files_fp_mode(const char *root, const char *tid, const con
         snprintf(app, sizeof(app), "%s/app.pkg", dir);
         snprintf(patch, sizeof(patch), "%s/patch.pkg", dir);
     }
-    uint64_t h = fp_stat(title_fp_start(), app);
-    h = fp_stat(h, patch);
+    uint64_t h = fp_stat(title_fp_start(), app, FP_STAT_APP, fc);
+    h = fp_stat(h, patch, FP_STAT_PATCH, fc);
     /* an update left out (or tried again) changes what the game is */
     char mark[96];
-    h = fp_stat(h, badpatch_path(tid, mark, sizeof(mark)));
+    h = fp_stat(h, badpatch_path(tid, mark, sizeof(mark)), FP_STAT_BADPATCH, fc);
     h = title_fp_add(h, cfg->dlc ? "add-ons" : "no add-ons", 0, cfg->dlc_mode | (cfg->dlc_big ? 4 : 0));
-    return cfg->dlc ? fp_addons(h, root, tid, inplace, snap) : h;
+    return cfg->dlc ? fp_addons(h, root, tid, inplace, snap, fc) : h;
 }
 
 static uint64_t title_files_fp(const char *root, const char *tid, const config_t *cfg) {
-    return title_files_fp_mode(root, tid, cfg, NULL);
+    return title_files_fp_mode(root, tid, cfg, NULL, g_scan_m.active ? &g_scan_m.fp : NULL);
 }
 
 static void info_from_src(const title_src_t *t, title_info_t *e) {
@@ -1423,7 +1458,7 @@ static pthread_mutex_t g_titlecache_mu = PTHREAD_MUTEX_INITIALIZER;
 /* What tid is, read from its pkgs only when its files changed since the last look (or it
  * was never looked at). NULL when the drive has no such game. */
 static const title_info_t *title_info_fp_impl(const char *root, const char *tid, uint64_t fp, const config_t *cfg,
-                                              const catsnap_t *snap) {
+                                              const catsnap_t *snap, fp_counts_t *fc) {
     if (!fp)
         return NULL;
     /* the games are kept per drive, not per path */
@@ -1432,10 +1467,19 @@ static const title_info_t *title_info_fp_impl(const char *root, const char *tid,
     const title_info_t *hit = title_cache_find(key, tid, fp);
     if (hit)
         return hit;
+    if (fc)
+        fc->cache_miss++;
     title_src_t src;
     int opened = snap ? src_open_snapshot(&src, root, tid, cfg, snap) : src_open(&src, root, tid, cfg);
     if (opened)
         return NULL;
+    if (fc) {
+        fp_counts_note_usb_io(fc, src.app_path, src.app.read_ops, src.app.bytes_read);
+        if (src.has_patch)
+            fp_counts_note_usb_io(fc, src.patch_path, src.patch.read_ops, src.patch.bytes_read);
+        for (int i = 0; i < src.ndlc; i++)
+            fp_counts_note_usb_io(fc, src.dlc[i].path, src.dlc[i].pkg.read_ops, src.dlc[i].pkg.bytes_read);
+    }
     title_info_t *e = title_cache_add(key, tid, fp);
     if (e)
         info_from_src(&src, e);
@@ -1464,9 +1508,9 @@ static void title_info_copy_data(title_info_copy_t *out, const title_info_t *src
 }
 
 static int title_info_fp_copy(const char *root, const char *tid, uint64_t fp, const config_t *cfg, const catsnap_t *snap,
-                              title_info_copy_t *out) {
+                              title_info_copy_t *out, fp_counts_t *fc) {
     pthread_mutex_lock(&g_titlecache_mu);
-    const title_info_t *t = title_info_fp_impl(root, tid, fp, cfg, snap);
+    const title_info_t *t = title_info_fp_impl(root, tid, fp, cfg, snap, fc);
     if (t)
         title_info_copy_data(out, t);
     pthread_mutex_unlock(&g_titlecache_mu);
@@ -1476,11 +1520,11 @@ static int title_info_fp_copy(const char *root, const char *tid, uint64_t fp, co
 /* Cache lookup for a worker using a catalog epoch. The fingerprint is taken before the cache
  * mutex; the fill/copy itself is serialized so no live cache pointer escapes to the panel. */
 static int title_info_snapshot_copy(const char *root, const char *tid, const config_t *cfg, const catsnap_t *snap,
-                                    title_info_copy_t *out) {
-    uint64_t fp = title_files_fp_mode(root, tid, cfg, snap);
+                                    title_info_copy_t *out, fp_counts_t *fc) {
+    uint64_t fp = title_files_fp_mode(root, tid, cfg, snap, fc);
     if (!fp)
         return -1;
-    return title_info_fp_copy(root, tid, fp, cfg, snap, out);
+    return title_info_fp_copy(root, tid, fp, cfg, snap, out, fc);
 }
 
 static void write_meta(pkg_t *pkg, const char *meta_dir, int *rc) {
@@ -1566,6 +1610,11 @@ static int hold_ready(const char *kind, const char *tid, const char *name, const
     char p[PATH_MAX];
     struct stat a, b;
     struct statfs sf;
+    if (g_scan_m.active) {
+        g_scan_m.hold_ready++;
+        if (is_usb_storage_path(pkg_path))
+            g_scan_m.usb_stat += 2; /* hold symlink stat + direct pkg_path stat */
+    }
     hold_path(p, sizeof(p), kind, tid);
     snprintf(p + strlen(p), sizeof(p) - strlen(p), "/%s", name);
     if (stat(p, &a) || stat(pkg_path, &b) || statfs(p, &sf))
@@ -1829,6 +1878,8 @@ static int dlc_ready(const title_info_t *t) {
         if (d->install && (dlc_failed(d->content_id) || dlc_pending(d->content_id)))
             continue;
         snprintf(p, sizeof(p), HOLD_DIR "/addcont/%s/%s/ac.pkg", d->title_id, d->content_id + 20);
+        if (!d->install && g_scan_m.active && is_usb_storage_path(t->dir))
+            g_scan_m.usb_stat++;
         if (d->install ? !dlc_installed_ids(d->title_id, d->content_id) : !exists(p))
             return 0;
     }
@@ -1949,6 +2000,10 @@ static int bgft_task_identifies(uint32_t id, const char *tid) {
     uint8_t *data = id ? read_all(p, &len) : NULL;
     if (!data)
         return 0;
+    if (g_scan_m.active) {
+        g_scan_m.bgft_pdb_reads++;
+        g_scan_m.bgft_pdb_bytes += len;
+    }
     bgft_info_t info;
     int match = 0;
     if (!bgft_task_parse(data, len, &info) && info.has_title)
@@ -1981,9 +2036,15 @@ static uint32_t bgft_find(const char *tid) {
         unsigned long id = strtoul(e->d_name, &end, 16);
         if (*end || id < BGFT_FIRST || id > BGFT_LAST)
             continue;
+        if (g_scan_m.active)
+            g_scan_m.bgft_dirs++;
         snprintf(p, sizeof(p), BGFT_DIR "/%s/d0.pdb", e->d_name);
         size_t len;
         uint8_t *data = read_all(p, &len);
+        if (data && g_scan_m.active) {
+            g_scan_m.bgft_pdb_reads++;
+            g_scan_m.bgft_pdb_bytes += len;
+        }
         if (data && contains(data, len, want))
             found = (uint32_t)id;
         mem_free(data);
@@ -2000,6 +2061,10 @@ static int bgft_read_info(uint32_t id, bgft_info_t *info) {
     size_t len;
     snprintf(p, sizeof(p), BGFT_DIR "/%08x/d0.pdb", id);
     uint8_t *data = id ? read_all(p, &len) : NULL;
+    if (data && g_scan_m.active) {
+        g_scan_m.bgft_pdb_reads++;
+        g_scan_m.bgft_pdb_bytes += len;
+    }
     int ok = data && bgft_task_parse(data, len, info) == 0;
     mem_free(data);
     return ok ? 0 : -1;
@@ -2461,6 +2526,7 @@ static void refresh_sandboxes(void) {
         mem_free(list);
         return;
     }
+    scan_note_mount_read();
     n = getfsstat(list, (long)(sizeof(*list) * (size_t)(n + 16)), MNT_NOWAIT);
     static const char prefix[] = "/mnt/sandbox/pfsmnt/";
     for (int i = 0; i < n; i++) {
@@ -2586,6 +2652,7 @@ static int mount_table(const struct statfs **out, int *nout, int fresh) {
         g_mount_table = next;
         g_mount_table_cap = need;
     }
+    scan_note_mount_read();
     n = getfsstat(g_mount_table, (long)(g_mount_table_cap * sizeof(*g_mount_table)), MNT_NOWAIT);
     if (n < 0) {
         mount_table_invalidate();
@@ -3464,6 +3531,7 @@ static unsigned long lib_signature(const char *root) {
         if (!is_game_id(e->d_name))
             continue;
         snprintf(p, sizeof(p), "%s/%s/app.pkg", lib, e->d_name);
+        scan_note_usb_stat(p);
         if (!exists(p))
             continue;
         unsigned long h = 0;
@@ -3577,11 +3645,18 @@ static int adopt_dir_pass(const char *root, const char *dir, int pass) {
     struct dirent *e;
     char path[PATH_MAX], dst[PATH_MAX];
     while ((e = readdir(d))) {
-        size_t n = strlen(e->d_name);
-        if (n < 5 || strcasecmp(e->d_name + n - 4, ".pkg"))
+        if (scan_is_appledouble_pkg(e->d_name)) {
+            if (g_scan_m.active)
+                g_scan_m.adopt_appledouble++;
             continue;
+        }
+        if (!scan_pkg_candidate(e->d_name))
+            continue;
+        if (g_scan_m.active)
+            g_scan_m.adopt_cand++;
         snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
         struct stat rs;
+        scan_note_usb_stat(path);
         if (!stat(path, &rs) && restored_has(RESTORED_LIST, drive_rel(root, path), (uint64_t)rs.st_size)) {
             if (first_time(path))
                 printf("[scan] skip %s (moved back from ps4/ on request)\n", path);
@@ -3592,12 +3667,15 @@ static int adopt_dir_pass(const char *root, const char *dir, int pass) {
             continue; /* waiting add-on, and no new game since the last check */
         pkg_t pkg;
         if (pkg_open(&pkg, path)) {
+            scan_note_usb_pkg(path, &pkg);
             if (pass == 0 && first_time(path))
                 printf("[scan] skip %s (cannot read the pkg header: not a PS4 pkg, or unreadable)\n", path);
             continue;
         }
+        scan_note_usb_stat(path);
         if (!stat(path, &rs) && (uint64_t)rs.st_size < pkg.pkg_size) {
             /* still being copied (an internal folder lets the copy be moved midway) */
+            scan_note_usb_pkg(path, &pkg);
             pkg_close(&pkg);
             continue;
         }
@@ -3631,6 +3709,7 @@ static int adopt_dir_pass(const char *root, const char *dir, int pass) {
                 else if (first_time(path))
                     printf("[scan] skip %s (not a fake add-on pkg)\n", path);
             }
+            scan_note_usb_pkg(path, &pkg);
             pkg_close(&pkg);
             continue;
         }
@@ -3643,6 +3722,7 @@ static int adopt_dir_pass(const char *root, const char *dir, int pass) {
         const sfo_item_t *av = ok ? sfo_get(&sfo, "APP_VER") : NULL;
         if (av && !av->is_int)
             snprintf(ver, sizeof(ver), "%s", av->sval);
+        scan_note_usb_pkg(path, &pkg);
         pkg_close(&pkg);
         if (!ok) {
             if (first_time(path))
@@ -3657,9 +3737,11 @@ static int adopt_dir_pass(const char *root, const char *dir, int pass) {
         snprintf(dst, sizeof(dst), "%s/ps4/%s", root, tid);
         mkdirs(dst, 0777);
         snprintf(dst, sizeof(dst), "%s/ps4/%s/%s", root, tid, is_app ? "app.pkg" : "patch.pkg");
+        scan_note_usb_stat(dst);
         if (exists(dst)) {
             pkg_t cur;
             int same = !pkg_open(&cur, dst) && !memcmp(cur.digest, digest, sizeof(digest));
+            scan_note_usb_pkg(dst, &cur);
             if (cur.fd > 0)
                 pkg_close(&cur);
             if (same || is_app) {
@@ -3780,8 +3862,7 @@ static int has_pkg(const char *dir) {
     struct dirent *e;
     int found = 0;
     while (!found && (e = readdir(d))) {
-        size_t n = strlen(e->d_name);
-        found = n > 4 && !strcasecmp(e->d_name + n - 4, ".pkg");
+        found = scan_pkg_candidate(e->d_name);
     }
     closedir(d);
     return found;
@@ -3902,7 +3983,7 @@ static int adopt_root_pkgs(const char *root) {
     return moved;
 }
 
-static int titles_on_root_dirs(const char *root, char (*tids)[10], int max) {
+static int titles_on_root_dirs(const char *root, char (*tids)[10], int max, fp_counts_t *fc) {
     int n = 0;
     char lib[PATH_MAX];
     snprintf(lib, sizeof(lib), "%s/ps4", root);
@@ -3913,6 +3994,8 @@ static int titles_on_root_dirs(const char *root, char (*tids)[10], int max) {
             continue;
         char pkg[PATH_MAX];
         snprintf(pkg, sizeof(pkg), "%s/%s/app.pkg", lib, e->d_name);
+        if (fc && is_usb_storage_path(pkg))
+            fc->usb_stat++;
         if (exists(pkg))
             snprintf(tids[n++], 10, "%s", e->d_name);
     }
@@ -3931,13 +4014,13 @@ static int titles_on_root(const char *root, char (*tids)[10], int max) {
             snprintf(tids[n++], 10, "%s", c->games[i].title_id);
         return n;
     }
-    return titles_on_root_dirs(root, tids, max);
+    return titles_on_root_dirs(root, tids, max, g_scan_m.active ? &g_scan_m.fp : NULL);
 }
 
 /* Worker form of the same enumeration: in-place games come from one immutable epoch held
  * by the caller; organized folders are already plain filesystem state. */
 static int titles_on_root_snapshot(const char *root, char (*tids)[10], int max, const catsnap_t *snap,
-                                   const config_t *cfg) {
+                                   const config_t *cfg, fp_counts_t *fc) {
     if (in_place_cfg(cfg)) {
         int n = 0;
         uint32_t ng = catsnap_ngames(snap);
@@ -3946,7 +4029,7 @@ static int titles_on_root_snapshot(const char *root, char (*tids)[10], int max, 
             snprintf(tids[n++], 10, "%s", games[i].title_id);
         return n;
     }
-    return titles_on_root_dirs(root, tids, max);
+    return titles_on_root_dirs(root, tids, max, fc);
 }
 
 /* Grouped paths for artwork come from one immutable epoch reference acquired and released
@@ -4079,9 +4162,9 @@ static int readd_queue(const char *tid, const char *why);
 static pthread_mutex_t g_scanreq_mu = PTHREAD_MUTEX_INITIALIZER;
 static scanreq_t g_scanreq;
 
-static void scan_request(int manual) {
+static void scan_request_why(int manual, scan_trigger_t trig) {
     pthread_mutex_lock(&g_scanreq_mu);
-    scanreq_request(&g_scanreq, manual);
+    scanreq_request_why(&g_scanreq, manual, trig);
     pthread_mutex_unlock(&g_scanreq_mu);
 }
 
@@ -4098,16 +4181,16 @@ static int scan_due(time_t now) {
     return due;
 }
 
-static unsigned scan_begin(int *manual, int *hard) {
+static unsigned scan_begin_why(int *manual, int *hard, scan_trigger_t *trig) {
     pthread_mutex_lock(&g_scanreq_mu);
-    unsigned seq = scanreq_begin(&g_scanreq, manual, hard);
+    unsigned seq = scanreq_begin_why(&g_scanreq, manual, hard, trig);
     pthread_mutex_unlock(&g_scanreq_mu);
     return seq;
 }
 
-static void scan_keep_request(int manual, int hard) {
+static void scan_keep_request_why(int manual, int hard, scan_trigger_t trig) {
     pthread_mutex_lock(&g_scanreq_mu);
-    scanreq_keep_request(&g_scanreq, manual, hard);
+    scanreq_keep_request_why(&g_scanreq, manual, hard, trig);
     pthread_mutex_unlock(&g_scanreq_mu);
 }
 
@@ -4142,8 +4225,14 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     int nt = titles_on_root(root, tids, MAX_TITLES);
     if (reconnected)
         clear_removed_dlc_tids(tids, nt);
-    if (nt)
+    if (nt) {
         bgftscan_load(&g_bgftscan, BGFT_DIR, BGFT_FIRST, BGFT_LAST);
+        if (g_scan_m.active) {
+            g_scan_m.bgft_dirs += g_bgftscan.dirs_scanned;
+            g_scan_m.bgft_pdb_reads += g_bgftscan.pdb_reads;
+            g_scan_m.bgft_pdb_bytes += g_bgftscan.pdb_bytes;
+        }
+    }
     for (int k = 0; k < nt && count < MAX_TITLES; k++) {
         if (stop_requested())
             break; /* the panel asked to stop */
@@ -4153,7 +4242,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         const char *tid = tids[k];
         uint64_t fp = title_files_fp(root, tid, &g_cfg);
         title_info_copy_t icopy;
-        if (title_info_fp_copy(root, tid, fp, &g_cfg, NULL, &icopy))
+        if (title_info_fp_copy(root, tid, fp, &g_cfg, NULL, &icopy, g_scan_m.active ? &g_scan_m.fp : NULL))
             continue;
         const title_info_t *info = &icopy.info;
         if (reconnected) {
@@ -4191,7 +4280,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             pump_now();
         title_t *t = &titles[i];
         title_info_copy_t icopy;
-        if (t->state != 0 || title_info_fp_copy(root, t->tid, fps[i], &g_cfg, NULL, &icopy))
+        if (t->state != 0 ||
+            title_info_fp_copy(root, t->tid, fps[i], &g_cfg, NULL, &icopy, g_scan_m.active ? &g_scan_m.fp : NULL))
             continue;
         const title_info_t *info = &icopy.info;
         enforce_patch_sfo(info->title_id, info->has_patch, info->patch_path, info->sfo_len, info->sfo_sha);
@@ -4522,6 +4612,7 @@ static void emu_sync(void) {
     struct statfs *list = mem_alloc(len);
     if (!list)
         return;
+    scan_note_mount_read();
     n = getfsstat(list, (long)len, MNT_NOWAIT);
     int mounted = 0;
     for (int i = 0; i < n; i++) {
@@ -4591,6 +4682,7 @@ static void release_dlc_mounts(void) {
     struct statfs *list = mem_alloc(len);
     if (!list)
         return;
+    scan_note_mount_read();
     n = getfsstat(list, (long)len, MNT_NOWAIT);
     for (int i = 0; i < n; i++) {
         const char *on = list[i].f_mntonname, *from = list[i].f_mntfromname;
@@ -5227,7 +5319,7 @@ static void handle_klog_line(const char *line) {
 
 /* --- web panel --- */
 
-void app_rescan(void) { scan_request(1); }
+void app_rescan(void) { scan_request_why(1, SCAN_TRIG_MANUAL); }
 
 /* Owner-side invalidation of a hard scan epoch: every pkg is read again, even when its file
  * kept the same size and time (a pkg replaced in place looks unchanged otherwise). */
@@ -5365,6 +5457,9 @@ static void app_status_state_json(buf_t *out) {
 }
 
 void app_games_json(buf_t *out) {
+    uint64_t t0 = mono_ms();
+    api_games_metrics_t am;
+    memset(&am, 0, sizeof(am));
     config_t cfg;
     cfg_snapshot(&cfg);
     if (setup_active())
@@ -5388,7 +5483,7 @@ void app_games_json(buf_t *out) {
                    (unsigned long long)((uint64_t)sf.f_blocks * (uint64_t)sf.f_bsize));
     }
     buf_printf(out, "],\"games\":[");
-    int first = 1, nlisted = 0;
+    int first = 1, nlisted = 0, noffline = 0;
     char listed[MAX_TITLES][10];
     for (int i = 0; i < NROOTS; i++) {
         char root[PATH_MAX];
@@ -5397,11 +5492,11 @@ void app_games_json(buf_t *out) {
             continue;
         catsnap_t *snap = in_place_cfg(&cfg) ? catalog_snapshot_acquire(root) : NULL;
         char tids[MAX_TITLES][10];
-        int nt = titles_on_root_snapshot(root, tids, MAX_TITLES, snap, &cfg);
+        int nt = titles_on_root_snapshot(root, tids, MAX_TITLES, snap, &cfg, &am.fp);
         for (int k = 0; k < nt; k++) {
             const char *tid = tids[k];
             title_info_copy_t tcopy;
-            if (title_info_snapshot_copy(root, tid, &cfg, snap, &tcopy))
+            if (title_info_snapshot_copy(root, tid, &cfg, snap, &tcopy, &am.fp))
                 continue;
             const title_info_t *t = &tcopy.info;
             const char *state, *mount = "";
@@ -5483,6 +5578,7 @@ void app_games_json(buf_t *out) {
         json_str(out, drive);
         buf_printf(out, "}");
         first = 0;
+        noffline++;
     }
     if (sd)
         closedir(sd);
@@ -5494,6 +5590,11 @@ void app_games_json(buf_t *out) {
     buf_put(out, ",", 1);
     activity_json(out);
     buf_put(out, "}", 1);
+    am.titles = (uint32_t)(nlisted + noffline);
+    am.wall_ms = mono_ms() - t0;
+    char tline[256];
+    api_games_metrics_format(&am, tline, sizeof(tline));
+    printf("%s\n", tline);
 }
 
 static int app_art(const char *tid, const char *name, uint32_t id, buf_t *out);
@@ -5557,7 +5658,7 @@ int app_add(const char *tid, char *msg, size_t cap) {
     snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", tid);
     unlink(rm);
     clear_removed_dlc_for(tid);
-    scan_request(0);
+    scan_request_why(0, SCAN_TRIG_ADD);
     snprintf(msg, cap, TR("Adding %s to the library", "Añadiendo %s a la biblioteca"), tid);
     return 0;
 }
@@ -6098,7 +6199,7 @@ static void run_restore(char (*only)[10], int nonly, int remember) {
     for (int i = 0; i < n; i++)
         if (restore_clear_state_ok(unregistered[i], move_failed[i]))
             restore_clear_state(items[i].tid);
-    scan_request(0);
+    scan_request_why(0, SCAN_TRIG_RESTORE);
     if (n == 1 && done)
         notify_kind(NOTIFY_READY, TR("%s: %d pkg file(s) restored%s", "%s: %d pkg(s) restaurado(s)%s"), items[0].name,
                     moved,
@@ -6239,7 +6340,7 @@ int app_restore(const char *tids, char *msg, size_t cap) {
 
 int app_restored_forget(char *msg, size_t cap) {
     unlink(RESTORED_LIST);
-    scan_request(0);
+    scan_request_why(0, SCAN_TRIG_RESTORE);
     snprintf(msg, cap, "%s", TR("Restored pkgs will be used again on the next scan", "Los pkgs restaurados se volverán a usar en la próxima búsqueda"));
     return 0;
 }
@@ -6528,7 +6629,7 @@ int app_config_set(const char *body, char *msg, size_t cap) {
     if (was_organize && !c.organize) /* turned off: send the organized games back to where they were */
         for (int i = 0; i < NROOTS; i++)
             g_migrated[i] = 0;
-    scan_request(0);
+    scan_request_why(0, SCAN_TRIG_CONFIG);
     snprintf(msg, cap, "%s", TR("Settings saved", "Ajustes guardados"));
     return 0;
 }
@@ -6684,7 +6785,7 @@ static void check_temp_cleanup(void) {
 
 static void upload_done(const char *path) {
     (void)path;
-    app_rescan(); /* the scan picks it up now */
+    scan_request_why(1, SCAN_TRIG_UPLOAD); /* the scan picks it up now */
 }
 
 /* --- homebrew apps sent to be installed --- */
@@ -7028,7 +7129,7 @@ static int links_check(const char *path, uint64_t size, char *problem, size_t n)
 
 static void links_arrived(const char *dir) {
     (void)dir;
-    app_rescan(); /* the scan adds them now */
+    scan_request_why(1, SCAN_TRIG_LINKS); /* the scan adds them now */
 }
 
 static void links_notify(const char *msg) { notify_kind(NOTIFY_DOWNLOAD, "%s", msg); }
@@ -7468,14 +7569,22 @@ int main(void) {
                 config_save();
             }
             int manual = 0, hard = 0;
-            unsigned scan_seq = scan_begin(&manual, &hard);
+            scan_trigger_t trig = SCAN_TRIG_ROUTINE;
+            unsigned scan_seq = scan_begin_why(&manual, &hard, &trig);
             g_scan_manual_active = manual;
-            int scanned = 1;
+            int scanned = 1, ran_scan = 0;
+            uint64_t scan_t0 = 0;
             if (setup_active()) {
                 if (manual)
                     notify("%s", TR("Save the settings in the panel first: no game is added until then",
                                     "Guarda primero los ajustes en el panel: hasta entonces no se añade ningún juego"));
             } else if (g_reg_mode != REG_NONE) {
+                memset(&g_scan_m, 0, sizeof(g_scan_m));
+                g_scan_m.active = 1;
+                g_scan_m.seq = scan_seq;
+                g_scan_m.trigger = trig;
+                scan_t0 = mono_ms();
+                ran_scan = 1;
                 migrate_organized(); /* organize off: the games it had organized, back in place */
                 scanned = scan_all(hard);
                 /* After a boot the games are mounted by this first scan: one started before
@@ -7487,16 +7596,24 @@ int main(void) {
                     for (int i = 0; i < MAX_TITLES; i++)
                         playable += g_managed[i].used && !needs_reboot(g_managed[i].tid);
                     if (playable)
-            notify_kind(NOTIFY_READY, TR("%d game(s) ready to play", "%d juego(s) listo(s) para jugar"), playable);
+                        notify_kind(NOTIFY_READY, TR("%d game(s) ready to play", "%d juego(s) listo(s) para jugar"), playable);
                 }
             } else if (manual)
                 notify_kind(NOTIFY_WARN, TR("Firmware %s is not supported yet: no games are added",
                           "El firmware %s aún no es compatible: no se añaden juegos"),
                        g_fw_text);
             if (!scanned)
-                scan_keep_request(manual, hard);
+                scan_keep_request_why(manual, hard, trig);
             g_scan_manual_active = 0;
             scan_finish(scan_seq);
+            if (ran_scan) {
+                g_scan_m.gameplay_running = g_nsandboxes > 0;
+                g_scan_m.wall_ms = mono_ms() - scan_t0;
+                g_scan_m.active = 0;
+                char sline[384];
+                scan_metrics_format(&g_scan_m, sline, sizeof(sline));
+                printf("%s\n", sline);
+            }
             install_cleanup();
             dlc_pending_check();
         }

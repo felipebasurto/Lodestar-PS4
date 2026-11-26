@@ -71,6 +71,8 @@ typedef struct {
     pkg_entry_t *entries; /* exactly nentries, owned until pkg_close */
     uint8_t dk3[32];
     int have_dk3, dk3_tried;
+    uint32_t read_ops;
+    uint64_t bytes_read;
 } pkg_t;
 
 /* Opens and parses a PS4 pkg. Returns 0 on success. */

@@ -175,6 +175,43 @@ Check: test (real hardware performance regression and scan timing/ordering). Tes
 `test_scanreq`; the sandbox-mount integration is compiled through `test/sdkcheck.sh`.
 Source: Lodestar background-load audit during CUSA23827 gameplay, 2026-11-26.
 
+### P4N-21: dotfiles and macOS AppleDouble sidecars are not PKG adoption candidates
+Directory entries whose name starts with `.` (including macOS AppleDouble sidecars `._*.pkg`, `.pkg`
+and hidden dotfiles) are never PKG candidates in `adopt_dir_pass` or `has_pkg`. An AppleDouble
+`._*.pkg` sidecar is ignored silently (and counted in scan telemetry) without calling `stat` or
+`pkg_open`, avoiding repeated futile USB header reads across both adoption passes. Historical log
+lines from older payloads that skipped `._*.pkg` after header read remain informational in
+`tools/logcheck.py` (`LOG-5`).
+Check: test (real hardware performance regression and external filename input space). Test:
+`test/unit.c` › `test_scanfilter`; `adopt_dir_pass` and `has_pkg` integration compiled through
+`test/sdkcheck.sh`.
+Source: CUSA23827 background-I/O audit, 2026-11-26 (41 `._*.pkg` sidecars opened twice per scan).
+
+### P4N-22: scan epochs and `/api/games` emit compact key=value telemetry without changing behavior
+Every executed scan epoch emits one `[scan] epoch ...` key=value log line reporting `seq`, `trigger`,
+`gameplay`, `wall_ms`, `usb_stat`, `usb_open`, `usb_read`, `usb_bytes`, `adopt_cand`,
+`adopt_appledouble`, `fp_app`, `fp_patch`, `fp_badpatch`, `fp_ac`, `hold_ready`, `bgft_dirs`,
+`bgft_pdb_reads`, `bgft_pdb_bytes` and `mount_reads`. Every `GET /api/games` request emits one
+`[api] games ...` key=value log line reporting `wall_ms`, `titles`, `usb_stats`, `fp_app`, `fp_patch`,
+`fp_ac` and `cache_miss`. Telemetry is strictly observational: it must not alter scan semantics,
+cadence, registration or `/api/games` freshness (no snapshot serving), and emits nothing while idle
+between scans or without API requests.
+Check: test (public log contract, trigger classification and BGFT read accounting). Test:
+`test/unit.c` › `test_telemetry`, `test_scanreq`, `test_bgft_scan`; `main.c` hooks compiled through
+`test/sdkcheck.sh`.
+Source: CUSA23827 background-I/O instrumentation plan, 2026-11-26.
+
+### P4N-23: offline exFAT allocation mapping is read-only and validates volume integrity
+`tools/exfatmap.py` maps physical cluster extents, fragmentation metrics (`extent_count`,
+`fragments_per_GiB`, `largest_extent_share`, forward gaps, backward jumps) and pairwise hole-sharing
+interleaving for target files directly from a raw exFAT device or image using only the Python standard
+library and `os.O_RDONLY`. It validates boot geometry and main/backup boot checksums, active FAT,
+allocation bitmap, `0x85`/`0xC0`/`0xC1` directory entry sets and `NoFatChain` vs FAT-chain resolution,
+rejecting corrupt geometry, FAT cycles, truncated chains and cross-file cluster overlaps.
+Check: test (keep bar 1: external binary filesystem format; keep bar 4: parser input space). Test:
+`test/exfatmap_test.py` (synthetic exFAT images).
+Source: CUSA23827 physical-allocation measurement design (`a2-report.txt`), 2026-11-26.
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,
@@ -204,15 +241,47 @@ Hardware-verified facts from firmware 14.00 with the Toshiba USB 3.0 exFAT drive
 - An FTP range-read comparison measured about 5.5-5.9 MB/s from both USB and an internal file. This is
   invalid as a disk benchmark because the FTP/network path saturates first; it must not be used as evidence
   that USB and internal storage perform equally.
+- Console-side read-only `pread` benchmark (`benchdisk` v1, `bench_ver=1`, `build=0329aaa4fafc+dirty`,
+  `sdk=573b4a0d`, `seed=0xc0de000000023827`, measured on `2026-11-26T15:31:13Z`, run `1795707073-45`,
+  `status=ok`, `errors=0`, `short_reads=0`, `total_bytes=1698037760`, normal cached I/O over unique 16 KiB
+  granules without cache purge; artifacts SHA-256 `build/benchdisk.elf` =
+  `e8da823260c3b6b967f0af9fd6f7d1ad2db2d35317b8efaa3093d472d8409d13`, `build/benchdisk.bin` =
+  `3774c495a84de12b1c16a8e1b4a0aafe3f6eac2811748e148fd1c0d0af49e226`) on
+  `/mnt/usb0/ps4/CUSA23827/patch.pkg` (`exfatfs`, `/dev/da1s1`):
+  - Sequential 1 MiB (`usb_seq`, 4×32 MiB/region): `lo` mean `60.499 MiB/s` (rep 0 `8.021`, reps 1-3
+    `74.7-79.6`), `mid` mean `91.843 MiB/s`, `hi` mean `92.788 MiB/s`.
+  - Random reads (`usb_rand`): 4 KiB mean `12.062 ms` (p50 `11.990 ms`, p95 `17.969 ms`, `0.324 MiB/s`);
+    64 KiB mean `14.213 ms` (`4.401 MiB/s`); 1 MiB mean `37.316 ms` (`29.873 MiB/s`); 8 MiB mean
+    `99.120 ms` (`80.841 MiB/s`).
+  - Concurrent interleaved 1 MiB streams (`usb_conc`, 1/2/4 threads, 3×64 MiB each): `92.590` → `63.644` →
+    `46.080 MiB/s` mean (4-stream min `21.505 MiB/s`).
+  - Direct USB vs nullfs-mounted patch (`patch_cmp`, 4 paired alternating 32 MiB adjacent windows, same
+    `dev=439 ino=4026532727`): `/mnt/usb0/ps4/CUSA23827/patch.pkg` mean `94.074 MiB/s` (sd `7.577`) vs
+    `/user/patch/CUSA23827/patch.pkg` mean `94.268 MiB/s` (sd `2.095`).
+  - Internal control (`/user/app/CUSA36843/app.pkg`, 9.01 GiB on encrypted UFS `/dev/da0x13.crypt`):
+    `79.473 MiB/s` seq, 4 KiB rand mean `16.167 ms` (p50 `12.902 ms`). Not directly comparable to the
+    51.42 GiB USB patch because file size, LBA placement, encryption and filesystem differ.
+  - `O_DIRECT` probe (`odirect_open=1`, `odirect_read=1`, 4 KiB rand mean `13.198 ms`) is accepted by the
+    kernel interface but is not proof of buffer-cache bypass.
 
-Inference, not proof: the dominant remaining cost is consistent with mechanical-drive seek and interleaved
-read behavior across the 51.42 GiB core package and large add-ons. Nullfs/path indirection alone is not a
-proven explanation, and no console-side sequential/random benchmark exists yet.
+Inference, not proof: sequential USB throughput (~92-94 MiB/s) is healthy and nullfs/path indirection shows
+no measurable sequential overhead (`94.074` vs `94.268 MiB/s`), so nullfs is not a priority suspect. The
+measured ~12 ms 4 KiB seek latency and sharp drop under concurrent streams (`92.6` → `63.6` → `46.1 MiB/s`)
+are consistent with mechanical-drive seek contention across the 51.42 GiB core package and large add-ons,
+compounded by background scan metadata loops (e.g., 41 macOS `._*.pkg` sidecars and `/api/games`
+fingerprint recomputation).
 
-Unknowns that still require console proof: physical exFAT allocation and fragmentation, direct USB sequential
-and random throughput without FTP, PFSC/PFS read amplification, PlayGo locus semantics, the effect of the
-repeated `/mnt/sandbox/download1/CUSA23827` `0x809f8500` error, and whether a USB SSD changes the same test
-materially.
+Unknowns that still require console/offline proof:
+- Physical exFAT allocation and fragmentation (extent count, backward jumps, gaps and interleaving of
+  `patch.pkg` and `CODMW3CONTENT003/004/005/006` on the Toshiba drive).
+- Runtime PFS/PFSC/HMAC read amplification (whether PS4 verifies signed 64 KiB outer-PFS HMACs on demand
+  and what cache/readahead sizes apply).
+- Real runtime I/O access pattern of `cod23-cod.elf` (block sizes, offsets, concurrency across `patch.pkg`
+  and the four add-on packages).
+- Random 4K/64K nullfs parity, multi-file concurrent throughput (`patch.pkg` + 4 add-ons), cache warm-repeat
+  contrast, and scan metadata microbenchmark timings (scheduled for `benchdisk` v2).
+- PlayGo locus semantics, the functional effect of the repeated `/mnt/sandbox/download1/CUSA23827`
+  `0x809f8500` error, and whether a USB SSD changes cold-boot gameplay materially.
 
 ## Open questions requiring console proof
 

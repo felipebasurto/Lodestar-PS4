@@ -25,8 +25,10 @@
 #include "mountplan.h"
 #include "retention.h"
 #include "restore.h"
+#include "scanfilter.h"
 #include "scanreq.h"
 #include "stage.h"
+#include "telemetry.h"
 #include "webnet.h"
 #include "pdb_template.h"
 
@@ -1082,6 +1084,9 @@ static void test_bgft_scan(void) {
     bgftscan_load(&scan, root, 0xf001, 0xffff);
     CHECK(scan.usable);
     CHECK(scan.count == 3);
+    CHECK(scan.dirs_scanned == 4); /* P4N-22: 0xf000..0xf005 */
+    CHECK(scan.pdb_reads == 3);
+    CHECK(scan.pdb_bytes == (uint64_t)(one.len + two.len + sizeof(legacy) - 1));
     /* occupancy is physical directory evidence, not successful parsing: the install id
      * 0xf000 has no d0.pdb here but still makes its pair unavailable */
     CHECK(bgftscan_id_used(&scan, 0xf000));
@@ -1419,6 +1424,123 @@ static void test_scanreq(void) {
     scanreq_finish(&q, seq, 50, 10);
     seq = scanreq_begin(&q, &manual, &hard);
     CHECK(manual == 1 && hard == 1); /* hard invalidation is not lost either */
+
+    /* P4N-22: trigger reason classification across startup, routine and explicit intents */
+    scan_trigger_t trig = SCAN_TRIG_ROUTINE;
+    scanreq_init(&q);
+    seq = scanreq_begin_why(&q, &manual, &hard, &trig);
+    CHECK(trig == SCAN_TRIG_STARTUP && !strcmp(scanreq_trigger_name(trig), "startup"));
+    scanreq_finish(&q, seq, 10, 10);
+    seq = scanreq_begin_why(&q, &manual, &hard, &trig);
+    CHECK(trig == SCAN_TRIG_ROUTINE && !strcmp(scanreq_trigger_name(trig), "routine"));
+    scanreq_request_why(&q, 1, SCAN_TRIG_UPLOAD);
+    seq = scanreq_begin_why(&q, &manual, &hard, &trig);
+    CHECK(manual == 1 && trig == SCAN_TRIG_UPLOAD && !strcmp(scanreq_trigger_name(trig), "upload"));
+    scanreq_request_why(&q, 1, SCAN_TRIG_LINKS);
+    seq = scanreq_begin_why(&q, &manual, &hard, &trig);
+    CHECK(manual == 1 && trig == SCAN_TRIG_LINKS && !strcmp(scanreq_trigger_name(trig), "links"));
+    scanreq_request_hard(&q);
+    scanreq_request_why(&q, 0, SCAN_TRIG_CONFIG); /* must not downgrade hard trigger */
+    seq = scanreq_begin_why(&q, &manual, &hard, &trig);
+    CHECK(manual == 1 && hard == 1 && trig == SCAN_TRIG_HARD);
+    scanreq_keep_request_why(&q, manual, hard, trig);
+    seq = scanreq_begin_why(&q, &manual, &hard, &trig);
+    CHECK(manual == 1 && hard == 1 && trig == SCAN_TRIG_HARD);
+}
+
+/* P4N-21 (specs/ps4-native.md): dotfiles and macOS AppleDouble sidecars are never PKG
+ * adoption candidates; they are skipped before stat/pkg_open. */
+static void test_scanfilter(void) {
+    printf("scan filter: dotfiles and AppleDouble sidecars rejected\n");
+    static const struct {
+        const char *name;
+        int cand;
+        int ad;
+    } cases[] = {
+        {"game.pkg", 1, 0},
+        {"UPDATE.PKG", 1, 0},
+        {"a.pkg", 1, 0},
+        {"game.v1.05.Pkg", 1, 0},
+        {"_game.pkg", 1, 0},
+        {"", 0, 0},
+        {".", 0, 0},
+        {"..", 0, 0},
+        {".pkg", 0, 0},
+        {".hidden.pkg", 0, 0},
+        {".DS_Store", 0, 0},
+        {"._.pkg", 0, 1},
+        {"._game.pkg", 0, 1},
+        {"._[SPSX]-COD.Black.Ops.3-CUSA02624-EUR-Game-PS4.pkg", 0, 1},
+        {"._DRAGON.BALL.FighterZ_CUSA08992_Broly.PKG", 0, 1},
+        {"._archive.rar", 0, 0},
+        {"game.pkg.part", 0, 0},
+        {"game.rar", 0, 0},
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        if (scan_pkg_candidate(cases[i].name) != cases[i].cand)
+            printf("  candidate(\"%s\") wanted %d\n", cases[i].name, cases[i].cand);
+        CHECK(scan_pkg_candidate(cases[i].name) == cases[i].cand);
+        if (scan_is_appledouble_pkg(cases[i].name) != cases[i].ad)
+            printf("  appledouble(\"%s\") wanted %d\n", cases[i].name, cases[i].ad);
+        CHECK(scan_is_appledouble_pkg(cases[i].name) == cases[i].ad);
+    }
+    CHECK(scan_pkg_candidate(NULL) == 0);
+    CHECK(scan_is_appledouble_pkg(NULL) == 0);
+}
+
+/* P4N-22 (specs/ps4-native.md): compact key=value telemetry formatting and USB path
+ * accounting for scan epochs and /api/games. */
+static void test_telemetry(void) {
+    printf("telemetry: scan epoch and /api/games key=value lines\n");
+    CHECK(is_usb_storage_path("/mnt/usb0/ps4/CUSA23827/app.pkg"));
+    CHECK(is_usb_storage_path("/mnt/ext1/PS4Mount/game.pkg"));
+    CHECK(!is_usb_storage_path("/data/ps4/CUSA23827/app.pkg"));
+    CHECK(!is_usb_storage_path("/user/app/CUSA23827/app.pkg"));
+    CHECK(!is_usb_storage_path(NULL));
+
+    scan_metrics_t sm;
+    memset(&sm, 0, sizeof(sm));
+    sm.seq = 7;
+    sm.trigger = SCAN_TRIG_ROUTINE;
+    sm.gameplay_running = 1;
+    sm.wall_ms = 42;
+    sm.usb_stat = 10;
+    sm.usb_open = 1;
+    sm.usb_read = 2;
+    sm.usb_bytes = 4096;
+    sm.adopt_cand = 3;
+    sm.adopt_appledouble = 82;
+    fp_counts_note_stat(&sm.fp, FP_STAT_APP, "/mnt/usb0/ps4/CUSA23827/app.pkg");
+    fp_counts_note_stat(&sm.fp, FP_STAT_PATCH, "/mnt/usb0/ps4/CUSA23827/patch.pkg");
+    fp_counts_note_stat(&sm.fp, FP_STAT_BADPATCH, "/data/ps4mount/CUSA23827.badpatch");
+    fp_counts_note_stat(&sm.fp, FP_STAT_AC, "/mnt/usb0/ps4/CUSA23827/addcont/CUSA23827/L1/ac.pkg");
+    fp_counts_note_usb_io(&sm.fp, "/mnt/usb0/ps4/CUSA23827/app.pkg", 3, 8192);
+    fp_counts_note_usb_io(&sm.fp, "/data/ps4/CUSA00001/app.pkg", 5, 16384); /* internal: ignored */
+    sm.hold_ready = 37;
+    sm.bgft_dirs = 33;
+    sm.bgft_pdb_reads = 33;
+    sm.bgft_pdb_bytes = 41258;
+    sm.mount_reads = 3;
+
+    char line[512];
+    scan_metrics_format(&sm, line, sizeof(line));
+    CHECK(strstr(line, "[scan] epoch seq=7 trigger=routine gameplay=1 wall_ms=42 ") != NULL);
+    CHECK(strstr(line, "usb_stat=13 ") != NULL); /* 10 + 3 USB fp stats (not badpatch) */
+    CHECK(strstr(line, "usb_open=2 usb_read=5 usb_bytes=12288 ") != NULL);
+    CHECK(strstr(line, "adopt_cand=3 adopt_appledouble=82 ") != NULL);
+    CHECK(strstr(line, "fp_app=1 fp_patch=1 fp_badpatch=1 fp_ac=1 ") != NULL);
+    CHECK(strstr(line, "hold_ready=37 bgft_dirs=33 bgft_pdb_reads=33 bgft_pdb_bytes=41258 mount_reads=3") != NULL);
+
+    api_games_metrics_t am;
+    memset(&am, 0, sizeof(am));
+    am.wall_ms = 19;
+    am.titles = 21;
+    fp_counts_note_stat(&am.fp, FP_STAT_APP, "/mnt/usb0/ps4/CUSA23827/app.pkg");
+    fp_counts_note_stat(&am.fp, FP_STAT_PATCH, "/mnt/usb0/ps4/CUSA23827/patch.pkg");
+    fp_counts_note_stat(&am.fp, FP_STAT_AC, "/mnt/usb0/ps4/CUSA23827/addcont/CUSA23827/L1/ac.pkg");
+    am.fp.cache_miss = 1;
+    api_games_metrics_format(&am, line, sizeof(line));
+    CHECK(!strcmp(line, "[api] games wall_ms=19 titles=21 usb_stats=3 fp_app=1 fp_patch=1 fp_ac=1 cache_miss=1"));
 }
 
 int main(void) {
@@ -1449,6 +1571,8 @@ int main(void) {
     test_restore_plan();
     test_emu();
     test_scanreq();
+    test_scanfilter();
+    test_telemetry();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;
 }

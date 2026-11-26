@@ -22,6 +22,9 @@ typedef struct {
     uint32_t used_first;
     size_t used_count;
     int usable; /* 0 means the snapshot could not be built; callers must use fresh reads */
+    uint32_t dirs_scanned;
+    uint32_t pdb_reads;
+    uint64_t pdb_bytes;
 } bgftscan_t;
 
 void bgftscan_init(bgftscan_t *s);
