@@ -1,0 +1,11 @@
+** Checking volume.
+** Checking main boot region.
+** Checking system files.
+** Volume name is TOSHIBA.
+** Checking upper case translation table.
+** Checking file system hierarchy.
+** Checking active bitmap.
+** Rechecking main boot region.
+** Rechecking alternate boot region.
+** The volume TOSHIBA appears to be OK.
+fsck-exit=0

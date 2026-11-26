@@ -1,0 +1,600 @@
+{
+ "junk": [
+  {
+   "path": "PS4Mount/._[SPSX]-COD.Black.Ops.3-CUSA02624-EUR-Game-PS4.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._[SuperPSX]-The.Ascent_CUSA14650_v1.05_BACKPORT_[5.05-6.72-7.xx-9.00]-PS4.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._[SPSX]-COD.Black.Ops.3-CUSA02624-EUR-Update-1.33-PS4.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._[SuperPSX]-The.Ascent_CUSA14650_v1.00_[9.00]-PS4.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/[SuperPSX]-Call.of.Duty.Black.Ops.II-CUSA57548-USA-DLCs-PS4/._[BO2-Cosmetic-Pack]-UP0002-CUSA57548_00-CODBO2CSMTICPACK-A0000-V0100.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/[SuperPSX]-Call.of.Duty.Black.Ops.II-CUSA57548-USA-DLCs-PS4/._[BO2-Season-Pass]-UP0002-CUSA57548_00-CODBO2SEASONPASS-A0000-V0100.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._[SuperPSX]-Call.of.Duty.Black.Ops.II-CUSA57548-USA-DLCs-PS4.rar",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._[SuperPSX]-Call.of.Duty.Black.Ops.II-CUSA57548-USA-DLCs-PS4",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._[SPSX]-GTA.Vice.City.TDE-CUSA26615-USA-v1.07-[Fix.5.05-11.00]-PS4-CyB1K.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_4.Extra.Stamps_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._[SPSX]-GTA.Vice.City.TDE-CUSA26615-USA-Game-v1.07-PS4-CyB1K.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._[SPSX]-DRAGON.BALL.FighterZ-CUSA08992-EUR-UPDATE-v1.42-5.05+.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._[SPSX]-DRAGON.BALL.FighterZ-CUSA08992-EUR-GAME-v1.00-5.05+.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Android.17_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Android.21_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Android.21.[Lab.Coat]_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Anime.Music.Pack_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Anime.Music.Pack.2_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Bardock_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Broly_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Broly.[DBS]_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Commentator.Voice.Pack_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Commentator.Voice.Pack.2_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Commentator.Voice.Pack.3_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Commentator.Voice.Pack.4_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Cooler_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Gogeta.[SS4]_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Gogeta.[SSGSS]_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Goku_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Goku.[GT]_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Goku.[Ultra.Instinct]_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Goku.Exclusive.Lobby.Avatar.Color_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Janemba_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Jiren_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Kefla_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Master.Roshi_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_SSGSS.Goku.and.SSGSS.Vegeta_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_SSGSS.Lobby.Avatars_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Stamps.Girls.Pack_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Super.Baby.2_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Vegeta_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Vegito.[SSGSS]_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Videl_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Xenoverse.Lobby.Avatar_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": "PS4Mount/._DRAGON.BALL.FighterZ_CUSA08992_Zamasu.[Fused]_OPOISSO893.pkg",
+   "size": 4096
+  },
+  {
+   "path": ".Trashes/._501",
+   "size": 4096
+  },
+  {
+   "path": "._.metadata_never_index",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCAVATR00001",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCAVATR00002",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCAVATR00004",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00001",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00002",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00003",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00004",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00005",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00006",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00007",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00008",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00009",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00010",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00011",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00012",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00013",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00014",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00015",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00016",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00017",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00018",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00019",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00020",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00021",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCCHARA00022",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCMUSIC00001",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCMUSIC00002",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCSTAMP00001",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCSTAMP00002",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCVOICE00001",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCVOICE00002",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCVOICE00003",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/CUSA08992/._DBFDLCVOICE00004",
+   "size": 4096
+  },
+  {
+   "path": ".ps4mount-prueba-fighterz/CUSA08992/addcont/._CUSA08992",
+   "size": 4096
+  },
+  {
+   "path": "._ps2",
+   "size": 4096
+  }
+ ],
+ "big_files": [],
+ "free_extents": [
+  {
+   "start_gib": 101.51,
+   "len_gib": 4.024,
+   "len_clusters": 32968
+  },
+  {
+   "start_gib": 532.17,
+   "len_gib": 2.245,
+   "len_clusters": 18395
+  },
+  {
+   "start_gib": 905.92,
+   "len_gib": 2.091,
+   "len_clusters": 17132
+  },
+  {
+   "start_gib": 908.01,
+   "len_gib": 2.081,
+   "len_clusters": 17048
+  },
+  {
+   "start_gib": 901.82,
+   "len_gib": 2.066,
+   "len_clusters": 16924
+  },
+  {
+   "start_gib": 903.89,
+   "len_gib": 2.03,
+   "len_clusters": 16628
+  },
+  {
+   "start_gib": 910.09,
+   "len_gib": 2.006,
+   "len_clusters": 16432
+  },
+  {
+   "start_gib": 106.48,
+   "len_gib": 1.911,
+   "len_clusters": 15656
+  },
+  {
+   "start_gib": 773.03,
+   "len_gib": 1.497,
+   "len_clusters": 12260
+  },
+  {
+   "start_gib": 774.53,
+   "len_gib": 1.478,
+   "len_clusters": 12107
+  },
+  {
+   "start_gib": 793.85,
+   "len_gib": 1.393,
+   "len_clusters": 11414
+  },
+  {
+   "start_gib": 776.01,
+   "len_gib": 1.386,
+   "len_clusters": 11357
+  },
+  {
+   "start_gib": 771.66,
+   "len_gib": 1.375,
+   "len_clusters": 11260
+  },
+  {
+   "start_gib": 777.39,
+   "len_gib": 1.359,
+   "len_clusters": 11136
+  },
+  {
+   "start_gib": 770.32,
+   "len_gib": 1.333,
+   "len_clusters": 10922
+  },
+  {
+   "start_gib": 912.1,
+   "len_gib": 1.317,
+   "len_clusters": 10790
+  },
+  {
+   "start_gib": 782.58,
+   "len_gib": 1.316,
+   "len_clusters": 10781
+  },
+  {
+   "start_gib": 789.99,
+   "len_gib": 1.313,
+   "len_clusters": 10754
+  },
+  {
+   "start_gib": 899.15,
+   "len_gib": 1.296,
+   "len_clusters": 10618
+  },
+  {
+   "start_gib": 791.31,
+   "len_gib": 1.295,
+   "len_clusters": 10610
+  },
+  {
+   "start_gib": 778.75,
+   "len_gib": 1.28,
+   "len_clusters": 10489
+  },
+  {
+   "start_gib": 781.31,
+   "len_gib": 1.279,
+   "len_clusters": 10474
+  },
+  {
+   "start_gib": 787.56,
+   "len_gib": 1.254,
+   "len_clusters": 10271
+  },
+  {
+   "start_gib": 792.6,
+   "len_gib": 1.249,
+   "len_clusters": 10235
+  },
+  {
+   "start_gib": 785.14,
+   "len_gib": 1.247,
+   "len_clusters": 10217
+  },
+  {
+   "start_gib": 894.33,
+   "len_gib": 1.245,
+   "len_clusters": 10202
+  },
+  {
+   "start_gib": 895.58,
+   "len_gib": 1.245,
+   "len_clusters": 10200
+  },
+  {
+   "start_gib": 890.78,
+   "len_gib": 1.24,
+   "len_clusters": 10158
+  },
+  {
+   "start_gib": 783.9,
+   "len_gib": 1.235,
+   "len_clusters": 10121
+  },
+  {
+   "start_gib": 799.88,
+   "len_gib": 1.235,
+   "len_clusters": 10120
+  },
+  {
+   "start_gib": 889.56,
+   "len_gib": 1.22,
+   "len_clusters": 9994
+  },
+  {
+   "start_gib": 795.25,
+   "len_gib": 1.213,
+   "len_clusters": 9938
+  },
+  {
+   "start_gib": 896.83,
+   "len_gib": 1.206,
+   "len_clusters": 9882
+  },
+  {
+   "start_gib": 893.14,
+   "len_gib": 1.197,
+   "len_clusters": 9806
+  },
+  {
+   "start_gib": 797.64,
+   "len_gib": 1.193,
+   "len_clusters": 9772
+  },
+  {
+   "start_gib": 788.81,
+   "len_gib": 1.182,
+   "len_clusters": 9684
+  },
+  {
+   "start_gib": 786.38,
+   "len_gib": 1.173,
+   "len_clusters": 9613
+  },
+  {
+   "start_gib": 892.02,
+   "len_gib": 1.12,
+   "len_clusters": 9179
+  },
+  {
+   "start_gib": 898.03,
+   "len_gib": 1.115,
+   "len_clusters": 9138
+  },
+  {
+   "start_gib": 888.46,
+   "len_gib": 1.092,
+   "len_clusters": 8943
+  }
+ ],
+ "errors": [
+  "extents ps4/CUSA14650/patch.pkg: 1",
+  "extents ps4/CUSA14650/app.pkg: 1",
+  "extents ps4/CUSA02624/patch.pkg: 1",
+  "extents ps4/CUSA02624/app.pkg: 1",
+  "extents ps4/CUSA02624/addcont/CUSA02624/CODBO3ZOMBIESHD1/ac.pkg: 1",
+  "extents ps4/CUSA02624/addcont/CUSA02624/BLACKOPS3GIANT00/ac.pkg: 1",
+  "extents ps4/CUSA02624/addcont/CUSA02624/BLACKOPS3MAPPAK3/ac.pkg: 1",
+  "extents ps4/CUSA02624/addcont/CUSA02624/BLACKOPS3MAPPAK2/ac.pkg: 1",
+  "extents ps4/CUSA02624/addcont/CUSA02624/BLACKOPS3MAPPAK4/ac.pkg: 1",
+  "extents ps4/CUSA26615/app.pkg: 1",
+  "extents ps4/CUSA08992/patch.pkg: 1",
+  "extents ps4/CUSA08992/app.pkg: 1",
+  "extents ps4/CUSA03291/app.pkg: 1",
+  "extents ps4/CUSA05749/app.pkg: 1",
+  "extents ps4/CUSA05749/patch.pkg: 1",
+  "extents ps4/CUSA09254/app.pkg: 1",
+  "extents ps4/CUSA09254/patch.pkg: 1",
+  "extents ps4/CUSA43804/app.pkg: 1",
+  "extents ps4/CUSA01004/app.pkg: 1",
+  "extents ps4/CUSA16734/app.pkg: 1",
+  "extents ps4/CUSA16734/patch.pkg: 1",
+  "extents ps4/CUSA57547/app.pkg: 1",
+  "extents ps4/CUSA01766/app.pkg: 1",
+  "extents ps4/CUSA25569/app.pkg: 1",
+  "extents ps4/CUSA05935/app.pkg: 1",
+  "extents ps4/CUSA52222/app.pkg: 1",
+  "extents ps4/CUSA52222/patch.pkg: 1",
+  "extents ps4/CUSA05526/app.pkg: 1",
+  "extents ps4/CUSA05526/patch.pkg: 1",
+  "extents ps4/CUSA02320/app.pkg: 1",
+  "extents ps4/CUSA02320/patch.pkg: 1",
+  "extents ps4/CUSA10866/app.pkg: 1",
+  "extents ps4/CUSA57548/app.pkg: 1",
+  "extents ps4/CUSA00900/app.pkg: 1",
+  "extents ps4/CUSA00900/patch.pkg: 1",
+  "extents ps4/CUSA23827/patch.pkg: 1",
+  "extents ps4/CUSA23827/addcont/CUSA23827/CODBO6CONTENT001/ac.pkg: 1",
+  "extents ps4/CUSA23827/addcont/CUSA23827/CODBO6CONTENT002/ac.pkg: 1",
+  "extents ps4/CUSA23827/addcont/CUSA23827/CODBO6CONTENT005/ac.pkg: 1",
+  "extents ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT001/ac.pkg: 1",
+  "extents ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT002/ac.pkg: 1",
+  "extents ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT004/ac.pkg: 1",
+  "extents ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT003/ac.pkg: 1",
+  "extents ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT005/ac.pkg: 1",
+  "extents ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT006/ac.pkg: 1",
+  "extents ps2/Burnout 3 - Takedown (Europe).chd: 1",
+  "extents ps2/Dragon Ball Z - Budokai Tenkaichi 3 (Europe).chd: 1",
+  "extents ps2/FIFA Street 2 (Europe).chd: 1",
+  "extents ps2/God of War (Europe).chd: 1",
+  "extents ps2/God of War II (Europe).chd: 1",
+  "extents ps2/Need for Speed - Underground 2 (Europe).chd: 1",
+  "extents ps2/Rumble Racing (Europe).chd: 1",
+  "extents ps2/The Simpsons - Hit & Run (Europe).chd: 1",
+  "extents ps2/The Warriors (Europe).chd: 1",
+  "extents .ps4mount-prueba-fighterz/CUSA08992/app.pkg: 1",
+  "extents .ps4mount-prueba-fighterz/CUSA08992/patch.pkg: 1"
+ ],
+ "geometry": {
+  "cluster_bytes": 131072,
+  "cluster_count": 7630696
+ },
+ "file_count": 253,
+ "free_total_gib": 86.73,
+ "free_run_count": 1208
+}

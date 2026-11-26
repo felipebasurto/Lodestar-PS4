@@ -1,0 +1,94 @@
+== exFAT Geometry
+  bytes_per_sector=512 sectors_per_cluster=256 cluster_bytes=131072 cluster_count=7630696
+  cluster_heap_offset_sectors=63488 partition_offset_bytes=0 fats=1 active_fat=0 boot=main dirty=False
+
+== Targets
+  patch: size=55208181760 no_fat_chain=False first_cluster=2970598 extent_count=65 contiguous=False fragments_per_GiB=1.245 largest_extent_share=0.0376 forward_gaps=59(124725755904B) backward_jumps=5(80233234432B) bitmap_ok=True
+    pkg: valid=True cid=UP0002-CUSA23827_00-COREGAME00000001 declared=55208181760 sha256_4k=8c053d8546cd5476...
+    ext[0]: lcluster=0 pcluster=2970598 clusters=42 vol=[389394464768..389399969792)
+    ext[1]: lcluster=42 pcluster=2970676 clusters=6151 vol=[389404688384..390210912256)
+    ext[2]: lcluster=6193 pcluster=2976829 clusters=12328 vol=[390211174400..391827030016)
+    ext[3]: lcluster=18521 pcluster=2989159 clusters=15200 vol=[391827292160..393819586560)
+    ext[4]: lcluster=33721 pcluster=3004361 clusters=12648 vol=[393819848704..395477647360)
+    ext[5]: lcluster=46369 pcluster=3017011 clusters=14359 vol=[395477909504..397359972352)
+    ext[6]: lcluster=60728 pcluster=3031372 clusters=14198 vol=[397360234496..399221194752)
+    ext[7]: lcluster=74926 pcluster=3045572 clusters=14885 vol=[399221456896..401172463616)
+    ext[8]: lcluster=89811 pcluster=3060459 clusters=13446 vol=[401172725760..402935119872)
+    ext[9]: lcluster=103257 pcluster=3073907 clusters=14107 vol=[402935382016..404784414720)
+    ext[10]: lcluster=117364 pcluster=3088016 clusters=13580 vol=[404784676864..406564634624)
+    ext[11]: lcluster=130944 pcluster=3101598 clusters=15823 vol=[406564896768..408638849024)
+    ext[12]: lcluster=146767 pcluster=3117423 clusters=12665 vol=[408639111168..410299138048)
+    ext[13]: lcluster=159432 pcluster=3130090 clusters=15297 vol=[410299400192..412304408576)
+    ext[14]: lcluster=174729 pcluster=3145389 clusters=13838 vol=[412304670720..414118445056)
+    ext[15]: lcluster=188567 pcluster=3159229 clusters=13493 vol=[414118707200..415887261696)
+    ... (49 more extents)
+  CODMW3CONTENT003: size=16251092992 no_fat_chain=False first_cluster=6978662 extent_count=14 contiguous=False fragments_per_GiB=0.859 largest_extent_share=0.0948 forward_gaps=13(3670016B) backward_jumps=0(0B) bitmap_ok=True
+    pkg: valid=True cid=UP0002-CUSA23827_00-CODMW3CONTENT003 declared=16251092992 sha256_4k=68a6429de7692d96...
+    ext[0]: lcluster=0 pcluster=6978662 clusters=138 vol=[914739429376..914757517312)
+    ext[1]: lcluster=138 pcluster=6978804 clusters=7103 vol=[914758041600..915689046016)
+    ext[2]: lcluster=7241 pcluster=6985909 clusters=10639 vol=[915689308160..917083783168)
+    ext[3]: lcluster=17880 pcluster=6996550 clusters=10470 vol=[917084045312..918456369152)
+    ext[4]: lcluster=28350 pcluster=7007022 clusters=10651 vol=[918456631296..919852679168)
+    ext[5]: lcluster=39001 pcluster=7017675 clusters=10351 vol=[919852941312..921209667584)
+    ext[6]: lcluster=49352 pcluster=7028028 clusters=11649 vol=[921209929728..922736787456)
+    ext[7]: lcluster=61001 pcluster=7039679 clusters=10332 vol=[922737049600..924091285504)
+    ext[8]: lcluster=71333 pcluster=7050013 clusters=8156 vol=[924091547648..925160570880)
+    ext[9]: lcluster=79489 pcluster=7058171 clusters=10451 vol=[925160833024..926530666496)
+    ext[10]: lcluster=89940 pcluster=7068624 clusters=9495 vol=[926530928640..927775457280)
+    ext[11]: lcluster=99435 pcluster=7078121 clusters=11750 vol=[927775719424..929315815424)
+    ext[12]: lcluster=111185 pcluster=7089873 clusters=9081 vol=[929316077568..930506342400)
+    ext[13]: lcluster=120266 pcluster=7098956 clusters=3720 vol=[930506604544..930994192384)
+  CODMW3CONTENT004: size=23551672320 no_fat_chain=False first_cluster=6798933 extent_count=20 contiguous=False fragments_per_GiB=0.866 largest_extent_share=0.0692 forward_gaps=19(5242880B) backward_jumps=0(0B) bitmap_ok=True
+    pkg: valid=True cid=UP0002-CUSA23827_00-CODMW3CONTENT004 declared=23551672320 sha256_4k=a473bbf57b416cb6...
+    ext[0]: lcluster=0 pcluster=6798933 clusters=1425 vol=[891181989888..891368767488)
+    ext[1]: lcluster=1425 pcluster=6800360 clusters=456 vol=[891369029632..891428798464)
+    ext[2]: lcluster=1881 pcluster=6800820 clusters=8344 vol=[891429322752..892522987520)
+    ext[3]: lcluster=10225 pcluster=6809166 clusters=10328 vol=[892523249664..893876961280)
+    ext[4]: lcluster=20553 pcluster=6819496 clusters=9413 vol=[893877223424..895111004160)
+    ext[5]: lcluster=29966 pcluster=6828911 clusters=9699 vol=[895111266304..896382533632)
+    ext[6]: lcluster=39665 pcluster=6838612 clusters=10021 vol=[896382795776..897696268288)
+    ext[7]: lcluster=49686 pcluster=6848635 clusters=9387 vol=[897696530432..898926903296)
+    ext[8]: lcluster=59073 pcluster=6858024 clusters=10520 vol=[898927165440..900306042880)
+    ext[9]: lcluster=69593 pcluster=6868546 clusters=10123 vol=[900306305024..901633146880)
+    ext[10]: lcluster=79716 pcluster=6878671 clusters=10740 vol=[901633409024..903041122304)
+    ext[11]: lcluster=90456 pcluster=6889413 clusters=9892 vol=[903041384448..904337948672)
+    ext[12]: lcluster=100348 pcluster=6899307 clusters=9941 vol=[904338210816..905641197568)
+    ext[13]: lcluster=110289 pcluster=6909250 clusters=10145 vol=[905641459712..906971185152)
+    ext[14]: lcluster=120434 pcluster=6919397 clusters=12439 vol=[906971447296..908601851904)
+    ext[15]: lcluster=132873 pcluster=6931838 clusters=10960 vol=[908602114048..910038663168)
+    ... (4 more extents)
+  CODMW3CONTENT005: size=10636951552 no_fat_chain=False first_cluster=7102680 extent_count=10 contiguous=False fragments_per_GiB=0.909 largest_extent_share=0.2205 forward_gaps=9(1835008B) backward_jumps=0(0B) bitmap_ok=True
+    pkg: valid=True cid=UP0002-CUSA23827_00-CODMW3CONTENT005 declared=10636951552 sha256_4k=cceabf9ba9c1790f...
+    ext[0]: lcluster=0 pcluster=7102680 clusters=3753 vol=[930994716672..931486629888)
+    ext[1]: lcluster=3753 pcluster=7106434 clusters=1 vol=[931486760960..931486892032)
+    ext[2]: lcluster=3754 pcluster=7106436 clusters=5 vol=[931487023104..931487678464)
+    ext[3]: lcluster=3759 pcluster=7106442 clusters=26 vol=[931487809536..931491217408)
+    ext[4]: lcluster=3785 pcluster=7106469 clusters=5464 vol=[931491348480..932207525888)
+    ext[5]: lcluster=9249 pcluster=7111935 clusters=16936 vol=[932207788032..934427623424)
+    ext[6]: lcluster=26185 pcluster=7128873 clusters=17896 vol=[934427885568..936773550080)
+    ext[7]: lcluster=44081 pcluster=7146771 clusters=16352 vol=[936773812224..938917101568)
+    ext[8]: lcluster=60433 pcluster=7163125 clusters=17560 vol=[938917363712..941218988032)
+    ext[9]: lcluster=77993 pcluster=7180687 clusters=3161 vol=[941219250176..941633568768)
+  CODMW3CONTENT006: size=11873615872 no_fat_chain=False first_cluster=7183852 extent_count=8 contiguous=False fragments_per_GiB=0.633 largest_extent_share=0.1973 forward_gaps=7(1703936B) backward_jumps=0(0B) bitmap_ok=True
+    pkg: valid=True cid=UP0002-CUSA23827_00-CODMW3CONTENT006 declared=11873615872 sha256_4k=b8ac46466d05cd29...
+    ext[0]: lcluster=0 pcluster=7183852 clusters=4633 vol=[941634093056..942241349632)
+    ext[1]: lcluster=4633 pcluster=7188487 clusters=2 vol=[942241611776..942241873920)
+    ext[2]: lcluster=4635 pcluster=7188490 clusters=8686 vol=[942242004992..943380496384)
+    ext[3]: lcluster=13321 pcluster=7197178 clusters=17872 vol=[943380758528..945723277312)
+    ext[4]: lcluster=31193 pcluster=7215052 clusters=15928 vol=[945723539456..947811254272)
+    ext[5]: lcluster=47121 pcluster=7230982 clusters=16272 vol=[947811516416..949944320000)
+    ext[6]: lcluster=63393 pcluster=7247256 clusters=16504 vol=[949944582144..952107794432)
+    ext[7]: lcluster=79897 pcluster=7263762 clusters=10692 vol=[952108056576..953509478400)
+
+== Pairwise Interleaving
+  patch <-> CODMW3CONTENT003: interleaved=False overlap_bytes=0 closest_gap=425644261376 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+  patch <-> CODMW3CONTENT004: interleaved=False overlap_bytes=0 closest_gap=402086821888 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+  patch <-> CODMW3CONTENT005: interleaved=False overlap_bytes=0 closest_gap=441899548672 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+  patch <-> CODMW3CONTENT006: interleaved=False overlap_bytes=0 closest_gap=452538925056 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+  CODMW3CONTENT003 <-> CODMW3CONTENT004: interleaved=False overlap_bytes=0 closest_gap=524288 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+  CODMW3CONTENT003 <-> CODMW3CONTENT005: interleaved=False overlap_bytes=0 closest_gap=524288 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+  CODMW3CONTENT003 <-> CODMW3CONTENT006: interleaved=False overlap_bytes=0 closest_gap=10639900672 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+  CODMW3CONTENT004 <-> CODMW3CONTENT005: interleaved=False overlap_bytes=0 closest_gap=16255811584 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+  CODMW3CONTENT004 <-> CODMW3CONTENT006: interleaved=False overlap_bytes=0 closest_gap=26895187968 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+  CODMW3CONTENT005 <-> CODMW3CONTENT006: interleaved=False overlap_bytes=0 closest_gap=524288 b_in_a_holes=0(0B) a_in_b_holes=0(0B)
+exit=0

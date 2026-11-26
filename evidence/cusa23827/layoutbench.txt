@@ -1,0 +1,7 @@
+warmup
+SEQ patch-only r1: 1.00 GiB in 10.3s = 99.1 MiB/s
+INTERLEAVED-5file r1: 1.00 GiB in 16.9s = 60.7 MiB/s
+SEQ patch-only r2: 1.00 GiB in 10.4s = 98.8 MiB/s
+INTERLEAVED-5file r2: 1.00 GiB in 16.9s = 60.8 MiB/s
+done
+exit=0

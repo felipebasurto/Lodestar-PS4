@@ -1,0 +1,1370 @@
+{
+  "geometry": {
+    "bytes_per_sector": 512,
+    "sectors_per_cluster": 256,
+    "cluster_bytes": 131072,
+    "partition_offset_sectors_boot": 2048,
+    "volume_length_sectors": 1953521664,
+    "fat_offset_sectors": 2048,
+    "fat_length_sectors": 61440,
+    "cluster_heap_offset_sectors": 63488,
+    "cluster_heap_offset_bytes_volume_relative": 32505856,
+    "cluster_count": 7630696,
+    "root_cluster": 11,
+    "volume_flags": 0,
+    "number_of_fats": 1,
+    "active_fat": 0,
+    "volume_dirty": false,
+    "media_failure": false,
+    "boot_region_used": "main",
+    "partition_offset_bytes": 0
+  },
+  "targets": {
+    "patch": {
+      "path": "ps4/CUSA23827/patch.pkg",
+      "data_length": 55208181760,
+      "valid_data_length": 55208181760,
+      "first_cluster": 2970598,
+      "no_fat_chain": false,
+      "required_clusters": 421205,
+      "chain_clusters": 421205,
+      "extra_clusters": 0,
+      "allocated_bytes": 55208181760,
+      "extent_count": 65,
+      "contiguous": false,
+      "fragments_per_gib": 1.244734,
+      "mean_extent_bytes": 849356642.46,
+      "median_extent_bytes": 45744128.0,
+      "largest_extent_bytes": 2073952256,
+      "largest_extent_share": 0.037566,
+      "forward_gap_count": 59,
+      "forward_gap_bytes_total": 124725755904,
+      "backward_jump_count": 5,
+      "backward_jump_bytes_total": 80233234432,
+      "physical_span_bytes": 99700703232,
+      "bitmap_all_allocated": true,
+      "pkg": {
+        "valid_magic": true,
+        "content_id": "UP0002-CUSA23827_00-COREGAME00000001",
+        "title_id": "CUSA23827",
+        "label": "COREGAME00000001",
+        "declared_pkg_size": 55208181760,
+        "header_4k_sha256": "8c053d8546cd5476429a6c75dc3ff96e4517576453f877f8bc5e638490d68702"
+      },
+      "extents": [
+        {
+          "logical_start_cluster": 0,
+          "clusters": 42,
+          "physical_start_cluster": 2970598,
+          "volume_byte_start": 389394464768,
+          "volume_byte_end_exclusive": 389399969792,
+          "disk_byte_start": 389394464768,
+          "disk_byte_end_exclusive": 389399969792
+        },
+        {
+          "logical_start_cluster": 42,
+          "clusters": 6151,
+          "physical_start_cluster": 2970676,
+          "volume_byte_start": 389404688384,
+          "volume_byte_end_exclusive": 390210912256,
+          "disk_byte_start": 389404688384,
+          "disk_byte_end_exclusive": 390210912256
+        },
+        {
+          "logical_start_cluster": 6193,
+          "clusters": 12328,
+          "physical_start_cluster": 2976829,
+          "volume_byte_start": 390211174400,
+          "volume_byte_end_exclusive": 391827030016,
+          "disk_byte_start": 390211174400,
+          "disk_byte_end_exclusive": 391827030016
+        },
+        {
+          "logical_start_cluster": 18521,
+          "clusters": 15200,
+          "physical_start_cluster": 2989159,
+          "volume_byte_start": 391827292160,
+          "volume_byte_end_exclusive": 393819586560,
+          "disk_byte_start": 391827292160,
+          "disk_byte_end_exclusive": 393819586560
+        },
+        {
+          "logical_start_cluster": 33721,
+          "clusters": 12648,
+          "physical_start_cluster": 3004361,
+          "volume_byte_start": 393819848704,
+          "volume_byte_end_exclusive": 395477647360,
+          "disk_byte_start": 393819848704,
+          "disk_byte_end_exclusive": 395477647360
+        },
+        {
+          "logical_start_cluster": 46369,
+          "clusters": 14359,
+          "physical_start_cluster": 3017011,
+          "volume_byte_start": 395477909504,
+          "volume_byte_end_exclusive": 397359972352,
+          "disk_byte_start": 395477909504,
+          "disk_byte_end_exclusive": 397359972352
+        },
+        {
+          "logical_start_cluster": 60728,
+          "clusters": 14198,
+          "physical_start_cluster": 3031372,
+          "volume_byte_start": 397360234496,
+          "volume_byte_end_exclusive": 399221194752,
+          "disk_byte_start": 397360234496,
+          "disk_byte_end_exclusive": 399221194752
+        },
+        {
+          "logical_start_cluster": 74926,
+          "clusters": 14885,
+          "physical_start_cluster": 3045572,
+          "volume_byte_start": 399221456896,
+          "volume_byte_end_exclusive": 401172463616,
+          "disk_byte_start": 399221456896,
+          "disk_byte_end_exclusive": 401172463616
+        },
+        {
+          "logical_start_cluster": 89811,
+          "clusters": 13446,
+          "physical_start_cluster": 3060459,
+          "volume_byte_start": 401172725760,
+          "volume_byte_end_exclusive": 402935119872,
+          "disk_byte_start": 401172725760,
+          "disk_byte_end_exclusive": 402935119872
+        },
+        {
+          "logical_start_cluster": 103257,
+          "clusters": 14107,
+          "physical_start_cluster": 3073907,
+          "volume_byte_start": 402935382016,
+          "volume_byte_end_exclusive": 404784414720,
+          "disk_byte_start": 402935382016,
+          "disk_byte_end_exclusive": 404784414720
+        },
+        {
+          "logical_start_cluster": 117364,
+          "clusters": 13580,
+          "physical_start_cluster": 3088016,
+          "volume_byte_start": 404784676864,
+          "volume_byte_end_exclusive": 406564634624,
+          "disk_byte_start": 404784676864,
+          "disk_byte_end_exclusive": 406564634624
+        },
+        {
+          "logical_start_cluster": 130944,
+          "clusters": 15823,
+          "physical_start_cluster": 3101598,
+          "volume_byte_start": 406564896768,
+          "volume_byte_end_exclusive": 408638849024,
+          "disk_byte_start": 406564896768,
+          "disk_byte_end_exclusive": 408638849024
+        },
+        {
+          "logical_start_cluster": 146767,
+          "clusters": 12665,
+          "physical_start_cluster": 3117423,
+          "volume_byte_start": 408639111168,
+          "volume_byte_end_exclusive": 410299138048,
+          "disk_byte_start": 408639111168,
+          "disk_byte_end_exclusive": 410299138048
+        },
+        {
+          "logical_start_cluster": 159432,
+          "clusters": 15297,
+          "physical_start_cluster": 3130090,
+          "volume_byte_start": 410299400192,
+          "volume_byte_end_exclusive": 412304408576,
+          "disk_byte_start": 410299400192,
+          "disk_byte_end_exclusive": 412304408576
+        },
+        {
+          "logical_start_cluster": 174729,
+          "clusters": 13838,
+          "physical_start_cluster": 3145389,
+          "volume_byte_start": 412304670720,
+          "volume_byte_end_exclusive": 414118445056,
+          "disk_byte_start": 412304670720,
+          "disk_byte_end_exclusive": 414118445056
+        },
+        {
+          "logical_start_cluster": 188567,
+          "clusters": 13493,
+          "physical_start_cluster": 3159229,
+          "volume_byte_start": 414118707200,
+          "volume_byte_end_exclusive": 415887261696,
+          "disk_byte_start": 414118707200,
+          "disk_byte_end_exclusive": 415887261696
+        },
+        {
+          "logical_start_cluster": 202060,
+          "clusters": 13145,
+          "physical_start_cluster": 3172724,
+          "volume_byte_start": 415887523840,
+          "volume_byte_end_exclusive": 417610465280,
+          "disk_byte_start": 415887523840,
+          "disk_byte_end_exclusive": 417610465280
+        },
+        {
+          "logical_start_cluster": 215205,
+          "clusters": 13394,
+          "physical_start_cluster": 3185871,
+          "volume_byte_start": 417610727424,
+          "volume_byte_end_exclusive": 419366305792,
+          "disk_byte_start": 417610727424,
+          "disk_byte_end_exclusive": 419366305792
+        },
+        {
+          "logical_start_cluster": 228599,
+          "clusters": 14515,
+          "physical_start_cluster": 3199267,
+          "volume_byte_start": 419366567936,
+          "volume_byte_end_exclusive": 421269078016,
+          "disk_byte_start": 419366567936,
+          "disk_byte_end_exclusive": 421269078016
+        },
+        {
+          "logical_start_cluster": 243114,
+          "clusters": 13402,
+          "physical_start_cluster": 3213784,
+          "volume_byte_start": 421269340160,
+          "volume_byte_end_exclusive": 423025967104,
+          "disk_byte_start": 421269340160,
+          "disk_byte_end_exclusive": 423025967104
+        },
+        {
+          "logical_start_cluster": 256516,
+          "clusters": 347,
+          "physical_start_cluster": 3439816,
+          "volume_byte_start": 450895806464,
+          "volume_byte_end_exclusive": 450941288448,
+          "disk_byte_start": 450895806464,
+          "disk_byte_end_exclusive": 450941288448
+        },
+        {
+          "logical_start_cluster": 256863,
+          "clusters": 99,
+          "physical_start_cluster": 3227188,
+          "volume_byte_start": 423026229248,
+          "volume_byte_end_exclusive": 423039205376,
+          "disk_byte_start": 423026229248,
+          "disk_byte_end_exclusive": 423039205376
+        },
+        {
+          "logical_start_cluster": 256962,
+          "clusters": 4,
+          "physical_start_cluster": 3319665,
+          "volume_byte_start": 435147374592,
+          "volume_byte_end_exclusive": 435147898880,
+          "disk_byte_start": 435147374592,
+          "disk_byte_end_exclusive": 435147898880
+        },
+        {
+          "logical_start_cluster": 256966,
+          "clusters": 4,
+          "physical_start_cluster": 3329189,
+          "volume_byte_start": 436395704320,
+          "volume_byte_end_exclusive": 436396228608,
+          "disk_byte_start": 436395704320,
+          "disk_byte_end_exclusive": 436396228608
+        },
+        {
+          "logical_start_cluster": 256970,
+          "clusters": 4,
+          "physical_start_cluster": 3339058,
+          "volume_byte_start": 437689253888,
+          "volume_byte_end_exclusive": 437689778176,
+          "disk_byte_start": 437689253888,
+          "disk_byte_end_exclusive": 437689778176
+        },
+        {
+          "logical_start_cluster": 256974,
+          "clusters": 4,
+          "physical_start_cluster": 3348578,
+          "volume_byte_start": 438937059328,
+          "volume_byte_end_exclusive": 438937583616,
+          "disk_byte_start": 438937059328,
+          "disk_byte_end_exclusive": 438937583616
+        },
+        {
+          "logical_start_cluster": 256978,
+          "clusters": 4,
+          "physical_start_cluster": 3357161,
+          "volume_byte_start": 440062050304,
+          "volume_byte_end_exclusive": 440062574592,
+          "disk_byte_start": 440062050304,
+          "disk_byte_end_exclusive": 440062574592
+        },
+        {
+          "logical_start_cluster": 256982,
+          "clusters": 4,
+          "physical_start_cluster": 3367316,
+          "volume_byte_start": 441393086464,
+          "volume_byte_end_exclusive": 441393610752,
+          "disk_byte_start": 441393086464,
+          "disk_byte_end_exclusive": 441393610752
+        },
+        {
+          "logical_start_cluster": 256986,
+          "clusters": 4,
+          "physical_start_cluster": 3376433,
+          "volume_byte_start": 442588069888,
+          "volume_byte_end_exclusive": 442588594176,
+          "disk_byte_start": 442588069888,
+          "disk_byte_end_exclusive": 442588594176
+        },
+        {
+          "logical_start_cluster": 256990,
+          "clusters": 4,
+          "physical_start_cluster": 3386702,
+          "volume_byte_start": 443934048256,
+          "volume_byte_end_exclusive": 443934572544,
+          "disk_byte_start": 443934048256,
+          "disk_byte_end_exclusive": 443934572544
+        },
+        {
+          "logical_start_cluster": 256994,
+          "clusters": 4,
+          "physical_start_cluster": 3395558,
+          "volume_byte_start": 445094821888,
+          "volume_byte_end_exclusive": 445095346176,
+          "disk_byte_start": 445094821888,
+          "disk_byte_end_exclusive": 445095346176
+        },
+        {
+          "logical_start_cluster": 256998,
+          "clusters": 4,
+          "physical_start_cluster": 3402987,
+          "volume_byte_start": 446068555776,
+          "volume_byte_end_exclusive": 446069080064,
+          "disk_byte_start": 446068555776,
+          "disk_byte_end_exclusive": 446069080064
+        },
+        {
+          "logical_start_cluster": 257002,
+          "clusters": 4,
+          "physical_start_cluster": 3412718,
+          "volume_byte_start": 447344017408,
+          "volume_byte_end_exclusive": 447344541696,
+          "disk_byte_start": 447344017408,
+          "disk_byte_end_exclusive": 447344541696
+        },
+        {
+          "logical_start_cluster": 257006,
+          "clusters": 4,
+          "physical_start_cluster": 3422531,
+          "volume_byte_start": 448630226944,
+          "volume_byte_end_exclusive": 448630751232,
+          "disk_byte_start": 448630226944,
+          "disk_byte_end_exclusive": 448630751232
+        },
+        {
+          "logical_start_cluster": 257010,
+          "clusters": 4,
+          "physical_start_cluster": 3431463,
+          "volume_byte_start": 449800962048,
+          "volume_byte_end_exclusive": 449801486336,
+          "disk_byte_start": 449800962048,
+          "disk_byte_end_exclusive": 449801486336
+        },
+        {
+          "logical_start_cluster": 257014,
+          "clusters": 2,
+          "physical_start_cluster": 3238553,
+          "volume_byte_start": 424515862528,
+          "volume_byte_end_exclusive": 424516124672,
+          "disk_byte_start": 424515862528,
+          "disk_byte_end_exclusive": 424516124672
+        },
+        {
+          "logical_start_cluster": 257016,
+          "clusters": 2,
+          "physical_start_cluster": 3249501,
+          "volume_byte_start": 425950838784,
+          "volume_byte_end_exclusive": 425951100928,
+          "disk_byte_start": 425950838784,
+          "disk_byte_end_exclusive": 425951100928
+        },
+        {
+          "logical_start_cluster": 257018,
+          "clusters": 2,
+          "physical_start_cluster": 3268622,
+          "volume_byte_start": 428457066496,
+          "volume_byte_end_exclusive": 428457328640,
+          "disk_byte_start": 428457066496,
+          "disk_byte_end_exclusive": 428457328640
+        },
+        {
+          "logical_start_cluster": 257020,
+          "clusters": 2,
+          "physical_start_cluster": 3288023,
+          "volume_byte_start": 430999994368,
+          "volume_byte_end_exclusive": 431000256512,
+          "disk_byte_start": 430999994368,
+          "disk_byte_end_exclusive": 431000256512
+        },
+        {
+          "logical_start_cluster": 257022,
+          "clusters": 2,
+          "physical_start_cluster": 3305282,
+          "volume_byte_start": 433262166016,
+          "volume_byte_end_exclusive": 433262428160,
+          "disk_byte_start": 433262166016,
+          "disk_byte_end_exclusive": 433262428160
+        },
+        {
+          "logical_start_cluster": 257024,
+          "clusters": 2,
+          "physical_start_cluster": 3310403,
+          "volume_byte_start": 433933385728,
+          "volume_byte_end_exclusive": 433933647872,
+          "disk_byte_start": 433933385728,
+          "disk_byte_end_exclusive": 433933647872
+        },
+        {
+          "logical_start_cluster": 257026,
+          "clusters": 1,
+          "physical_start_cluster": 3227835,
+          "volume_byte_start": 423111032832,
+          "volume_byte_end_exclusive": 423111163904,
+          "disk_byte_start": 423111032832,
+          "disk_byte_end_exclusive": 423111163904
+        },
+        {
+          "logical_start_cluster": 257027,
+          "clusters": 1,
+          "physical_start_cluster": 3265003,
+          "volume_byte_start": 427982716928,
+          "volume_byte_end_exclusive": 427982848000,
+          "disk_byte_start": 427982716928,
+          "disk_byte_end_exclusive": 427982848000
+        },
+        {
+          "logical_start_cluster": 257028,
+          "clusters": 11222,
+          "physical_start_cluster": 3440163,
+          "volume_byte_start": 450941288448,
+          "volume_byte_end_exclusive": 452412178432,
+          "disk_byte_start": 450941288448,
+          "disk_byte_end_exclusive": 452412178432
+        },
+        {
+          "logical_start_cluster": 268250,
+          "clusters": 349,
+          "physical_start_cluster": 3578297,
+          "volume_byte_start": 469046788096,
+          "volume_byte_end_exclusive": 469092532224,
+          "disk_byte_start": 469046788096,
+          "disk_byte_end_exclusive": 469092532224
+        },
+        {
+          "logical_start_cluster": 268599,
+          "clusters": 4,
+          "physical_start_cluster": 3570399,
+          "volume_byte_start": 468011581440,
+          "volume_byte_end_exclusive": 468012105728,
+          "disk_byte_start": 468011581440,
+          "disk_byte_end_exclusive": 468012105728
+        },
+        {
+          "logical_start_cluster": 268603,
+          "clusters": 4,
+          "physical_start_cluster": 3578289,
+          "volume_byte_start": 469045739520,
+          "volume_byte_end_exclusive": 469046263808,
+          "disk_byte_start": 469045739520,
+          "disk_byte_end_exclusive": 469046263808
+        },
+        {
+          "logical_start_cluster": 268607,
+          "clusters": 2,
+          "physical_start_cluster": 3462868,
+          "volume_byte_start": 453917278208,
+          "volume_byte_end_exclusive": 453917540352,
+          "disk_byte_start": 453917278208,
+          "disk_byte_end_exclusive": 453917540352
+        },
+        {
+          "logical_start_cluster": 268609,
+          "clusters": 2,
+          "physical_start_cluster": 3479685,
+          "volume_byte_start": 456121516032,
+          "volume_byte_end_exclusive": 456121778176,
+          "disk_byte_start": 456121516032,
+          "disk_byte_end_exclusive": 456121778176
+        },
+        {
+          "logical_start_cluster": 268611,
+          "clusters": 2,
+          "physical_start_cluster": 3497775,
+          "volume_byte_start": 458492608512,
+          "volume_byte_end_exclusive": 458492870656,
+          "disk_byte_start": 458492608512,
+          "disk_byte_end_exclusive": 458492870656
+        },
+        {
+          "logical_start_cluster": 268613,
+          "clusters": 2,
+          "physical_start_cluster": 3516185,
+          "volume_byte_start": 460905644032,
+          "volume_byte_end_exclusive": 460905906176,
+          "disk_byte_start": 460905644032,
+          "disk_byte_end_exclusive": 460905906176
+        },
+        {
+          "logical_start_cluster": 268615,
+          "clusters": 2,
+          "physical_start_cluster": 3535075,
+          "volume_byte_start": 463381594112,
+          "volume_byte_end_exclusive": 463381856256,
+          "disk_byte_start": 463381594112,
+          "disk_byte_end_exclusive": 463381856256
+        },
+        {
+          "logical_start_cluster": 268617,
+          "clusters": 2,
+          "physical_start_cluster": 3554733,
+          "volume_byte_start": 465958207488,
+          "volume_byte_end_exclusive": 465958469632,
+          "disk_byte_start": 465958207488,
+          "disk_byte_end_exclusive": 465958469632
+        },
+        {
+          "logical_start_cluster": 268619,
+          "clusters": 953,
+          "physical_start_cluster": 3578646,
+          "volume_byte_start": 469092532224,
+          "volume_byte_end_exclusive": 469217443840,
+          "disk_byte_start": 469092532224,
+          "disk_byte_end_exclusive": 469217443840
+        },
+        {
+          "logical_start_cluster": 269572,
+          "clusters": 13332,
+          "physical_start_cluster": 3579601,
+          "volume_byte_start": 469217705984,
+          "volume_byte_end_exclusive": 470965157888,
+          "disk_byte_start": 469217705984,
+          "disk_byte_end_exclusive": 470965157888
+        },
+        {
+          "logical_start_cluster": 282904,
+          "clusters": 14764,
+          "physical_start_cluster": 3592935,
+          "volume_byte_start": 470965420032,
+          "volume_byte_end_exclusive": 472900567040,
+          "disk_byte_start": 470965420032,
+          "disk_byte_end_exclusive": 472900567040
+        },
+        {
+          "logical_start_cluster": 297668,
+          "clusters": 13756,
+          "physical_start_cluster": 3607701,
+          "volume_byte_start": 472900829184,
+          "volume_byte_end_exclusive": 474703855616,
+          "disk_byte_start": 472900829184,
+          "disk_byte_end_exclusive": 474703855616
+        },
+        {
+          "logical_start_cluster": 311424,
+          "clusters": 14966,
+          "physical_start_cluster": 3621459,
+          "volume_byte_start": 474704117760,
+          "volume_byte_end_exclusive": 476665741312,
+          "disk_byte_start": 474704117760,
+          "disk_byte_end_exclusive": 476665741312
+        },
+        {
+          "logical_start_cluster": 326390,
+          "clusters": 14136,
+          "physical_start_cluster": 3636427,
+          "volume_byte_start": 476666003456,
+          "volume_byte_end_exclusive": 478518837248,
+          "disk_byte_start": 476666003456,
+          "disk_byte_end_exclusive": 478518837248
+        },
+        {
+          "logical_start_cluster": 340526,
+          "clusters": 14055,
+          "physical_start_cluster": 3650565,
+          "volume_byte_start": 478519099392,
+          "volume_byte_end_exclusive": 480361316352,
+          "disk_byte_start": 478519099392,
+          "disk_byte_end_exclusive": 480361316352
+        },
+        {
+          "logical_start_cluster": 354581,
+          "clusters": 13934,
+          "physical_start_cluster": 3664622,
+          "volume_byte_start": 480361578496,
+          "volume_byte_end_exclusive": 482187935744,
+          "disk_byte_start": 480361578496,
+          "disk_byte_end_exclusive": 482187935744
+        },
+        {
+          "logical_start_cluster": 368515,
+          "clusters": 13789,
+          "physical_start_cluster": 3678558,
+          "volume_byte_start": 482188197888,
+          "volume_byte_end_exclusive": 483995549696,
+          "disk_byte_start": 482188197888,
+          "disk_byte_end_exclusive": 483995549696
+        },
+        {
+          "logical_start_cluster": 382304,
+          "clusters": 12926,
+          "physical_start_cluster": 3692349,
+          "volume_byte_start": 483995811840,
+          "volume_byte_end_exclusive": 485690048512,
+          "disk_byte_start": 483995811840,
+          "disk_byte_end_exclusive": 485690048512
+        },
+        {
+          "logical_start_cluster": 395230,
+          "clusters": 13584,
+          "physical_start_cluster": 3705277,
+          "volume_byte_start": 485690310656,
+          "volume_byte_end_exclusive": 487470792704,
+          "disk_byte_start": 485690310656,
+          "disk_byte_end_exclusive": 487470792704
+        },
+        {
+          "logical_start_cluster": 408814,
+          "clusters": 12391,
+          "physical_start_cluster": 3718863,
+          "volume_byte_start": 487471054848,
+          "volume_byte_end_exclusive": 489095168000,
+          "disk_byte_start": 487471054848,
+          "disk_byte_end_exclusive": 489095168000
+        }
+      ]
+    },
+    "CODMW3CONTENT003": {
+      "path": "ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT003/ac.pkg",
+      "data_length": 16251092992,
+      "valid_data_length": 16251092992,
+      "first_cluster": 6978662,
+      "no_fat_chain": false,
+      "required_clusters": 123986,
+      "chain_clusters": 123986,
+      "extra_clusters": 0,
+      "allocated_bytes": 16251092992,
+      "extent_count": 14,
+      "contiguous": false,
+      "fragments_per_gib": 0.858936,
+      "mean_extent_bytes": 1160792356.57,
+      "median_extent_bytes": 1355481088.0,
+      "largest_extent_bytes": 1540096000,
+      "largest_extent_share": 0.094769,
+      "forward_gap_count": 13,
+      "forward_gap_bytes_total": 3670016,
+      "backward_jump_count": 0,
+      "backward_jump_bytes_total": 0,
+      "physical_span_bytes": 16254763008,
+      "bitmap_all_allocated": true,
+      "pkg": {
+        "valid_magic": true,
+        "content_id": "UP0002-CUSA23827_00-CODMW3CONTENT003",
+        "title_id": "CUSA23827",
+        "label": "CODMW3CONTENT003",
+        "declared_pkg_size": 16251092992,
+        "header_4k_sha256": "68a6429de7692d96ed1511a0cce0a31364009c79d349e38a5bd0a1bc80f0e929"
+      },
+      "extents": [
+        {
+          "logical_start_cluster": 0,
+          "clusters": 138,
+          "physical_start_cluster": 6978662,
+          "volume_byte_start": 914739429376,
+          "volume_byte_end_exclusive": 914757517312,
+          "disk_byte_start": 914739429376,
+          "disk_byte_end_exclusive": 914757517312
+        },
+        {
+          "logical_start_cluster": 138,
+          "clusters": 7103,
+          "physical_start_cluster": 6978804,
+          "volume_byte_start": 914758041600,
+          "volume_byte_end_exclusive": 915689046016,
+          "disk_byte_start": 914758041600,
+          "disk_byte_end_exclusive": 915689046016
+        },
+        {
+          "logical_start_cluster": 7241,
+          "clusters": 10639,
+          "physical_start_cluster": 6985909,
+          "volume_byte_start": 915689308160,
+          "volume_byte_end_exclusive": 917083783168,
+          "disk_byte_start": 915689308160,
+          "disk_byte_end_exclusive": 917083783168
+        },
+        {
+          "logical_start_cluster": 17880,
+          "clusters": 10470,
+          "physical_start_cluster": 6996550,
+          "volume_byte_start": 917084045312,
+          "volume_byte_end_exclusive": 918456369152,
+          "disk_byte_start": 917084045312,
+          "disk_byte_end_exclusive": 918456369152
+        },
+        {
+          "logical_start_cluster": 28350,
+          "clusters": 10651,
+          "physical_start_cluster": 7007022,
+          "volume_byte_start": 918456631296,
+          "volume_byte_end_exclusive": 919852679168,
+          "disk_byte_start": 918456631296,
+          "disk_byte_end_exclusive": 919852679168
+        },
+        {
+          "logical_start_cluster": 39001,
+          "clusters": 10351,
+          "physical_start_cluster": 7017675,
+          "volume_byte_start": 919852941312,
+          "volume_byte_end_exclusive": 921209667584,
+          "disk_byte_start": 919852941312,
+          "disk_byte_end_exclusive": 921209667584
+        },
+        {
+          "logical_start_cluster": 49352,
+          "clusters": 11649,
+          "physical_start_cluster": 7028028,
+          "volume_byte_start": 921209929728,
+          "volume_byte_end_exclusive": 922736787456,
+          "disk_byte_start": 921209929728,
+          "disk_byte_end_exclusive": 922736787456
+        },
+        {
+          "logical_start_cluster": 61001,
+          "clusters": 10332,
+          "physical_start_cluster": 7039679,
+          "volume_byte_start": 922737049600,
+          "volume_byte_end_exclusive": 924091285504,
+          "disk_byte_start": 922737049600,
+          "disk_byte_end_exclusive": 924091285504
+        },
+        {
+          "logical_start_cluster": 71333,
+          "clusters": 8156,
+          "physical_start_cluster": 7050013,
+          "volume_byte_start": 924091547648,
+          "volume_byte_end_exclusive": 925160570880,
+          "disk_byte_start": 924091547648,
+          "disk_byte_end_exclusive": 925160570880
+        },
+        {
+          "logical_start_cluster": 79489,
+          "clusters": 10451,
+          "physical_start_cluster": 7058171,
+          "volume_byte_start": 925160833024,
+          "volume_byte_end_exclusive": 926530666496,
+          "disk_byte_start": 925160833024,
+          "disk_byte_end_exclusive": 926530666496
+        },
+        {
+          "logical_start_cluster": 89940,
+          "clusters": 9495,
+          "physical_start_cluster": 7068624,
+          "volume_byte_start": 926530928640,
+          "volume_byte_end_exclusive": 927775457280,
+          "disk_byte_start": 926530928640,
+          "disk_byte_end_exclusive": 927775457280
+        },
+        {
+          "logical_start_cluster": 99435,
+          "clusters": 11750,
+          "physical_start_cluster": 7078121,
+          "volume_byte_start": 927775719424,
+          "volume_byte_end_exclusive": 929315815424,
+          "disk_byte_start": 927775719424,
+          "disk_byte_end_exclusive": 929315815424
+        },
+        {
+          "logical_start_cluster": 111185,
+          "clusters": 9081,
+          "physical_start_cluster": 7089873,
+          "volume_byte_start": 929316077568,
+          "volume_byte_end_exclusive": 930506342400,
+          "disk_byte_start": 929316077568,
+          "disk_byte_end_exclusive": 930506342400
+        },
+        {
+          "logical_start_cluster": 120266,
+          "clusters": 3720,
+          "physical_start_cluster": 7098956,
+          "volume_byte_start": 930506604544,
+          "volume_byte_end_exclusive": 930994192384,
+          "disk_byte_start": 930506604544,
+          "disk_byte_end_exclusive": 930994192384
+        }
+      ]
+    },
+    "CODMW3CONTENT004": {
+      "path": "ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT004/ac.pkg",
+      "data_length": 23551672320,
+      "valid_data_length": 23551672320,
+      "first_cluster": 6798933,
+      "no_fat_chain": false,
+      "required_clusters": 179685,
+      "chain_clusters": 179685,
+      "extra_clusters": 0,
+      "allocated_bytes": 23551672320,
+      "extent_count": 20,
+      "contiguous": false,
+      "fragments_per_gib": 0.866227,
+      "mean_extent_bytes": 1177583616.0,
+      "median_extent_bytes": 1314783232.0,
+      "largest_extent_bytes": 1630404608,
+      "largest_extent_share": 0.069227,
+      "forward_gap_count": 19,
+      "forward_gap_bytes_total": 5242880,
+      "backward_jump_count": 0,
+      "backward_jump_bytes_total": 0,
+      "physical_span_bytes": 23556915200,
+      "bitmap_all_allocated": true,
+      "pkg": {
+        "valid_magic": true,
+        "content_id": "UP0002-CUSA23827_00-CODMW3CONTENT004",
+        "title_id": "CUSA23827",
+        "label": "CODMW3CONTENT004",
+        "declared_pkg_size": 23551672320,
+        "header_4k_sha256": "a473bbf57b416cb61ef16b2fbfae137b3463b65cf081051c1812a6af8b8583f9"
+      },
+      "extents": [
+        {
+          "logical_start_cluster": 0,
+          "clusters": 1425,
+          "physical_start_cluster": 6798933,
+          "volume_byte_start": 891181989888,
+          "volume_byte_end_exclusive": 891368767488,
+          "disk_byte_start": 891181989888,
+          "disk_byte_end_exclusive": 891368767488
+        },
+        {
+          "logical_start_cluster": 1425,
+          "clusters": 456,
+          "physical_start_cluster": 6800360,
+          "volume_byte_start": 891369029632,
+          "volume_byte_end_exclusive": 891428798464,
+          "disk_byte_start": 891369029632,
+          "disk_byte_end_exclusive": 891428798464
+        },
+        {
+          "logical_start_cluster": 1881,
+          "clusters": 8344,
+          "physical_start_cluster": 6800820,
+          "volume_byte_start": 891429322752,
+          "volume_byte_end_exclusive": 892522987520,
+          "disk_byte_start": 891429322752,
+          "disk_byte_end_exclusive": 892522987520
+        },
+        {
+          "logical_start_cluster": 10225,
+          "clusters": 10328,
+          "physical_start_cluster": 6809166,
+          "volume_byte_start": 892523249664,
+          "volume_byte_end_exclusive": 893876961280,
+          "disk_byte_start": 892523249664,
+          "disk_byte_end_exclusive": 893876961280
+        },
+        {
+          "logical_start_cluster": 20553,
+          "clusters": 9413,
+          "physical_start_cluster": 6819496,
+          "volume_byte_start": 893877223424,
+          "volume_byte_end_exclusive": 895111004160,
+          "disk_byte_start": 893877223424,
+          "disk_byte_end_exclusive": 895111004160
+        },
+        {
+          "logical_start_cluster": 29966,
+          "clusters": 9699,
+          "physical_start_cluster": 6828911,
+          "volume_byte_start": 895111266304,
+          "volume_byte_end_exclusive": 896382533632,
+          "disk_byte_start": 895111266304,
+          "disk_byte_end_exclusive": 896382533632
+        },
+        {
+          "logical_start_cluster": 39665,
+          "clusters": 10021,
+          "physical_start_cluster": 6838612,
+          "volume_byte_start": 896382795776,
+          "volume_byte_end_exclusive": 897696268288,
+          "disk_byte_start": 896382795776,
+          "disk_byte_end_exclusive": 897696268288
+        },
+        {
+          "logical_start_cluster": 49686,
+          "clusters": 9387,
+          "physical_start_cluster": 6848635,
+          "volume_byte_start": 897696530432,
+          "volume_byte_end_exclusive": 898926903296,
+          "disk_byte_start": 897696530432,
+          "disk_byte_end_exclusive": 898926903296
+        },
+        {
+          "logical_start_cluster": 59073,
+          "clusters": 10520,
+          "physical_start_cluster": 6858024,
+          "volume_byte_start": 898927165440,
+          "volume_byte_end_exclusive": 900306042880,
+          "disk_byte_start": 898927165440,
+          "disk_byte_end_exclusive": 900306042880
+        },
+        {
+          "logical_start_cluster": 69593,
+          "clusters": 10123,
+          "physical_start_cluster": 6868546,
+          "volume_byte_start": 900306305024,
+          "volume_byte_end_exclusive": 901633146880,
+          "disk_byte_start": 900306305024,
+          "disk_byte_end_exclusive": 901633146880
+        },
+        {
+          "logical_start_cluster": 79716,
+          "clusters": 10740,
+          "physical_start_cluster": 6878671,
+          "volume_byte_start": 901633409024,
+          "volume_byte_end_exclusive": 903041122304,
+          "disk_byte_start": 901633409024,
+          "disk_byte_end_exclusive": 903041122304
+        },
+        {
+          "logical_start_cluster": 90456,
+          "clusters": 9892,
+          "physical_start_cluster": 6889413,
+          "volume_byte_start": 903041384448,
+          "volume_byte_end_exclusive": 904337948672,
+          "disk_byte_start": 903041384448,
+          "disk_byte_end_exclusive": 904337948672
+        },
+        {
+          "logical_start_cluster": 100348,
+          "clusters": 9941,
+          "physical_start_cluster": 6899307,
+          "volume_byte_start": 904338210816,
+          "volume_byte_end_exclusive": 905641197568,
+          "disk_byte_start": 904338210816,
+          "disk_byte_end_exclusive": 905641197568
+        },
+        {
+          "logical_start_cluster": 110289,
+          "clusters": 10145,
+          "physical_start_cluster": 6909250,
+          "volume_byte_start": 905641459712,
+          "volume_byte_end_exclusive": 906971185152,
+          "disk_byte_start": 905641459712,
+          "disk_byte_end_exclusive": 906971185152
+        },
+        {
+          "logical_start_cluster": 120434,
+          "clusters": 12439,
+          "physical_start_cluster": 6919397,
+          "volume_byte_start": 906971447296,
+          "volume_byte_end_exclusive": 908601851904,
+          "disk_byte_start": 906971447296,
+          "disk_byte_end_exclusive": 908601851904
+        },
+        {
+          "logical_start_cluster": 132873,
+          "clusters": 10960,
+          "physical_start_cluster": 6931838,
+          "volume_byte_start": 908602114048,
+          "volume_byte_end_exclusive": 910038663168,
+          "disk_byte_start": 908602114048,
+          "disk_byte_end_exclusive": 910038663168
+        },
+        {
+          "logical_start_cluster": 143833,
+          "clusters": 11448,
+          "physical_start_cluster": 6942800,
+          "volume_byte_start": 910038925312,
+          "volume_byte_end_exclusive": 911539437568,
+          "disk_byte_start": 910038925312,
+          "disk_byte_end_exclusive": 911539437568
+        },
+        {
+          "logical_start_cluster": 155281,
+          "clusters": 10041,
+          "physical_start_cluster": 6954250,
+          "volume_byte_start": 911539699712,
+          "volume_byte_end_exclusive": 912855793664,
+          "disk_byte_start": 911539699712,
+          "disk_byte_end_exclusive": 912855793664
+        },
+        {
+          "logical_start_cluster": 165322,
+          "clusters": 10758,
+          "physical_start_cluster": 6964293,
+          "volume_byte_start": 912856055808,
+          "volume_byte_end_exclusive": 914266128384,
+          "disk_byte_start": 912856055808,
+          "disk_byte_end_exclusive": 914266128384
+        },
+        {
+          "logical_start_cluster": 176080,
+          "clusters": 3605,
+          "physical_start_cluster": 6975053,
+          "volume_byte_start": 914266390528,
+          "volume_byte_end_exclusive": 914738905088,
+          "disk_byte_start": 914266390528,
+          "disk_byte_end_exclusive": 914738905088
+        }
+      ]
+    },
+    "CODMW3CONTENT005": {
+      "path": "ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT005/ac.pkg",
+      "data_length": 10636951552,
+      "valid_data_length": 10636951552,
+      "first_cluster": 7102680,
+      "no_fat_chain": false,
+      "required_clusters": 81154,
+      "chain_clusters": 81154,
+      "extra_clusters": 0,
+      "allocated_bytes": 10637017088,
+      "extent_count": 10,
+      "contiguous": false,
+      "fragments_per_gib": 0.908501,
+      "mean_extent_bytes": 1063701708.8,
+      "median_extent_bytes": 604045312.0,
+      "largest_extent_bytes": 2345664512,
+      "largest_extent_share": 0.220519,
+      "forward_gap_count": 9,
+      "forward_gap_bytes_total": 1835008,
+      "backward_jump_count": 0,
+      "backward_jump_bytes_total": 0,
+      "physical_span_bytes": 10638852096,
+      "bitmap_all_allocated": true,
+      "pkg": {
+        "valid_magic": true,
+        "content_id": "UP0002-CUSA23827_00-CODMW3CONTENT005",
+        "title_id": "CUSA23827",
+        "label": "CODMW3CONTENT005",
+        "declared_pkg_size": 10636951552,
+        "header_4k_sha256": "cceabf9ba9c1790f4d126a48d07b8b956caefef90f828cfb3feaf18968f4f054"
+      },
+      "extents": [
+        {
+          "logical_start_cluster": 0,
+          "clusters": 3753,
+          "physical_start_cluster": 7102680,
+          "volume_byte_start": 930994716672,
+          "volume_byte_end_exclusive": 931486629888,
+          "disk_byte_start": 930994716672,
+          "disk_byte_end_exclusive": 931486629888
+        },
+        {
+          "logical_start_cluster": 3753,
+          "clusters": 1,
+          "physical_start_cluster": 7106434,
+          "volume_byte_start": 931486760960,
+          "volume_byte_end_exclusive": 931486892032,
+          "disk_byte_start": 931486760960,
+          "disk_byte_end_exclusive": 931486892032
+        },
+        {
+          "logical_start_cluster": 3754,
+          "clusters": 5,
+          "physical_start_cluster": 7106436,
+          "volume_byte_start": 931487023104,
+          "volume_byte_end_exclusive": 931487678464,
+          "disk_byte_start": 931487023104,
+          "disk_byte_end_exclusive": 931487678464
+        },
+        {
+          "logical_start_cluster": 3759,
+          "clusters": 26,
+          "physical_start_cluster": 7106442,
+          "volume_byte_start": 931487809536,
+          "volume_byte_end_exclusive": 931491217408,
+          "disk_byte_start": 931487809536,
+          "disk_byte_end_exclusive": 931491217408
+        },
+        {
+          "logical_start_cluster": 3785,
+          "clusters": 5464,
+          "physical_start_cluster": 7106469,
+          "volume_byte_start": 931491348480,
+          "volume_byte_end_exclusive": 932207525888,
+          "disk_byte_start": 931491348480,
+          "disk_byte_end_exclusive": 932207525888
+        },
+        {
+          "logical_start_cluster": 9249,
+          "clusters": 16936,
+          "physical_start_cluster": 7111935,
+          "volume_byte_start": 932207788032,
+          "volume_byte_end_exclusive": 934427623424,
+          "disk_byte_start": 932207788032,
+          "disk_byte_end_exclusive": 934427623424
+        },
+        {
+          "logical_start_cluster": 26185,
+          "clusters": 17896,
+          "physical_start_cluster": 7128873,
+          "volume_byte_start": 934427885568,
+          "volume_byte_end_exclusive": 936773550080,
+          "disk_byte_start": 934427885568,
+          "disk_byte_end_exclusive": 936773550080
+        },
+        {
+          "logical_start_cluster": 44081,
+          "clusters": 16352,
+          "physical_start_cluster": 7146771,
+          "volume_byte_start": 936773812224,
+          "volume_byte_end_exclusive": 938917101568,
+          "disk_byte_start": 936773812224,
+          "disk_byte_end_exclusive": 938917101568
+        },
+        {
+          "logical_start_cluster": 60433,
+          "clusters": 17560,
+          "physical_start_cluster": 7163125,
+          "volume_byte_start": 938917363712,
+          "volume_byte_end_exclusive": 941218988032,
+          "disk_byte_start": 938917363712,
+          "disk_byte_end_exclusive": 941218988032
+        },
+        {
+          "logical_start_cluster": 77993,
+          "clusters": 3161,
+          "physical_start_cluster": 7180687,
+          "volume_byte_start": 941219250176,
+          "volume_byte_end_exclusive": 941633568768,
+          "disk_byte_start": 941219250176,
+          "disk_byte_end_exclusive": 941633568768
+        }
+      ]
+    },
+    "CODMW3CONTENT006": {
+      "path": "ps4/CUSA23827/addcont/CUSA23827/CODMW3CONTENT006/ac.pkg",
+      "data_length": 11873615872,
+      "valid_data_length": 11873615872,
+      "first_cluster": 7183852,
+      "no_fat_chain": false,
+      "required_clusters": 90589,
+      "chain_clusters": 90589,
+      "extra_clusters": 0,
+      "allocated_bytes": 11873681408,
+      "extent_count": 8,
+      "contiguous": false,
+      "fragments_per_gib": 0.633016,
+      "mean_extent_bytes": 1484210176.0,
+      "median_extent_bytes": 1744568320.0,
+      "largest_extent_bytes": 2342518784,
+      "largest_extent_share": 0.197287,
+      "forward_gap_count": 7,
+      "forward_gap_bytes_total": 1703936,
+      "backward_jump_count": 0,
+      "backward_jump_bytes_total": 0,
+      "physical_span_bytes": 11875385344,
+      "bitmap_all_allocated": true,
+      "pkg": {
+        "valid_magic": true,
+        "content_id": "UP0002-CUSA23827_00-CODMW3CONTENT006",
+        "title_id": "CUSA23827",
+        "label": "CODMW3CONTENT006",
+        "declared_pkg_size": 11873615872,
+        "header_4k_sha256": "b8ac46466d05cd297502c2f779ac2c9428d1689e47a61fb89a70da5634fd7c6a"
+      },
+      "extents": [
+        {
+          "logical_start_cluster": 0,
+          "clusters": 4633,
+          "physical_start_cluster": 7183852,
+          "volume_byte_start": 941634093056,
+          "volume_byte_end_exclusive": 942241349632,
+          "disk_byte_start": 941634093056,
+          "disk_byte_end_exclusive": 942241349632
+        },
+        {
+          "logical_start_cluster": 4633,
+          "clusters": 2,
+          "physical_start_cluster": 7188487,
+          "volume_byte_start": 942241611776,
+          "volume_byte_end_exclusive": 942241873920,
+          "disk_byte_start": 942241611776,
+          "disk_byte_end_exclusive": 942241873920
+        },
+        {
+          "logical_start_cluster": 4635,
+          "clusters": 8686,
+          "physical_start_cluster": 7188490,
+          "volume_byte_start": 942242004992,
+          "volume_byte_end_exclusive": 943380496384,
+          "disk_byte_start": 942242004992,
+          "disk_byte_end_exclusive": 943380496384
+        },
+        {
+          "logical_start_cluster": 13321,
+          "clusters": 17872,
+          "physical_start_cluster": 7197178,
+          "volume_byte_start": 943380758528,
+          "volume_byte_end_exclusive": 945723277312,
+          "disk_byte_start": 943380758528,
+          "disk_byte_end_exclusive": 945723277312
+        },
+        {
+          "logical_start_cluster": 31193,
+          "clusters": 15928,
+          "physical_start_cluster": 7215052,
+          "volume_byte_start": 945723539456,
+          "volume_byte_end_exclusive": 947811254272,
+          "disk_byte_start": 945723539456,
+          "disk_byte_end_exclusive": 947811254272
+        },
+        {
+          "logical_start_cluster": 47121,
+          "clusters": 16272,
+          "physical_start_cluster": 7230982,
+          "volume_byte_start": 947811516416,
+          "volume_byte_end_exclusive": 949944320000,
+          "disk_byte_start": 947811516416,
+          "disk_byte_end_exclusive": 949944320000
+        },
+        {
+          "logical_start_cluster": 63393,
+          "clusters": 16504,
+          "physical_start_cluster": 7247256,
+          "volume_byte_start": 949944582144,
+          "volume_byte_end_exclusive": 952107794432,
+          "disk_byte_start": 949944582144,
+          "disk_byte_end_exclusive": 952107794432
+        },
+        {
+          "logical_start_cluster": 79897,
+          "clusters": 10692,
+          "physical_start_cluster": 7263762,
+          "volume_byte_start": 952108056576,
+          "volume_byte_end_exclusive": 953509478400,
+          "disk_byte_start": 952108056576,
+          "disk_byte_end_exclusive": 953509478400
+        }
+      ]
+    }
+  },
+  "pairwise": [
+    {
+      "a": "patch",
+      "b": "CODMW3CONTENT003",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 425644261376,
+      "start_delta_bytes": 525344964608,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    },
+    {
+      "a": "patch",
+      "b": "CODMW3CONTENT004",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 402086821888,
+      "start_delta_bytes": 501787525120,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    },
+    {
+      "a": "patch",
+      "b": "CODMW3CONTENT005",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 441899548672,
+      "start_delta_bytes": 541600251904,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    },
+    {
+      "a": "patch",
+      "b": "CODMW3CONTENT006",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 452538925056,
+      "start_delta_bytes": 552239628288,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    },
+    {
+      "a": "CODMW3CONTENT003",
+      "b": "CODMW3CONTENT004",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 524288,
+      "start_delta_bytes": -23557439488,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    },
+    {
+      "a": "CODMW3CONTENT003",
+      "b": "CODMW3CONTENT005",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 524288,
+      "start_delta_bytes": 16255287296,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    },
+    {
+      "a": "CODMW3CONTENT003",
+      "b": "CODMW3CONTENT006",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 10639900672,
+      "start_delta_bytes": 26894663680,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    },
+    {
+      "a": "CODMW3CONTENT004",
+      "b": "CODMW3CONTENT005",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 16255811584,
+      "start_delta_bytes": 39812726784,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    },
+    {
+      "a": "CODMW3CONTENT004",
+      "b": "CODMW3CONTENT006",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 26895187968,
+      "start_delta_bytes": 50452103168,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    },
+    {
+      "a": "CODMW3CONTENT005",
+      "b": "CODMW3CONTENT006",
+      "overlap_bytes": 0,
+      "closest_positive_gap_bytes": 524288,
+      "start_delta_bytes": 10639376384,
+      "b_extents_inside_a_holes": 0,
+      "b_extent_bytes_inside_a_holes": 0,
+      "a_extents_inside_b_holes": 0,
+      "a_extent_bytes_inside_b_holes": 0,
+      "interleaved": false
+    }
+  ],
+  "warnings": []
+}
