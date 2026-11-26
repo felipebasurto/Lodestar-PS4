@@ -1668,6 +1668,19 @@ static uint32_t g_fw; /* kernel_get_fw_version(), written in the tasks */
 /* Titles whose game task was written in this run. */
 static char g_reboot_tids[MAX_TITLES][10];
 static int g_nreboot;
+static pthread_mutex_t g_reboot_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static int reboot_listed(const char *tid) {
+    int found = 0;
+    pthread_mutex_lock(&g_reboot_mu);
+    for (int i = 0; i < g_nreboot; i++)
+        if (!strcmp(g_reboot_tids[i], tid)) {
+            found = 1;
+            break;
+        }
+    pthread_mutex_unlock(&g_reboot_mu);
+    return found;
+}
 
 static int same_file(const char *path, const void *data, size_t size);
 
@@ -1688,9 +1701,8 @@ static long boot_time(void) {
  * needs a restart while the console has not booted since (a PS4Mount loaded again keeps
  * knowing it). */
 static int needs_reboot(const char *tid) {
-    for (int i = 0; i < g_nreboot; i++)
-        if (!strcmp(g_reboot_tids[i], tid))
-            return 1;
+    if (reboot_listed(tid))
+        return 1;
     char p[64], buf[32] = "";
     snprintf(p, sizeof(p), STATE_DIR "/%s.restart", tid);
     int fd = open(p, O_RDONLY);
@@ -1706,8 +1718,15 @@ static int needs_reboot(const char *tid) {
 }
 
 static void mark_reboot(const char *tid) {
-    if (!needs_reboot(tid) && g_nreboot < MAX_TITLES)
-        snprintf(g_reboot_tids[g_nreboot++], 10, "%s", tid);
+    if (!needs_reboot(tid)) {
+        pthread_mutex_lock(&g_reboot_mu);
+        int found = 0;
+        for (int i = 0; i < g_nreboot; i++)
+            found |= !strcmp(g_reboot_tids[i], tid);
+        if (!found && g_nreboot < MAX_TITLES)
+            snprintf(g_reboot_tids[g_nreboot++], 10, "%s", tid);
+        pthread_mutex_unlock(&g_reboot_mu);
+    }
     char p[64], buf[32];
     snprintf(p, sizeof(p), STATE_DIR "/%s.restart", tid);
     int n = snprintf(buf, sizeof(buf), "%ld\n", boot_time());
