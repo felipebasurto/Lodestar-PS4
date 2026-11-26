@@ -10,148 +10,49 @@
 if (typeof document.createElement('dialog').showModal !== 'function') location.replace('/legacy' + (/[?&]app=1(?:&|$)/.test(location.search) ? '#app=1' : ''));
 </script>
 <style>
-:root{--bg:#050b18;--bg-deep:#02060f;--panel:#0a1424;--panel-2:#0e1c32;--surface:#13233e;--surface-hover:#1b3154;--line:#1d3252;--line-strong:#2f4e7e;--fg:#eef4fc;--muted:#9fb4d2;--accent:#0e7490;--accent-hover:#0f8fb1;--focus:#22d3ee;--amber:#f0a227;--ok:#2fae66;--warn:#e8a33d;--bad:#e05555;--ease-out:cubic-bezier(0.23,1,0.32,1);--ease-in-out:cubic-bezier(0.77,0,0.175,1)}
+:root{--bg:#050b18;--bg-deep:#02060f;--panel:#0a1424;--panel-2:#0e1c32;--surface:#13233e;--surface-hover:#1b3154;--line:#1d3252;--line-strong:#2f4e7e;--fg:#eef4fc;--muted:#9fb4d2;--accent:#0b6178;--accent-hover:#0e7490;--focus:#22d3ee;--amber:#f0a227;--ok:#35d99a;--warn:#e8a33d;--bad:#e05555;--ease-out:cubic-bezier(0.23,1,0.32,1)}
 *{box-sizing:border-box}
 html{color-scheme:dark}
-body{margin:0;color:var(--fg);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background-color:var(--bg);background-image:radial-gradient(1100px 520px at 88% -8%,rgba(34,211,238,.09),transparent 60%),radial-gradient(900px 500px at -12% 108%,rgba(240,162,39,.05),transparent 55%),linear-gradient(160deg,#081426,#040b18 60%,#030913);background-attachment:fixed}
+body{margin:0;color:var(--fg);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg) linear-gradient(170deg,#081426,#040b18 55%,#030913) fixed}
 ::selection{background:rgba(34,211,238,.32)}
-header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between;padding:12px max(24px,calc((100% - 1320px)/2));background:linear-gradient(180deg,rgba(11,23,42,.97),rgba(6,13,26,.97));border-bottom:1px solid var(--line-strong);box-shadow:0 1px 0 rgba(34,211,238,.16),0 12px 32px rgba(0,0,0,.4)}
+a{color:var(--focus)}
+/* header: brand, status, the frequent actions and the More menu */
+header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;padding:10px max(24px,calc((100% - 1320px)/2));background:rgba(7,15,29,.97);border-bottom:1px solid var(--line-strong)}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}
-.brand-mark{width:38px;height:38px;flex:none;filter:drop-shadow(0 0 7px rgba(34,211,238,.4))}
+.brand-mark{width:36px;height:36px;flex:none}
 .brand-t{display:flex;flex-direction:column;min-width:0}
-h1{font-size:21px;margin:0;font-weight:700;letter-spacing:.07em;line-height:1.1}
-h1 small{color:var(--muted);font-weight:400;font-size:13px;margin-left:8px;letter-spacing:0}
-.tagline{color:var(--muted);font-size:11.5px;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.06em;line-height:1.1}
+.tagline{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.mc-status{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg-deep);color:var(--muted);font-size:12px;white-space:nowrap}
-.mc-status:empty{display:none}
-.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--amber);box-shadow:0 0 8px rgba(240,162,39,.8);animation:mc-pulse 1.6s var(--ease-in-out) infinite}
-.dot.ok{background:#35d99a;box-shadow:0 0 8px rgba(53,217,154,.75);animation:none}
-.dot.bad{background:var(--bad);box-shadow:0 0 8px rgba(224,85,85,.75);animation:none}
+.bar.center{justify-content:center}
+.mc-status{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;margin-right:4px;border:1px solid var(--line);border-radius:999px;background:var(--bg-deep);color:var(--muted);font-size:12px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--amber);animation:mc-pulse 1.6s ease-in-out infinite}
+.dot.ok{background:var(--ok);animation:none}
+.dot.bad{background:var(--bad);animation:none}
 @keyframes mc-pulse{50%{opacity:.3}}
-.toolbar-more{position:relative}
-.toolbar-more summary{list-style:none;cursor:pointer;padding:8px 14px;border:1px solid var(--line-strong);border-radius:8px;color:var(--fg);background:linear-gradient(180deg,var(--panel-2),var(--panel));font-weight:500;transition:border-color 150ms var(--ease-out),background-color 150ms var(--ease-out)}
-.toolbar-more summary::-webkit-details-marker{display:none}
-@media (hover:hover) and (pointer:fine){.toolbar-more summary:hover{border-color:var(--focus)}}
-.toolbar-more[open] summary{border-color:var(--focus);box-shadow:0 0 0 1px rgba(34,211,238,.35)}
-.toolbar-menu{position:absolute;right:0;top:calc(100% + 8px);width:max-content;min-width:208px;max-width:calc(100vw - 24px);display:grid;gap:4px;padding:8px;background:#0d1c33;border:1px solid #345b91;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.5)}
-.toolbar-menu button{text-align:left}
-.toolbar-menu .summary{margin:0;padding:4px;gap:4px}
-.toolbar-menu input[type=search]{width:100%}
-.toolbar-menu .storage{margin:0;padding:4px}
-.toolbar-menu .storage .schip{padding:4px 0;background:transparent;border:0}
-.tv .toolbar-more summary{min-height:41px;padding-block:9px}
-button{font:inherit;font-weight:500;color:var(--fg);background:linear-gradient(180deg,var(--surface),#101e37);border:1px solid var(--line);border-radius:9px;padding:8px 16px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(190,220,255,.07),0 1px 2px rgba(0,0,0,.35);transition:background-color 150ms var(--ease-out),border-color 150ms var(--ease-out),color 150ms var(--ease-out),transform 140ms var(--ease-out),box-shadow 150ms var(--ease-out)}
+button{font:inherit;font-weight:500;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px 16px;cursor:pointer;transition:background-color 150ms var(--ease-out),border-color 150ms var(--ease-out),transform 140ms var(--ease-out)}
 button:focus{outline:none}
-@media (hover:hover) and (pointer:fine){button:hover{background:linear-gradient(180deg,var(--surface-hover),#14273f);border-color:var(--line-strong)}}
+@media (hover:hover) and (pointer:fine){button:hover{background:var(--surface-hover);border-color:var(--line-strong)}}
 button:active:not(:disabled){transform:scale(.97)}
-button.primary{background:linear-gradient(180deg,var(--accent-hover),var(--accent));border-color:#1599bd;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.3)}
-@media (hover:hover) and (pointer:fine){button.primary:hover{background:linear-gradient(180deg,#14a3c7,#0e7f9e);border-color:#2bb5d8}}
+button.primary{background:var(--accent);border-color:#13809f;color:#fff}
+@media (hover:hover) and (pointer:fine){button.primary:hover{background:var(--accent-hover);border-color:#1b9cc0}}
 button.danger{background:rgba(224,85,85,.13);border-color:rgba(224,85,85,.55)}
 @media (hover:hover) and (pointer:fine){button.danger:hover{background:rgba(224,85,85,.24);border-color:var(--bad)}}
 button:disabled{opacity:.45;cursor:default}
-summary:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible,.summary span:focus-visible,.art:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-main{padding:28px 24px 44px;max-width:1368px;margin:0 auto}
-.summary{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;color:var(--muted)}
-.summary span{background:rgba(10,20,36,.85);border:1px solid var(--line);border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;transition:border-color 150ms var(--ease-out),color 150ms var(--ease-out),background-color 150ms var(--ease-out)}
-.summary span.on{border-color:var(--focus);color:var(--fg);background:rgba(34,211,238,.1);box-shadow:0 0 0 1px rgba(34,211,238,.25)}
-@media (hover:hover) and (pointer:fine){.summary span:hover{border-color:var(--line-strong)}}
-.storage{display:flex;flex-wrap:wrap;gap:8px}
-.schip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;color:var(--muted);white-space:nowrap}
-.schip .sl{color:var(--fg);font-weight:500}
-.sbar{display:inline-block;width:48px;height:4px;border-radius:999px;background:var(--line);overflow:hidden;flex:none}
-.sbar span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--focus));border-radius:999px}
-#restart-banner{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;border:1px solid rgba(240,162,39,.5);border-left:4px solid var(--amber);border-radius:10px;background:rgba(240,162,39,.09);color:#ffe0ad;padding:12px 14px;margin-bottom:24px}
-#restart-banner .rb-main{font-weight:500}
-.card .art{cursor:pointer}
-.hero{height:220px;border-radius:12px;background:var(--bg-deep) center/cover no-repeat;margin:0 0 16px;position:relative;border:1px solid var(--line)}
-.hero .icon{position:absolute;left:16px;bottom:-24px;width:96px;height:96px;border-radius:12px;border:3px solid var(--panel);background:var(--bg-deep) center/cover no-repeat;box-shadow:0 8px 20px rgba(0,0,0,.45)}
-#g-name{margin:0 0 0 124px;min-height:30px}
-.facts{display:grid;grid-template-columns:max-content 1fr;gap:8px 16px;margin:24px 0 16px;font-size:14px}
-.facts dt{color:var(--muted)}.facts dd{margin:0;word-break:break-all}
-body:before{content:"";position:fixed;z-index:-1;pointer-events:none;top:130px;right:-160px;width:560px;height:560px;border:1px dashed rgba(34,211,238,.16);border-radius:50%;box-shadow:0 0 0 26px rgba(34,211,238,.03),inset 0 0 0 26px rgba(34,211,238,.02)}
-body:after{content:"";position:fixed;z-index:-1;pointer-events:none;left:-140px;bottom:-180px;width:420px;height:420px;border:1px dashed rgba(240,162,39,.1);border-radius:50%}
-.library-heading{display:flex;align-items:center;gap:10px;margin:0 0 20px;font-size:15px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
-.library-heading:before{content:"";width:14px;height:14px;flex:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 6l5.6 20.4L58 32l-20.4 5.6L32 58l-5.6-20.4L6 32l20.4-5.6z' fill='%2322d3ee'/%3E%3C/svg%3E") center/contain no-repeat}
-.library-heading:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line-strong),transparent)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:20px 14px;align-items:start}
-.card{min-width:0}
-.card .art{display:block;width:100%;padding:0;text-align:left;background:transparent;border:0;border-radius:12px;box-shadow:none}
-.card .art[aria-pressed=true] .cover{border-color:var(--focus);box-shadow:0 0 0 2px var(--focus),0 8px 24px rgba(34,211,238,.18)}
-.card .art:focus .cover{box-shadow:none}
-.art:focus-visible{outline-offset:2px}
-.cover{display:block;aspect-ratio:4/3;border-radius:10px;background:#081226 center/cover no-repeat;position:relative;border:1px solid rgba(150,185,225,.16);box-shadow:0 3px 12px rgba(0,0,0,.4);transition:transform 160ms var(--ease-out),border-color 160ms var(--ease-out),box-shadow 160ms var(--ease-out)}
-@media (hover:hover) and (pointer:fine){.card .art:hover .cover{transform:translateY(-2px);border-color:rgba(150,185,225,.4);box-shadow:0 8px 22px rgba(0,0,0,.5)}}
-.badge{display:flex;align-items:center;gap:6px;font-size:12px;color:#b8cee8}
-.b-restart,.b-pending{color:#ffd88f}
-.info{display:block;padding:9px 2px 4px;min-height:48px}
-.badge{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.name{display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meta{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
-.actions{display:flex;gap:8px;flex-wrap:wrap}
-.tv main{padding:30px 4% 48px}
-.tv header{padding-left:4%;padding-right:4%}
-.tv button,.tv input,.tv select{min-height:41px}
-.tv button{font-size:16px}
-.tv button:focus,.tv input:focus,.tv select:focus,.tv textarea:focus,.tv [tabindex]:focus{outline:3px solid var(--focus);outline-offset:3px}
-.tv .name{font-size:18px}.tv .badge{font-size:14px}
-.tv .meta{font-size:14px}
-.tv .library-heading{font-size:17px}
-.tv .grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:24px 18px}
-.tv .card .art:focus .cover{transform:scale(1.03)}
-@media(max-width:720px){.tagline{display:none}}
-@media(max-width:620px){.toolbar-more{position:static}.toolbar-menu{right:14px;top:calc(100% - 3px)}main{padding:20px 14px}.library-heading{font-size:14px}header{position:relative;padding:12px 14px}.top{flex-wrap:wrap}}
-.empty{color:var(--muted);text-align:center;padding:48px 0}
-.warn{color:#ffd88f;font-size:13px;background:rgba(240,162,39,.1);border:1px solid rgba(240,162,39,.45);border-radius:8px;padding:8px 12px;margin-top:4px}
-dialog{background:linear-gradient(180deg,var(--panel-2),var(--panel));color:var(--fg);border:1px solid var(--line-strong);border-radius:16px;box-shadow:0 28px 70px rgba(0,0,0,.55),inset 0 1px 0 rgba(190,220,255,.07);max-width:95vw;max-width:min(900px,95vw);width:900px;padding:22px;transform-origin:center;opacity:1;transform:none;transition:opacity 180ms var(--ease-out),transform 200ms var(--ease-out)}
-@starting-style{dialog[open]{opacity:0;transform:scale(.96)}}
-dialog::backdrop{background:rgba(1,4,10,.68)}
-dialog h3{margin:0 0 16px;font-size:18px;font-weight:600;letter-spacing:.02em}
-pre{white-space:pre-wrap;font-size:12px;max-height:60vh;overflow:auto;background:var(--bg-deep);border:1px solid var(--line);padding:12px;border-radius:8px}
-form.settings{display:flex;flex-direction:column;gap:16px}
-form.settings label{display:flex;flex-direction:column;gap:6px}
-form.settings label.check{flex-direction:row;align-items:center;gap:10px}
-a{color:var(--focus)}
-input[type=search]{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;min-width:200px}
-form.settings textarea,form.settings select,form.settings input[type=number],form.settings input[type=text],form.settings input[type=password]{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
-form.settings textarea{min-height:90px;resize:vertical;font-family:ui-monospace,Consolas,monospace}
-form.settings textarea:focus,form.settings select:focus,form.settings input:focus,input[type=search]:focus{border-color:var(--focus)}
-form.settings .hint{color:var(--muted);font-size:13px}
-form.settings .row{display:flex;gap:8px;justify-content:flex-end}
-form.settings fieldset{border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;background:rgba(5,11,24,.45)}
-form.settings legend{font-weight:600;padding:0 8px;color:var(--focus);font-size:12.5px;letter-spacing:.09em;text-transform:uppercase}
-form.settings input.num{width:6em}
-form.settings details p{margin:8px 0;font-size:13px;color:var(--muted)}
-form.settings details summary{cursor:pointer}
-.picker{width:100%;border-collapse:collapse;font-size:14px}
-.picker th,.picker td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
-.picker td.c,.picker th.c{width:36px;text-align:center}
-.picker .meta{font-size:12px}
-.pickwrap{max-height:55vh;overflow:auto;margin:12px 0}
-.note{color:#ffd88f;font-size:13px}
-.drop{border:2px dashed var(--line-strong);border-radius:12px;padding:24px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color 150ms var(--ease-out),color 150ms var(--ease-out),background-color 150ms var(--ease-out)}
-.drop.over{border-color:var(--focus);color:var(--fg);background:rgba(34,211,238,.06)}
-.queue{display:flex;flex-direction:column;gap:12px;margin:16px 0;max-height:50vh;overflow:auto}
-.item{border:1px solid var(--line);border-radius:12px;padding:12px 16px;background:var(--bg-deep)}
-.item .top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
-.item .file{font-weight:600;word-break:break-all}
-.item .st{font-size:13px;white-space:nowrap}
-.st-ok{color:#4ad98d}.st-bad{color:#ff9e9e}.st-wait{color:var(--muted)}.st-send{color:var(--focus)}
-.bad{color:#ff9e9e;font-size:13px;background:rgba(224,85,85,.12);border:1px solid rgba(224,85,85,.45);border-radius:8px;padding:8px 12px;margin-top:8px}
-progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
-.sendbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
-.sendbar select{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
 button.small{padding:4px 12px;font-size:13px}
-#linkbar,#actbar{display:none;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:12px 20px;background:rgba(10,20,36,.96);border-bottom:1px solid var(--line);box-shadow:inset 3px 0 0 var(--accent-hover);font-size:14px}
-#linkbar progress{width:220px;margin:0}
-#act-prog{width:160px;margin:0;flex:none}
-#linkbar .db-main,#actbar .db-main{font-weight:600}
-#linkbar .db-sub,#actbar .db-sub{color:var(--muted);font-size:13px;flex-basis:100%}
-#l-text{width:100%;min-height:140px;white-space:pre;overflow-wrap:normal;overflow-x:auto}
-#l-dest{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
-#toast{position:fixed;right:20px;bottom:20px;background:var(--panel-2);border:1px solid var(--line-strong);border-left:4px solid var(--focus);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:12px 16px;display:none;max-width:420px;opacity:1;transform:none;transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
-@starting-style{#toast{opacity:0;transform:translateY(8px)}}
-.notifpop{position:absolute;top:calc(100% + 8px);right:20px;z-index:6;width:340px;max-width:calc(100vw - 40px);max-height:60vh;overflow:auto;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.45);padding:8px;transform-origin:top right;opacity:1;transform:none;transition:opacity 150ms var(--ease-out),transform 150ms var(--ease-out)}
+.icon-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;padding:8px 10px}
+.icon-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ncount{position:absolute;top:-6px;right:-6px;min-width:18px;padding:0 5px;border-radius:999px;background:var(--amber);color:#1a1000;font-size:11px;font-weight:700;line-height:18px;text-align:center}
+summary:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible,.summary span:focus-visible,.art:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.toolbar-more{position:relative}
+.toolbar-more summary{list-style:none;cursor:pointer;padding:8px 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface);font-weight:500;transition:border-color 150ms var(--ease-out),background-color 150ms var(--ease-out)}
+.toolbar-more summary::-webkit-details-marker{display:none}
+.toolbar-more summary:after{content:"";display:inline-block;width:6px;height:6px;margin:0 0 3px 9px;border:solid var(--muted);border-width:0 2px 2px 0;transform:rotate(45deg)}
+@media (hover:hover) and (pointer:fine){.toolbar-more summary:hover{border-color:var(--line-strong);background:var(--surface-hover)}}
+.toolbar-more[open] summary{border-color:var(--focus)}
+.toolbar-menu{position:absolute;right:0;top:calc(100% + 8px);width:max-content;min-width:200px;max-width:calc(100vw - 24px);display:grid;gap:4px;padding:8px;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.5)}
+.toolbar-menu button{text-align:left}
+.notifpop{position:absolute;top:calc(100% + 8px);right:20px;z-index:6;width:340px;max-width:calc(100vw - 40px);max-height:60vh;overflow:auto;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.45);padding:8px;transform-origin:top right;transition:opacity 150ms var(--ease-out),transform 150ms var(--ease-out)}
 @starting-style{.notifpop{opacity:0;transform:scale(.96)}}
 .nitem{display:flex;gap:8px;align-items:baseline;padding:8px;border-bottom:1px solid var(--line);font-size:13px}
 .nitem:last-child{border-bottom:0}
@@ -162,9 +63,108 @@ button.small{padding:4px 12px;font-size:13px}
 .ntext{flex:1;min-width:0;word-break:break-word}
 .ntime{flex:none;color:var(--muted);font-size:12px}
 .nempty{color:var(--muted);text-align:center;padding:24px 8px;font-size:13px}
-.ncount{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:999px;background:#0b5d74;color:#fff;font-size:11px;font-weight:600;line-height:18px;text-align:center}
+/* the activity and download docks under the header */
+#linkbar,#actbar{display:none;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:10px max(24px,calc((100% - 1320px)/2));background:var(--panel);border-bottom:1px solid var(--line);font-size:14px}
+#linkbar progress{width:220px;margin:0}
+#act-prog{width:160px;margin:0;flex:none}
+.db-main{font-weight:600}
+.db-sub{color:var(--muted);font-size:13px;flex-basis:100%}
+/* library */
+main{padding:24px 24px 44px;max-width:1368px;margin:0 auto}
+#restart-banner{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;border:1px solid rgba(240,162,39,.5);border-left:4px solid var(--amber);border-radius:10px;background:rgba(240,162,39,.09);color:#ffe0ad;padding:12px 14px;margin-bottom:20px}
+#restart-banner .rb-main{font-weight:500}
+.libbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;margin:0 0 12px}
+.library-heading{flex:1;display:flex;align-items:center;gap:12px;margin:0;font-size:14px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.library-heading:after{content:"";flex:1;height:1px;background:var(--line)}
+input[type=search]{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;width:280px;max-width:100%}
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-bottom:20px}
+.summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;color:var(--muted)}
+.summary span{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 11px;font-size:13px;cursor:pointer;transition:border-color 150ms var(--ease-out),color 150ms var(--ease-out),background-color 150ms var(--ease-out)}
+.summary span.on{border-color:var(--focus);color:var(--fg);background:rgba(34,211,238,.1)}
+@media (hover:hover) and (pointer:fine){.summary span:hover{border-color:var(--line-strong)}}
+.storage{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.schip{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);white-space:nowrap}
+.schip .sl{color:var(--fg);font-weight:500}
+.sbar{display:inline-block;width:48px;height:4px;border-radius:999px;background:var(--line);overflow:hidden;flex:none}
+.sbar span{display:block;height:100%;background:var(--focus);border-radius:999px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:20px 14px;align-items:start}
+.card{min-width:0}
+.card .art{display:block;width:100%;padding:0;text-align:left;background:transparent;border:0;border-radius:12px;cursor:pointer}
+.card .art[aria-pressed=true] .cover{border-color:var(--focus);box-shadow:0 0 0 2px var(--focus)}
+.cover{display:block;aspect-ratio:4/3;border-radius:10px;background:#081226 center/cover no-repeat;position:relative;border:1px solid rgba(150,185,225,.16);box-shadow:0 3px 12px rgba(0,0,0,.4);transition:transform 160ms var(--ease-out),border-color 160ms var(--ease-out),box-shadow 160ms var(--ease-out)}
+@media (hover:hover) and (pointer:fine){.card .art:hover .cover{transform:translateY(-2px);border-color:rgba(150,185,225,.4);box-shadow:0 8px 22px rgba(0,0,0,.5)}}
+.info{display:block;padding:9px 2px 4px;min-height:48px}
+.name{display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{display:block;font-size:12px;color:#b8cee8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b-restart,.b-pending{color:#ffd88f}
+.b-offline{color:#ff9e9e}
+.b-running{color:#8fe3b6}
+.meta{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.empty{color:var(--muted);text-align:center;padding:48px 0}
+.warn{color:#ffd88f;font-size:13px;background:rgba(240,162,39,.1);border:1px solid rgba(240,162,39,.45);border-radius:8px;padding:8px 12px;margin-top:4px}
+.bad{color:#ff9e9e;font-size:13px;background:rgba(224,85,85,.12);border:1px solid rgba(224,85,85,.45);border-radius:8px;padding:8px 12px;margin-top:8px}
+.note{color:#ffd88f;font-size:13px}
+.hint{color:var(--muted);font-size:13px}
+.hint.lead{margin-bottom:10px}
+/* dialogs */
+dialog{background:var(--panel-2);color:var(--fg);border:1px solid var(--line-strong);border-radius:16px;box-shadow:0 28px 70px rgba(0,0,0,.55);max-width:95vw;max-width:min(900px,95vw);width:900px;padding:22px;transition:opacity 180ms var(--ease-out),transform 200ms var(--ease-out)}
+@starting-style{dialog[open]{opacity:0;transform:scale(.96)}}
+dialog::backdrop{background:rgba(1,4,10,.68)}
+dialog h3{margin:0 0 16px;font-size:18px;font-weight:600}
+.dlg-foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:12px}
+.hero{height:220px;border-radius:12px;background:var(--bg-deep) center/cover no-repeat;margin:0 0 16px;position:relative;border:1px solid var(--line)}
+.hero .icon{position:absolute;left:16px;bottom:-24px;width:96px;height:96px;border-radius:12px;border:3px solid var(--panel-2);background:var(--bg-deep) center/cover no-repeat;box-shadow:0 8px 20px rgba(0,0,0,.45)}
+#g-name{margin:0 0 0 124px;min-height:30px}
+.facts{display:grid;grid-template-columns:max-content 1fr;gap:8px 16px;margin:24px 0 16px;font-size:14px}
+.facts dt{color:var(--muted)}.facts dd{margin:0;word-break:break-all}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+pre{white-space:pre-wrap;font-size:12px;max-height:60vh;overflow:auto;background:var(--bg-deep);border:1px solid var(--line);padding:12px;border-radius:8px}
+form.settings{display:flex;flex-direction:column;gap:16px}
+form.settings label{display:flex;flex-direction:column;gap:6px}
+form.settings label.check{flex-direction:row;align-items:center;gap:10px}
+form.settings textarea,select,form.settings input[type=number],form.settings input[type=text],form.settings input[type=password]{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
+form.settings textarea{min-height:90px;resize:vertical;font-family:ui-monospace,Consolas,monospace}
+form.settings textarea:focus,select:focus,form.settings input:focus,input[type=search]:focus{border-color:var(--focus)}
+form.settings .row{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+form.settings .row.start{justify-content:flex-start}
+#setform>.row:last-child{position:sticky;bottom:-22px;margin:0 -22px -22px;padding:14px 22px;background:var(--panel-2);border-top:1px solid var(--line)}
+form.settings fieldset{border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;background:rgba(5,11,24,.45)}
+form.settings legend{font-weight:600;padding:0 8px;color:var(--focus);font-size:12.5px;letter-spacing:.09em;text-transform:uppercase}
+form.settings input.num{width:6em}
+.picker{width:100%;border-collapse:collapse;font-size:14px}
+.picker th,.picker td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
+.picker td.c,.picker th.c{width:36px;text-align:center}
+.picker .meta{font-size:12px}
+.pickwrap{max-height:55vh;overflow:auto;margin:12px 0}
+.drop{border:2px dashed var(--line-strong);border-radius:12px;padding:24px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color 150ms var(--ease-out),color 150ms var(--ease-out),background-color 150ms var(--ease-out)}
+.drop.over{border-color:var(--focus);color:var(--fg);background:rgba(34,211,238,.06)}
+.queue{display:flex;flex-direction:column;gap:12px;margin:16px 0;max-height:50vh;overflow:auto}
+.item{border:1px solid var(--line);border-radius:12px;padding:12px 16px;background:var(--bg-deep)}
+.item .top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.item .file{font-weight:600;word-break:break-all}
+.item .st{font-size:13px;white-space:nowrap}
+.st-ok{color:#4ad98d}.st-bad{color:#ff9e9e}.st-wait{color:var(--muted)}.st-send{color:var(--focus)}
+progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
+.sendbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sendbar .bar,.sendbar>button{margin-left:auto}
+#l-text{width:100%;min-height:140px;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+#toast{position:fixed;right:20px;bottom:20px;z-index:10;background:var(--panel-2);border:1px solid var(--line-strong);border-left:4px solid var(--focus);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:12px 16px;display:none;max-width:420px;transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
+@starting-style{#toast{opacity:0;transform:translateY(8px)}}
+/* the PS4 app (?app=1): bigger targets for a TV across the room */
+.tv main{padding:28px 4% 48px}
+.tv header{padding-left:4%;padding-right:4%}
+.tv button,.tv input,.tv select,.tv .toolbar-more summary{min-height:41px}
+.tv button{font-size:16px}
+.tv button:focus,.tv input:focus,.tv select:focus,.tv textarea:focus,.tv [tabindex]:focus{outline:3px solid var(--focus);outline-offset:3px}
+.tv .name{font-size:18px}.tv .badge{font-size:14px}
+.tv .meta{font-size:14px}
+.tv .library-heading{font-size:16px}
+.tv .grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:24px 18px}
+.tv .card .art:focus .cover{transform:scale(1.03)}
+@media(max-width:860px){.tagline{display:none}}
+@media(max-width:620px){header{position:relative;padding:10px 14px}.bar{width:100%}.mc-status{display:none}.toolbar-more{position:static;margin-left:auto}.toolbar-menu{right:14px;top:calc(100% - 3px)}main{padding:18px 14px}.libbar input[type=search]{width:100%}.storage{margin-left:0}}
 @media (prefers-contrast:more){:root{--muted:#c2d3ea;--line:#33538a;--line-strong:#4a70a8}.cover{border-color:#4a70a8}}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-property:opacity,background-color,border-color,color!important}button:active:not(:disabled){transform:none!important}.tv .card .art:focus .cover{transform:none!important}#toast{transform:none!important}.notifpop{transform:none!important}dialog[open]{transform:none!important}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-property:opacity,background-color,border-color,color!important}button:active:not(:disabled){transform:none!important}.tv .card .art:focus .cover{transform:none!important}#toast,.notifpop,dialog[open]{transform:none!important}}
 /* last: over any display rule (form.settings is flex), also where !important or
  * specificity are not applied */
 [hidden],form.settings[hidden]{display:none!important}
@@ -181,27 +181,17 @@ button.small{padding:4px 12px;font-size:13px}
   </div>
   <div class="bar">
     <span class="mc-status" id="mc-status"><span class="dot" id="mc-dot"></span><span id="mc-ver"></span></span>
-    <details id="library-filters" class="toolbar-more">
-      <summary tabindex="0">Search and filter</summary>
-      <div class="toolbar-menu">
-        <input id="q" type="search" placeholder="Search game or CUSA" aria-label="Search game or CUSA">
-        <div class="summary" id="summary"></div>
-        <div class="summary" id="platforms" hidden></div>
-      </div>
-    </details>
+    <button id="rescan">Scan for games</button>
+    <button id="sendbtn" hidden>Send games</button>
+    <button id="linkbtn" hidden>Download links</button>
+    <button id="notifbtn" class="icon-btn" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.6L4.3 16h15.4L18 12.6V9a6 6 0 0 0-6-6zM9.5 18.5a2.5 2.5 0 0 0 5 0"/></svg><span id="notif-count" class="ncount" hidden></span></button>
     <details id="panel-tools" class="toolbar-more">
-      <summary tabindex="0">Manage</summary>
+      <summary tabindex="0">More</summary>
       <div class="toolbar-menu">
-        <button id="rescan">Scan for games</button>
-        <button id="sendbtn" hidden>Send games</button>
         <button id="settingsbtn">Settings</button>
         <button id="removebtn">Remove several</button>
-        <button id="linkbtn" hidden>Download links</button>
         <button id="logbtn">Log</button>
-        <button id="notifbtn">Notifications<span id="notif-count" class="ncount" hidden></span></button>
         <button id="stop" class="danger">Stop</button>
-        <div class="storage" id="storage" hidden></div>
-        <small class="meta" id="ver"></small>
       </div>
     </details>
   </div>
@@ -216,12 +206,20 @@ button.small{padding:4px 12px;font-size:13px}
     <button type="button" id="restart-filter" class="small"></button>
   </div>
   <div class="warn" id="setupnote" hidden>First start: check the settings (which folders, games per group, add-ons) and press Save in Settings. While this page is open no game is added; closed for 2 minutes without saving, the default settings are used.</div>
-  <h2 class="library-heading">Library</h2>
+  <div class="libbar">
+    <h2 class="library-heading">Library</h2>
+    <input id="q" type="search" placeholder="Search game or CUSA" aria-label="Search game or CUSA">
+  </div>
+  <div class="filters">
+    <div class="summary" id="summary"></div>
+    <div class="summary" id="platforms" hidden></div>
+    <div class="storage" id="storage" hidden></div>
+  </div>
   <div class="grid" id="grid"></div>
   <p class="empty" id="no-matches" hidden>No matching games</p>
   <div class="empty" id="empty" hidden>
     <p id="empty-t">No PS4 games found. Put the .pkg files (game, update and add-ons) on a USB drive, then Scan for games or send them from this page.</p>
-    <div class="bar" id="empty-btns" style="justify-content:center" hidden>
+    <div class="bar center" id="empty-btns" hidden>
       <button id="empty-send" hidden>Send games</button>
       <button id="empty-links" hidden>Download links</button>
     </div>
@@ -229,7 +227,7 @@ button.small{padding:4px 12px;font-size:13px}
 </main>
 <dialog id="setdlg"><h3>Settings</h3>
 <form class="settings" id="setform">
-  <fieldset><legend>External drives and scan folders</legend>
+  <fieldset><legend>Library</legend>
     <label>Folders to search for pkgs (one per line, relative to each drive)
       <textarea id="s-paths" spellcheck="false"></textarea>
       <span class="hint">/ is the root of the drive. The ps4 folder holds organized games, so it cannot be used here.</span>
@@ -237,6 +235,8 @@ button.small{padding:4px 12px;font-size:13px}
     <label class="check"><input type="checkbox" id="s-organize"> Organize pkgs into the ps4 folder</label>
     <span class="hint">On (the default): the .pkg files are moved into ps4/&lt;title ID&gt;/ on the drive, so the console's
       own installer does not find them again. Off: they are used where they are, anywhere on the drive, and are not renamed or moved.</span>
+    <label class="check"><input type="checkbox" id="s-internal"> Also use pkgs in the console's /data/PS4Mount</label>
+    <span class="hint">Pkgs sent to the console's storage are added from there, with no install to wait for. They still take internal space.</span>
     <label class="check"><input type="checkbox" id="s-batch"> Add new games in groups</label>
     <label>Games per group
       <input type="number" class="num" id="s-size" inputmode="numeric" pattern="[0-9]*" min="1" max="50">
@@ -244,36 +244,24 @@ button.small{padding:4px 12px;font-size:13px}
     </label>
   </fieldset>
   <fieldset><legend>Add-ons (DLC)</legend>
-    <label>Add-ons (DLC)
-      <select id="s-dlc-mode">
-        <option value="external">Mount from the source drive</option>
-        <option value="internal">Console storage (installs add-ons, up to 256 MB)</option>
-        <option value="off">Off</option>
-      </select>
-    </label>
+    <select id="s-dlc-mode" title="Add-ons (DLC)" aria-label="Add-ons (DLC)">
+      <option value="external">Mount from the source drive</option>
+      <option value="internal">Console storage (installs add-ons, up to 256 MB)</option>
+      <option value="off">Off</option>
+    </select>
     <label class="check" id="s-dlcbig-row" hidden><input type="checkbox" id="s-dlcbig"> Also install big add-ons (over 256 MB)</label>
     <span class="hint">External mode mounts add-on packages from the source drive. Console storage
       installs add-ons up to 256 MB each, or any size with the big-add-ons option. Off disables add-ons managed by Lodestar.</span>
   </fieldset>
-  <fieldset><legend>System and GoldHEN</legend>
-    <label class="check"><input type="checkbox" id="s-klog"> Read the console's log (game start and stop)</label>
-    <span class="hint">On by default. Turn it off to leave the log to another payload: AnyPad needs it to tell its virtual
-      pad apart, and only one payload can read it. Games in play are then noticed a few seconds later, from their mount.</span>
-    <label class="check"><input type="checkbox" id="s-autorun"> Start with the console (GoldHEN AutoRun)</label>
-    <span class="hint" id="autorun-hint"></span>
+  <fieldset><legend>Console</legend>
     <label>Language
       <select id="s-lang"><option value="auto">The console's</option><option value="en">English</option><option value="es">Español</option></select>
     </label>
-    <label class="check"><input type="checkbox" id="s-internal"> Also use pkgs in the console's /data/PS4Mount</label>
-    <span class="hint">Pkgs sent to the console's storage are added from there, with no install to wait for. They still take internal space.</span>
-    <details><summary>Where the games are</summary>
-      <p>Nothing is installed: each game plays straight from its .pkg files on a USB drive or the console's
-        /data/PS4Mount when the internal-storage option is on. Lodestar only adds it to the home screen; the pkgs are never
-        copied for it.</p>
-      <p>Add-ons come from the drive too: external mode mounts their packages from the source drive, console storage installs them on the
-        console (up to 256 MB each, or any size with the big-add-ons option), off disables add-ons managed by Lodestar. Removing a game from the
-        library, or restoring its files, never deletes a .pkg.</p>
-    </details>
+    <label class="check"><input type="checkbox" id="s-autorun"> Start with the console (GoldHEN AutoRun)</label>
+    <span class="hint" id="autorun-hint"></span>
+    <label class="check"><input type="checkbox" id="s-klog"> Read the console's log (game start and stop)</label>
+    <span class="hint">On by default. Turn it off to leave the log to another payload: AnyPad needs it to tell its virtual
+      pad apart, and only one payload can read it. Games in play are then noticed a few seconds later, from their mount.</span>
   </fieldset>
   <fieldset id="storagebox"><legend>What Lodestar keeps on the console's drive</legend>
     <span class="hint" id="st-free"></span>
@@ -286,7 +274,7 @@ button.small{padding:4px 12px;font-size:13px}
     <label><span>Games removed from the library per group (1 to <span class="rmax">10</span>)</span>
       <input type="number" class="num" id="s-rsize" inputmode="numeric" pattern="[0-9]*" min="1" max="10">
     </label>
-    <div class="row" style="justify-content:flex-start;flex-wrap:wrap">
+    <div class="row start">
       <button type="button" class="danger" id="s-restore">Restore the files of all games</button>
       <button type="button" id="s-pick">Restore the files of chosen games</button>
       <button type="button" id="s-forget">Use restored pkgs again</button>
@@ -301,7 +289,7 @@ button.small{padding:4px 12px;font-size:13px}
   <tbody id="p-rows"></tbody>
 </table></div>
 <div class="hint" id="p-info"></div>
-<div class="row" style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+<div class="dlg-foot">
   <button type="button" id="p-cancel">Cancel</button><button type="button" class="danger" id="p-go" disabled>Restore the chosen ones</button>
 </div></dialog>
 <dialog id="remdlg"><h3>Remove games from the library</h3>
@@ -311,11 +299,11 @@ button.small{padding:4px 12px;font-size:13px}
   <tbody id="r-rows"></tbody>
 </table></div>
 <div class="hint" id="r-info"></div>
-<div class="row" style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+<div class="dlg-foot">
   <button type="button" id="r-cancel">Cancel</button><button type="button" class="danger" id="r-go" disabled>Remove the chosen ones</button>
 </div></dialog>
 <dialog id="senddlg"><h3>Send games</h3>
-<div class="hint" style="color:var(--muted);font-size:13px;margin-bottom:10px">Pick the pkgs on this computer. Each one is
+<div class="hint lead">Pick the pkgs on this computer. Each one is
   checked first (it takes a second): only pkgs this console can use are sent, so no transfer ends in a game that does not
   start. They are added to the library when they arrive.</div>
 <div class="drop" id="drop">Drop .pkg files here, or click to pick them<input type="file" id="files" accept=".pkg" multiple hidden></div>
@@ -327,11 +315,11 @@ button.small{padding:4px 12px;font-size:13px}
 </div></dialog>
 <dialog id="gamedlg"><div class="hero" id="g-hero"><div class="icon" id="g-icon"></div></div>
 <h3 id="g-name"></h3><dl class="facts" id="g-facts"></dl>
-<div class="actions" id="g-actions" style="padding:0"></div>
-<form method="dialog" style="display:flex;justify-content:flex-end;margin-top:10px"><button>Close</button></form></dialog>
+<div class="actions" id="g-actions"></div>
+<form method="dialog" class="dlg-foot"><button>Close</button></form></dialog>
 <dialog id="linkdlg"><h3>Download links</h3>
 <form class="settings" id="l-form">
-  <div class="hint" style="color:var(--muted);font-size:13px">The console downloads them itself (you can close this page): a pkg, a ZIP
+  <div class="hint">The console downloads them itself (you can close this page): a pkg, a ZIP
     or a RAR, also in parts. Paste the direct links, the ones that start the download, one per line; all the parts of a RAR
     (name.part1.rar, name.part2.rar...) become one download. Its pkgs are added to the library when they arrive.</div>
   <textarea id="l-text" spellcheck="false" placeholder="https://example.com/game.part1.rar&#10;https://example.com/game.part2.rar&#10;https://example.com/file?id=123 | name.pkg"></textarea>
@@ -343,8 +331,8 @@ button.small{padding:4px 12px;font-size:13px}
 </form>
 <div class="note" id="l-result" hidden></div>
 <div class="pickwrap"><table class="picker"><tbody id="l-rows"></tbody></table></div>
-<div class="row" style="display:flex;justify-content:flex-end"><button type="button" id="l-close">Close</button></div></dialog>
-<dialog id="logdlg"><h3>Log</h3><pre id="log"></pre><form method="dialog"><button>Close</button></form></dialog>
+<div class="dlg-foot"><button type="button" id="l-close">Close</button></div></dialog>
+<dialog id="logdlg"><h3>Log</h3><pre id="log"></pre><form method="dialog" class="dlg-foot"><button>Close</button></form></dialog>
 <div id="toast"></div>
 <!--LANG-->
 <script>
@@ -649,7 +637,7 @@ function load() {
     renderStorage();
     renderActivity();
     renderNotices();
-    $('ver').textContent = j.version; $('setupnote').hidden = !j.setup;
+    $('setupnote').hidden = !j.setup;
     $('mc-ver').textContent = j.version;
     $('mc-dot').className = 'dot ok';
   })
@@ -677,12 +665,8 @@ function onAction(e) {
     .catch(function (err) { toast(t('Error: {0}', err.message)); })
     .then(function () { delete busy[tid]; load(); });
 }
-var shelfMenus = [$('library-filters'), $('panel-tools')];
-shelfMenus.forEach(function (menu) {
-  menu.addEventListener('toggle', function () {
-    if (menu.open) shelfMenus.forEach(function (other) { if (other !== menu) other.open = false; });
-  });
-});
+var shelfMenus = [$('panel-tools')];
+$('panel-tools').addEventListener('toggle', function () { if (this.open) $('notifpop').hidden = true; });
 $('panel-tools').addEventListener('click', function (e) {
   if (e.target.closest('button') && this.open) {
     this.open = false;
@@ -1012,7 +996,7 @@ function rate(bps) { var m = bps / 1048576; return (m < 10 ? m.toFixed(1) : Math
 /* "~25 min", "~1 h 40 min" (exact: no ~, for time already spent) */
 function left(seconds, exact) {
   var m = Math.round(seconds / 60), p = exact ? '' : '~';
-  if (m < 1) return exact ? t('less than a minute') : t('less than a minute');
+  if (m < 1) return t('less than a minute');
   return m < 60 ? p + m + ' min' : p + Math.floor(m / 60) + ' h ' + (m % 60) + ' min';
 }
 /* The drives downloads from links can go to. */

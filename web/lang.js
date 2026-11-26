@@ -16,7 +16,8 @@ var LANGS = {
     'Games': 'Juegos',
     'Library': 'Biblioteca',
     'Manage': 'Gestionar',
-    'Search and filter': 'Buscar y filtrar',
+    'More': 'Más',
+    'Console': 'Consola',
     'No matching games': 'Ningún juego coincide',
     'Back': 'Volver',
     'Save': 'Guardar',
@@ -40,7 +41,6 @@ var LANGS = {
     'Organize pkgs into the ps4 folder': 'Organizar los pkgs en la carpeta ps4',
     'On (the default): the .pkg files are moved into ps4/<title ID>/ on the drive, so the console\'s own installer does not find them again. Off: they are used where they are, anywhere on the drive, and are not renamed or moved.':
       'Activado (por defecto): los .pkg se mueven a ps4/<ID del título>/ en la unidad, así el instalador de la consola no los encuentra otra vez. Desactivado: se usan donde están, en cualquier parte de la unidad, sin renombrarlos ni moverlos.',
-    'External drives and scan folders': 'Unidades externas y carpetas de búsqueda',
     'Add-ons (DLC)': 'DLC',
     'Mount from the source drive': 'Montar desde la unidad de origen',
     'Console storage (installs add-ons, up to 256 MB)': 'Memoria de la consola (instala los DLC, hasta 256 MB)',
@@ -53,7 +53,6 @@ var LANGS = {
       'Memoria de la consola: activa "Usar también los pkgs de /data/PS4Mount de la consola" en Ajustes',
     'External mode mounts add-on packages from the source drive. Console storage installs add-ons up to 256 MB each, or any size with the big-add-ons option. Off disables add-ons managed by Lodestar.':
       'El modo externo monta los paquetes de DLC desde la unidad de origen. El modo interno instala DLC de hasta 256 MB cada uno, o de cualquier tamaño con la opción de DLC grandes. Apagado desactiva los DLC gestionados por Lodestar.',
-    'System and GoldHEN': 'Sistema y GoldHEN',
     "Read the console's log (game start and stop)": 'Leer el log de la consola (inicio y fin de juego)',
     "On by default. Turn it off to leave the log to another payload: AnyPad needs it to tell its virtual pad apart, and only one payload can read it. Games in play are then noticed a few seconds later, from their mount.":
       'Activado por defecto. Desactivalo para dejarle el log a otro payload: AnyPad lo necesita para distinguir su pad virtual, y solo un payload puede leerlo. Los juegos en marcha se notan unos segundos más tarde, por su montaje.',
@@ -130,11 +129,6 @@ var LANGS = {
     'Pkgs in the internal library': 'Pkgs de la biblioteca interna',
     "{0} free of {1} on the console's drive": '{0} libres de {1} en el disco de la consola',
     'Could not read the storage': 'No se pudo leer el almacenamiento',
-    'Where the games are': 'Dónde están los juegos',
-    'Nothing is installed: each game plays straight from its .pkg files on a USB drive or the console\'s /data/PS4Mount when the internal-storage option is on. Lodestar only adds it to the home screen; the pkgs are never copied for it.':
-      'No se instala nada: cada juego se juega directamente desde sus .pkg en un USB o el /data/PS4Mount de la consola cuando la opción de memoria interna está activada. Lodestar solo lo añade a la pantalla de inicio; los pkgs nunca se copian para ello.',
-    'Add-ons come from the drive too: external mode mounts their packages from the source drive, console storage installs them on the console (up to 256 MB each, or any size with the big-add-ons option), off disables add-ons managed by Lodestar. Removing a game from the library, or restoring its files, never deletes a .pkg.':
-      'Los DLC también vienen de la unidad: el modo externo monta los paquetes desde la unidad de origen, la memoria de la consola los instala en la consola (hasta 256 MB cada uno, o cualquier tamaño con la opción de DLC grandes) y apagado desactiva los DLC gestionados por Lodestar. Quitar un juego de la biblioteca, o devolver sus archivos, nunca borra un .pkg.',
     'Start with the console (GoldHEN AutoRun)': 'Arrancar con la consola (AutoRun de GoldHEN)',
     'Payload found: {0}. Enable Settings > GoldHEN > PayLoader > Enable AutoRun. Hold L1 at boot to skip AutoRun.':
       'Payload encontrado: {0}. Activa Ajustes > GoldHEN > PayLoader > Enable AutoRun. Mantén L1 al arrancar para saltar AutoRun.',
@@ -266,7 +260,7 @@ function known(k) {
   return false;
 }
 
-/* The fixed texts of the page (text nodes and placeholder/title), by their English text,
+/* The fixed texts of the page (text nodes and placeholder/title/aria-label), by their English text,
  * kept on each node so the page can switch back. Generated parts use t() themselves. */
 function translatePage() {
   var walker = document.createTreeWalker(document.body, 4, null, false), n, k, attrs, i, j, el, a;
@@ -281,7 +275,7 @@ function translatePage() {
     }
     n.nodeValue = n.psmLead + t(n.psmEn) + n.psmTrail;
   }
-  attrs = ['placeholder', 'title'];
+  attrs = ['placeholder', 'title', 'aria-label'];
   for (i = 0; i < attrs.length; i++) {
     a = attrs[i];
     el = document.querySelectorAll('[' + a + ']');

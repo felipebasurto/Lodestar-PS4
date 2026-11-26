@@ -43,7 +43,10 @@ function bindShelfNavigation(grid, tv, select, back) {
   }
   document.addEventListener('keydown', function (e) {
     var direction = directions[e.keyCode] || (/^Arrow(Left|Up|Right|Down)$/.test(e.key) ? e.key.slice(5) : '');
-    var editable = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || e.target.isContentEditable;
+    /* Up/Down leave a one-line text field (the search): it has no use for them, and on the
+     * PS4 a field that keeps them traps the controller */
+    var line = e.target.tagName === 'INPUT' && /^(search|text)$/i.test(e.target.type) && (direction === 'Up' || direction === 'Down');
+    var editable = (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) && !line) || e.target.isContentEditable;
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
     if (tv && (e.key === 'Escape' || e.keyCode === 27)) {
       lastKey = Date.now();

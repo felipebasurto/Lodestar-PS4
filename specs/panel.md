@@ -20,10 +20,14 @@ Source: user request for TV and controller operation.
 ### PANEL-3: game artwork comes first without sacrificing scanability
 
 The grid shows artwork, titles, and states that need attention in compact cards. Details use the
-large artwork and expose package paths and maintenance actions there. The modern panel keeps
-library filters and management in separate menus. Back closes an open menu before leaving the PS4 panel.
+large artwork and expose package paths and maintenance actions there. The modern panel shows the
+search field, the state/platform filters and the drives' free space above the grid, the frequent
+actions (scan, send games, download links, notifications) in the header, and the rest (settings,
+remove several, log, stop) in one menu. Back closes an open menu before leaving the PS4 panel, and in
+the PS4 app Up/Down move out of the search field so it never traps the controller.
 Check: test for reaching details, filtering and Back (`test/web/panel.test.js`), read for hierarchy.
-Source: user feedback on the blue shelf and the Steam-like library direction.
+Source: user feedback on the blue shelf and the Steam-like library direction; user (2026-11-26):
+a clean, well organised interface (search and the main actions were hidden behind two menus).
 
 ### PANEL-4: write requests come only from local network addresses
 

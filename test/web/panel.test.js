@@ -616,9 +616,14 @@ function tKeys(file) {
   w.showGame('CUSA34284');
   key('Escape', 27);
   ok(!d.getElementById('gamedlg').hasAttribute('open') && !reqs.length, 'PS4 back closes details before exiting');
-  d.querySelector('#library-filters summary').click();
+  d.querySelector('#panel-tools summary').click();
   key('Escape', 27);
-  ok(!d.getElementById('library-filters').open && !reqs.length, 'PS4 back closes search before exiting');
+  ok(!d.getElementById('panel-tools').open && !reqs.length, 'PS4 back closes the menu before exiting');
+  { const q = d.getElementById('q');
+    q.getClientRects = () => [{}];
+    q.getBoundingClientRect = () => ({left: 0, top: -100, width: 90, height: 30});
+    q.focus(); key('ArrowDown', 40);
+    ok(d.activeElement === covers[0] && !reqs.length, 'PS4 Down leaves the search field for the games'); }
   key('Escape', 27);
   ok(reqs[0] && reqs[0].url === '/api/app/close' && reqs[0].method === 'POST', 'PS4 back from the shelf closes the app');
 
