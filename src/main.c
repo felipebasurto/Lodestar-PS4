@@ -2184,6 +2184,42 @@ static managed_t g_managed[MAX_TITLES];
 /* Storage reads only the identity fields (used/tid). The owner keeps runtime/mount use of
  * the table; this short mutex only makes that identity snapshot consistent for workers. */
 static pthread_mutex_t g_managed_id_mu = PTHREAD_MUTEX_INITIALIZER;
+
+/* Small published mirror of "this title is running" for panel reads. g_managed remains
+ * owner/runtime machinery; this list is synchronized because klog and scans update it. */
+static char g_running_tids[MAX_TITLES][10];
+static int g_nrunning;
+static pthread_mutex_t g_running_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static void runtime_publish(const char *tid, int running) {
+    pthread_mutex_lock(&g_running_mu);
+    int at = -1;
+    for (int i = 0; i < g_nrunning; i++)
+        if (!strcmp(g_running_tids[i], tid))
+            at = i;
+    if (running && at < 0 && g_nrunning < MAX_TITLES)
+        snprintf(g_running_tids[g_nrunning++], 10, "%s", tid);
+    else if (!running && at >= 0) {
+        memmove(g_running_tids[at], g_running_tids[at + 1], (size_t)(g_nrunning - at - 1) * sizeof(g_running_tids[0]));
+        g_nrunning--;
+    }
+    pthread_mutex_unlock(&g_running_mu);
+}
+
+static int runtime_is_running(const char *tid) {
+    int found = 0;
+    pthread_mutex_lock(&g_running_mu);
+    for (int i = 0; i < g_nrunning; i++)
+        found |= !strcmp(g_running_tids[i], tid);
+    pthread_mutex_unlock(&g_running_mu);
+    return found;
+}
+
+static void runtime_clear(void) {
+    pthread_mutex_lock(&g_running_mu);
+    g_nrunning = 0;
+    pthread_mutex_unlock(&g_running_mu);
+}
 static int g_scan_manual_active; /* main-loop epoch snapshot of a panel "scan for games" request */
 static int g_walk_now;    /* a drive came (the share connected): walked now, without saying so */
 static int g_deleting; /* a delete screen is open: game folders are unmounted */
@@ -3987,8 +4023,10 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         int running = title_running(t->tid);
         if (m && running && !m->running) {
             m->running = 1; /* open before this daemon started (restart or crash) */
+            runtime_publish(t->tid, 1);
         } else if (m && !running && m->running && time(NULL) - m->running_since > 60) {
             m->running = 0; /* closed without a klog end event */
+            runtime_publish(t->tid, 0);
         }
         if (mount_info(info)) {
             if (!m || !m->mount_warned)
@@ -4652,6 +4690,7 @@ static void disagree_seen(const char *tid) {
     if (!m)
         return;
     m->running = 0; /* the launch was refused */
+    runtime_publish(tid, 0);
     if (!m->has_patch)
         return;
     /* The system holds one version of the game and the update is not it (it refuses the
@@ -4914,20 +4953,25 @@ static void handle_klog_line(const char *line) {
         if (m) {
             m->running = 1;
             m->running_since = time(NULL);
+            runtime_publish(id, 1);
         }
     } else if ((p = after(line, "PrepareProcessLaunchPkg() ret = ")) && strtoul(p, NULL, 16) && g_last_launch[0]) {
         /* the system turned the launch down (80990019: no game task yet): it never ran */
         managed_t *m = managed_by(g_last_launch, NULL);
-        if (m)
+        if (m) {
             m->running = 0;
+            runtime_publish(g_last_launch, 0);
+        }
     } else if ((p = after(line, "notifyAppCrash() titleId={"))) {
         /* a crash, or a game the system killed because it did not suspend in time: it
          * ends without the PlayGo end event */
         snprintf(id, sizeof(id), "%.9s", p);
         printf("[game] %s ended with an application error\n", id);
         managed_t *m = managed_by(id, NULL);
-        if (m)
+        if (m) {
             m->running = 0;
+            runtime_publish(id, 0);
+        }
     } else if ((p = after(line, "Suspending the app has been timed out. ("))) {
         snprintf(id, sizeof(id), "%.9s", p);
         printf("[game] %s did not suspend in time: the system closes it (unsaved progress is lost)\n", id);
@@ -4959,6 +5003,7 @@ static void handle_klog_line(const char *line) {
         managed_t *m = managed_by(id, NULL);
         if (m) {
             m->running = 0;
+            runtime_publish(id, 0);
             if (g_deleting) {
                 /* closed by a delete: take the folder away before the uninstall runs */
                 unmount_title(m->tid, m->dlc_tids, m->ndlc_tids);
@@ -5121,14 +5166,13 @@ void app_games_json(buf_t *out) {
                 statfs(target, &sf);
                 mount = sf.f_flags & MNT_RDONLY ? "ro" : "rw";
             }
-            managed_t *m = managed_by(tid, NULL);
             if (installed_internally(tid))
                 state = "internal";
             else if (served_elsewhere(t))
                 state = "duplicate";
             else if (removed(tid))
                 state = "removed";
-            else if (m && m->running)
+            else if (runtime_is_running(tid))
                 state = "running";
             else if (mounted && db_is_registered(tid))
                 state = needs_reboot(tid) ? "restart" : "ready";
@@ -5729,6 +5773,7 @@ static int close_open_games(void) {
             pump_events(2000); /* let the system finish unmounting the game */
             for (int i = 0; i < MAX_TITLES; i++)
                 g_managed[i].running = 0;
+            runtime_clear();
             return 0;
         }
     }
