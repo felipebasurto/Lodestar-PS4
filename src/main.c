@@ -845,7 +845,7 @@ static int dlc_cmp(const void *a, const void *b) {
 }
 
 /* Add-ons are used when their folder names match the pkg (title ID and label). */
-static void dlc_open(title_src_t *t) {
+static void dlc_open(title_src_t *t, const config_t *cfg) {
     char base[PATH_MAX];
     snprintf(base, sizeof(base), "%s/addcont", t->dir);
     DIR *d = opendir(base);
@@ -886,7 +886,7 @@ static void dlc_open(title_src_t *t) {
                 pkg_close(&a->pkg);
                 continue;
             }
-            if (dlc_skip(a->pkg.pkg_size, g_cfg.dlc_mode, g_cfg.dlc_big)) {
+            if (dlc_skip(a->pkg.pkg_size, cfg->dlc_mode, cfg->dlc_big)) {
                 pkg_close(&a->pkg);
                 continue;
             }
@@ -897,7 +897,7 @@ static void dlc_open(title_src_t *t) {
                 continue;
             }
             a->data = a->pkg.content_type == 0x1b; /* 0x1b with data, 0x1c license only */
-            a->install = g_cfg.dlc_mode == DLC_INTERNAL && (a->pkg.pkg_size <= DLC_INSTALL_MAX || g_cfg.dlc_big);
+            a->install = cfg->dlc_mode == DLC_INTERNAL && (a->pkg.pkg_size <= DLC_INSTALL_MAX || cfg->dlc_big);
             t->ndlc++;
             if (a->install)
                 continue; /* not mounted: no /user/addcont folder of PS4Mount's */
@@ -931,7 +931,7 @@ static void game_location(const char *root, const char *tid, const char *app_pat
 
 /* The add-ons the catalog grouped with the game, wherever they are. A second copy of an
  * add-on and the ones deleted on the console are left out. */
-static void dlc_open_catalog(title_src_t *t, const catalog_t *c, const cat_game_t *g) {
+static void dlc_open_catalog(title_src_t *t, const catalog_t *c, const cat_game_t *g, const config_t *cfg) {
     const cat_pkg_t *list[CAT_MAX_DLC];
     int nlist = catalog_dlc_of(g_cat, c, g, list, CAT_MAX_DLC);
     for (int k = 0; k < nlist && t->ndlc < MAX_DLC; k++) {
@@ -956,12 +956,12 @@ static void dlc_open_catalog(title_src_t *t, const catalog_t *c, const cat_game_
                 pkg_close(&a->pkg);
             continue;
         }
-        if (dlc_skip(a->pkg.pkg_size, g_cfg.dlc_mode, g_cfg.dlc_big)) {
+        if (dlc_skip(a->pkg.pkg_size, cfg->dlc_mode, cfg->dlc_big)) {
             pkg_close(&a->pkg);
             continue;
         }
         a->data = a->pkg.content_type == 0x1b; /* 0x1b with data, 0x1c license only */
-        a->install = g_cfg.dlc_mode == DLC_INTERNAL && (a->pkg.pkg_size <= DLC_INSTALL_MAX || g_cfg.dlc_big);
+        a->install = cfg->dlc_mode == DLC_INTERNAL && (a->pkg.pkg_size <= DLC_INSTALL_MAX || cfg->dlc_big);
         t->ndlc++;
         if (a->install)
             continue; /* not mounted: no /user/addcont folder of PS4Mount's */
@@ -1057,7 +1057,7 @@ static int title_patch_path(const char *root, const char *tid, char *out, size_t
 
 /* Opens the pkgs of tid with the paths already chosen (dir, app_path and patch_path).
  * cat is NULL for the folders of older versions. */
-static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat, const cat_game_t *g) {
+static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat, const cat_game_t *g, const config_t *cfg) {
     if (pkg_open(&t->app, t->app_path) || read_meta(&t->app, &t->app_meta)) {
         if (first_time(t->app_path))
             printf("[scan] %s: unreadable app pkg\n", t->app_path);
@@ -1109,11 +1109,11 @@ static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat,
         for (int i = 0; i < 32; i++)
             snprintf(digest + i * 2, 3, "%02x", t->patch.digest[i]);
     snprintf(t->marker, sizeof(t->marker), "%s\n%s\n", t->dir, t->has_patch ? digest : "nopatch");
-    if (g_cfg.dlc) {
+    if (cfg->dlc) {
         if (cat)
-            dlc_open_catalog(t, cat, g);
+            dlc_open_catalog(t, cat, g, cfg);
         else
-            dlc_open(t);
+            dlc_open(t, cfg);
     }
     if (t->ndlc) {
         /* one line for all add-ons, so markers of titles without add-ons stay as before */
@@ -1139,7 +1139,7 @@ static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat,
 
 /* Opens the pkgs PS4Mount serves for tid from root: its ps4/<TID> folder (organized) or,
  * with organize off, where the catalog of the drive found them. */
-static int src_open(title_src_t *t, const char *root, const char *tid) {
+static int src_open(title_src_t *t, const char *root, const char *tid, const config_t *cfg) {
     memset(t, 0, sizeof(*t));
     if (in_place(root)) {
         const catalog_t *cat = drive_catalog(root);
@@ -1151,12 +1151,12 @@ static int src_open(title_src_t *t, const char *root, const char *tid) {
         if (patch)
             snprintf(t->patch_path, sizeof(t->patch_path), "%s", patch->path);
         game_location(root, tid, t->app_path, t->dir, sizeof(t->dir));
-        return src_open_paths(t, tid, cat, g);
+        return src_open_paths(t, tid, cat, g, cfg);
     }
     snprintf(t->dir, sizeof(t->dir), "%s/ps4/%s", root, tid);
     snprintf(t->app_path, sizeof(t->app_path), "%s/app.pkg", t->dir);
     snprintf(t->patch_path, sizeof(t->patch_path), "%s/patch.pkg", t->dir);
-    return src_open_paths(t, tid, NULL, NULL);
+    return src_open_paths(t, tid, NULL, NULL, cfg);
 }
 
 /* --- what each game is, kept between looks (titlecache.c) --- */
@@ -1291,7 +1291,7 @@ static pthread_mutex_t g_titlecache_mu = PTHREAD_MUTEX_INITIALIZER;
 
 /* What tid is, read from its pkgs only when its files changed since the last look (or it
  * was never looked at). NULL when the drive has no such game. */
-static const title_info_t *title_info_fp_impl(const char *root, const char *tid, uint64_t fp) {
+static const title_info_t *title_info_fp_impl(const char *root, const char *tid, uint64_t fp, const config_t *cfg) {
     if (!fp)
         return NULL;
     /* the games are kept per drive, not per path: a share mounted under another name in
@@ -1302,7 +1302,7 @@ static const title_info_t *title_info_fp_impl(const char *root, const char *tid,
     if (hit)
         return hit;
     title_src_t src;
-    if (src_open(&src, root, tid))
+    if (src_open(&src, root, tid, cfg))
         return NULL;
     title_info_t *e = title_cache_add(key, tid, fp);
     if (e)
@@ -1311,15 +1311,15 @@ static const title_info_t *title_info_fp_impl(const char *root, const char *tid,
     return e;
 }
 
-static const title_info_t *title_info_fp(const char *root, const char *tid, uint64_t fp) {
+static const title_info_t *title_info_fp(const char *root, const char *tid, uint64_t fp, const config_t *cfg) {
     pthread_mutex_lock(&g_titlecache_mu);
-    const title_info_t *t = title_info_fp_impl(root, tid, fp);
+    const title_info_t *t = title_info_fp_impl(root, tid, fp, cfg);
     pthread_mutex_unlock(&g_titlecache_mu);
     return t;
 }
 
 static const title_info_t *title_info(const char *root, const char *tid, const config_t *cfg) {
-    return title_info_fp(root, tid, title_files_fp(root, tid, cfg->dlc, cfg->dlc_mode, cfg->dlc_big));
+    return title_info_fp(root, tid, title_files_fp(root, tid, cfg->dlc, cfg->dlc_mode, cfg->dlc_big), cfg);
 }
 
 static void write_meta(pkg_t *pkg, const char *meta_dir, int *rc) {
@@ -3980,7 +3980,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         activity_set("scanning", label, NULL, NULL, k, nt, 0, 0);
         const char *tid = tids[k];
         uint64_t fp = title_files_fp(root, tid, g_cfg.dlc, g_cfg.dlc_mode, g_cfg.dlc_big);
-        const title_info_t *info = title_info_fp(root, tid, fp);
+        const title_info_t *info = title_info_fp(root, tid, fp, &g_cfg);
         if (!info)
             continue;
         if (reconnected) {
@@ -4018,7 +4018,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             pump_now();
         title_t *t = &titles[i];
         const title_info_t *info;
-        if (t->state != 0 || !(info = title_info_fp(root, t->tid, fps[i])))
+        if (t->state != 0 || !(info = title_info_fp(root, t->tid, fps[i], &g_cfg)))
             continue;
         enforce_patch_sfo(info->title_id, info->has_patch, info->patch_path, info->sfo_len, info->sfo_sha);
         manage_info(info);
@@ -4114,7 +4114,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
                 notify_detail(TR("Adding %d/%d: %s%s%s (%s)", "Añadiendo %d/%d: %s%s%s (%s)"), done + k + 1, pending, t->name,
                               t->has_patch ? TR(" with update", " con actualización") : "", extra, t->tid);
             }
-            if (src_open(&src, root, t->tid) || register_prepare(&src)) {
+            if (src_open(&src, root, t->tid, &g_cfg) || register_prepare(&src)) {
                 if (retry_failed(t->tid))
                     notify_kind(NOTIFY_WARN, TR("Failed to add %s (%s), it is tried again every few minutes",
                                                 "No se pudo añadir %s (%s), se vuelve a intentar cada pocos minutos"),
@@ -4133,7 +4133,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         for (int k = 0; k < n; k++) {
             title_t *t = &titles[members[k]];
             title_src_t src;
-            if (!prepared[k] || delete_pending_is(t->tid) || src_open(&src, root, t->tid))
+            if (!prepared[k] || delete_pending_is(t->tid) || src_open(&src, root, t->tid, &g_cfg))
                 continue;
             if (register_finish(&src)) {
                 int first = retry_failed(t->tid);
