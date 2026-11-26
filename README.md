@@ -66,7 +66,7 @@ Probado en una PS4 con firmware **13.52** y GoldHEN; también funciona en **14.0
 - Una PS4 con jailbreak y **GoldHEN** (con su BinLoader activado, el puerto 9090).
 - Una forma de cargar payloads: **Payloader/Launchpad** de GoldHEN (recomendado), Payload Guest, o **Ajustes → Arrancar con la consola** en el panel.
 - Pkgs **fake** de PS4 (`CUSA…`).
-- Para jugar desde USB: un disco formateado en **exFAT**.
+- Para jugar desde USB: un disco formateado en **exFAT**. Mejor un **SSD**: con un disco duro mecánico algunos juegos cargan lento (ver [Rendimiento](#rendimiento-disco-duro-mecánico-o-ssd)).
 
 ## Uso
 
@@ -88,11 +88,12 @@ La consola solo prepara algunos juegos nuevos al arrancar. Cuando Lodestar regis
 
 ### El panel
 
-![Biblioteca de Lodestar](docs/panel-main-es.png)
+- **Arriba**: **Buscar juegos** (vuelve a mirar las unidades), **Enviar juegos**, **Descargar enlaces**, la campana de notificaciones y **Más** (Ajustes, Quitar varios, Log y Detener).
+- **Encima de la parrilla**: el buscador, los filtros por estado (Listo, Reinicia para jugar, Unidad no conectada…) y por plataforma, y el espacio libre de cada unidad.
+- **La parrilla**: una carátula por juego. Al pulsarla se abre su ficha: versión, DLC, firmware que necesita, dónde están sus pkgs y las acciones (quitar o añadir a la biblioteca, restaurar sus archivos originales).
+- **Ajustes**: biblioteca (carpetas, organizar, memoria interna, grupos), DLC, consola (idioma, AutoRun, log del sistema), lo que Lodestar ocupa en la consola y restaurar archivos originales.
 
-La biblioteca es una parrilla densa de carátulas. Al abrir un juego aparece su ficha bajo demanda, con acciones como quitar/añadir de la biblioteca, ver rutas, actualizar contenido o borrar. No hay una ficha grande permanente ocupando media pantalla.
-
-Botones principales: **Buscar juegos**, **Enviar juegos**, **Descargas**, **Ajustes**, **Log** y **Detener**.
+En la app de la consola se maneja con el mando: flechas para moverse, X para abrir, círculo para volver.
 
 #### API para agentes y scripts
 
@@ -117,7 +118,7 @@ Lodestar puede descargar en la propia consola:
 - un `.zip`;
 - un `.rar`, incluidos RAR en partes y RAR con contraseña.
 
-Pega el enlace en **Descargas**, elige destino y la consola baja y extrae sin usar un PC. Una descarga interrumpida se reanuda al cargar Lodestar otra vez.
+Pega el enlace en **Descargar enlaces**, elige destino y la consola baja y extrae sin usar un PC. Una descarga interrumpida se reanuda al cargar Lodestar otra vez.
 
 ### Extensión del navegador
 
@@ -143,6 +144,23 @@ Al borrar un juego añadido por Lodestar desde la pantalla de inicio, Lodestar b
 - `/data/ps4mount/<CUSA…>.src`: de dónde salió cada juego.
 - `/data/ps4mount/stop`: si existe, Lodestar se detiene.
 
+## Rendimiento: disco duro mecánico o SSD
+
+Lodestar lee los juegos directamente de los pkgs del USB, así que la velocidad depende del disco. Con un **SSD** no hay problema. Con un **disco duro mecánico**, los juegos que leen a la vez su actualización y varios DLC pueden cargar lento: cada cambio de archivo mueve el cabezal, y si los archivos están lejos unos de otros en el plato, ese movimiento es casi todo el disco.
+
+Medido en la consola con un disco duro de 2.5" lleno al 91 %, donde la actualización y los DLC de un juego quedaron a 400-450 GB unos de otros ([#1](https://github.com/felipebasurto/Lodestar-PS4/issues/1)):
+
+| | Velocidad |
+| --- | --- |
+| Un solo archivo seguido | ~92 MiB/s |
+| Actualización + 4 DLC a la vez | ~22 MiB/s en total |
+
+Lodestar no puede cambiar dónde están los archivos en el disco. Qué puedes hacer:
+
+1. **Usar un SSD USB.** Es la solución.
+2. Con un disco duro: copia cada juego **con su actualización y sus DLC juntos y seguidos**, en un disco con mucho espacio libre (mejor recién formateado). No llenes el disco hasta el final.
+3. Para ver cómo están los archivos de un juego en tu disco, conéctalo a un Mac o Linux, desmóntalo y ejecuta `sudo python3 tools/exfatmap.py /dev/rdiskN <ruta del pkg>...` (solo lee).
+
 ## Problemas frecuentes
 
 ### El panel no abre
@@ -163,6 +181,15 @@ El explicador está en español por defecto; usa `--lang en` para inglés.
 
 Lodestar conserva la entrada en la pantalla de inicio, pero el juego no arranca hasta volver a conectar la unidad donde están sus pkgs. No muevas los pkgs manualmente mientras la consola los está usando.
 
+## Problemas conocidos
+
+Los fallos conocidos y las mejoras pendientes están en [Issues](https://github.com/felipebasurto/Lodestar-PS4/issues). Los principales:
+
+- [#1](https://github.com/felipebasurto/Lodestar-PS4/issues/1) Carga lenta con discos duros mecánicos cuando un juego lee la actualización y varios DLC a la vez.
+- [#7](https://github.com/felipebasurto/Lodestar-PS4/issues/7) Un juego nuevo necesita reiniciar la consola una vez.
+- [#4](https://github.com/felipebasurto/Lodestar-PS4/issues/4), [#5](https://github.com/felipebasurto/Lodestar-PS4/issues/5) Clásicos de PS1/PS2/PSP y ROM de emuladores: falta comprobarlos en consola.
+- [#11](https://github.com/felipebasurto/Lodestar-PS4/issues/11) Solo probado en los firmwares 13.52 y 14.00.
+
 ## Desarrollo
 
 Las reglas para agentes y personas que modifiquen el código están en [AGENTS.md](AGENTS.md) y [AI-WORKFLOW.md](AI-WORKFLOW.md). Las decisiones de comportamiento viven en `specs/`. Antes de cada commit:
@@ -174,6 +201,17 @@ bash test/sdkcheck.sh
 (cd test/web && npm test)
 ```
 
+| Carpeta | Contenido |
+| --- | --- |
+| `src/` | El payload en C (escaneo, registro, montajes, panel HTTP, descargas) |
+| `web/` | El panel: `index.html`, `legacy.html` (navegador de la PS4) y las traducciones |
+| `panel-app/` | La app de la consola que abre el panel |
+| `extension/` | La extensión del navegador |
+| `specs/` | Las reglas de comportamiento, por área |
+| `test/` | Pruebas en el PC (C, Python y el panel en jsdom) |
+| `tools/` | `logcheck.py` (explica el log), `exfatmap.py` (mapa de un disco exFAT), `benchdisk` |
+| `evidence/` | Mediciones hechas en consola |
+
 ---
 
 <a name="english"></a>
@@ -184,6 +222,8 @@ Lodestar is a payload for a jailbroken PS4. Put a game's packages (with its upda
 Lodestar is deliberately focused on USB hard drives and local storage. **It does not include Google Drive, NAS, SMB, NFS or FUSE**: those features were removed to reduce surface area, dependencies and hard-to-diagnose failures.
 
 The web panel shows the library as a dense artwork grid, closer to a Steam library. A game's details and actions open only on demand instead of a permanent details pane taking half the screen.
+
+![The Lodestar panel](docs/panel-main.png)
 
 Tested on a PS4 running firmware **13.52** with GoldHEN; it also works on **14.00**. The panel and notifications are in **Spanish and English**: they follow the console language (English when it is neither), and can be changed in **Settings → Language**.
 
@@ -221,7 +261,7 @@ Tested on a PS4 running firmware **13.52** with GoldHEN; it also works on **14.0
 - A jailbroken PS4 with **GoldHEN** (BinLoader enabled, port 9090).
 - A way to load payloads: GoldHEN **Payloader/Launchpad** (recommended), Payload Guest, or the panel's **Start with the console** setting.
 - PS4 **fake** packages (`CUSA…`).
-- For USB play: an **exFAT** formatted drive.
+- For USB play: an **exFAT** formatted drive. An **SSD** is best: with a spinning hard drive some games load slowly (see [Performance](#performance-hard-drive-or-ssd)).
 
 ## Use
 
@@ -243,9 +283,12 @@ The console prepares some new games only during boot. When Lodestar registers a 
 
 ### The panel
 
-The library is a dense artwork grid. Opening a game shows its details on demand, with actions such as removing/adding it to the library, inspecting paths, refreshing content or deleting it. There is no permanent large details pane consuming half the screen.
+- **Top**: **Scan for games** (looks at the drives again), **Send games**, **Download links**, the notifications bell and **More** (Settings, Remove several, Log and Stop).
+- **Above the grid**: the search field, the filters by state (Ready, Restart to play, Drive not connected…) and by platform, and each drive's free space.
+- **The grid**: one artwork per game. Choosing it opens its details: version, add-ons, required firmware, where its pkgs are, and its actions (remove from or add to the library, restore its original files).
+- **Settings**: library (folders, organize, internal storage, groups), add-ons, console (language, AutoRun, system log), what Lodestar keeps on the console, and restoring original files.
 
-Main actions: **Scan for games**, **Send games**, **Downloads**, **Settings**, **Log** and **Stop**.
+In the console app it works with the controller: arrows to move, X to open, circle to go back.
 
 #### Agent and script API
 
@@ -266,7 +309,7 @@ Lodestar can download directly on the console:
 - a `.zip`;
 - a `.rar`, including multipart and password-protected RAR archives.
 
-Paste the link in **Downloads**, choose a destination, and the console downloads and extracts it without a PC. An interrupted download resumes when Lodestar is loaded again.
+Paste the link in **Download links**, choose a destination, and the console downloads and extracts it without a PC. An interrupted download resumes when Lodestar is loaded again.
 
 ### Browser extension
 
@@ -292,6 +335,23 @@ Deleting a Lodestar-added game from the home screen also deletes its library pkg
 - `/data/ps4mount/<CUSA…>.src`: where each game came from.
 - `/data/ps4mount/stop`: if present, Lodestar stops.
 
+## Performance: hard drive or SSD
+
+Lodestar reads games straight from the pkgs on the drive, so speed depends on the drive. With an **SSD** there is no problem. With a **spinning hard drive**, games that read their update and several add-ons at once can load slowly: every switch between files moves the head, and when the files are far apart on the platter that move crosses almost the whole disk.
+
+Measured on the console with a 2.5" hard drive 91% full, where a game's update and add-ons ended up 400-450 GB apart ([#1](https://github.com/felipebasurto/Lodestar-PS4/issues/1)):
+
+| | Speed |
+| --- | --- |
+| One file, read in order | ~92 MiB/s |
+| Update + 4 add-ons at once | ~22 MiB/s in total |
+
+Lodestar cannot change where files sit on the disk. What you can do:
+
+1. **Use a USB SSD.** That is the fix.
+2. With a hard drive: copy each game **with its update and add-ons together, one after the other**, onto a drive with plenty of free space (freshly formatted is best). Do not fill the drive to the end.
+3. To see where a game's files are on your drive, connect it to a Mac or Linux machine, unmount it and run `sudo python3 tools/exfatmap.py /dev/rdiskN <pkg path>...` (read only).
+
 ## Frequent problems
 
 ### The panel does not open
@@ -310,6 +370,15 @@ python3 tools/logcheck.py log.txt --lang en
 
 Lodestar keeps the home-screen entry, but the game does not launch until the drive containing its pkgs is connected again. Do not move packages manually while the console is using them.
 
+## Known issues
+
+Known bugs and pending improvements are in [Issues](https://github.com/felipebasurto/Lodestar-PS4/issues). The main ones:
+
+- [#1](https://github.com/felipebasurto/Lodestar-PS4/issues/1) Slow loading on spinning hard drives when a game reads its update and several add-ons at once.
+- [#7](https://github.com/felipebasurto/Lodestar-PS4/issues/7) A new game needs one console restart.
+- [#4](https://github.com/felipebasurto/Lodestar-PS4/issues/4), [#5](https://github.com/felipebasurto/Lodestar-PS4/issues/5) PS1/PS2/PSP classics and emulator ROMs still need console verification.
+- [#11](https://github.com/felipebasurto/Lodestar-PS4/issues/11) Only tested on firmware 13.52 and 14.00.
+
 ## Development
 
 Rules for agents and people changing the code are in [AGENTS.md](AGENTS.md) and [AI-WORKFLOW.md](AI-WORKFLOW.md). Behavior decisions live in `specs/`. Before every commit:
@@ -320,3 +389,14 @@ bash test/policy.sh
 bash test/sdkcheck.sh
 (cd test/web && npm test)
 ```
+
+| Folder | Contents |
+| --- | --- |
+| `src/` | The payload in C (scan, registration, mounts, HTTP panel, downloads) |
+| `web/` | The panel: `index.html`, `legacy.html` (the PS4's browser) and translations |
+| `panel-app/` | The console app that opens the panel |
+| `extension/` | The browser extension |
+| `specs/` | Behavior rules, by area |
+| `test/` | Host tests (C, Python and the panel in jsdom) |
+| `tools/` | `logcheck.py` (explains the log), `exfatmap.py` (maps an exFAT drive), `benchdisk` |
+| `evidence/` | Measurements taken on the console |

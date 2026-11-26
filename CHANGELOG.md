@@ -1,6 +1,14 @@
 # Changelog
 
-PS4Mount PS4 is a PS4-only port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (PS5); its versions start again at 0.1.0. The history of the original is in its project and in this repository's git history.
+Lodestar (PS4Mount PS4 before 2.0.0) began as a PS4-only port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (PS5); its versions start again at 0.1.0. The history of the original is in its project and in this repository's git history.
+
+## Unreleased
+
+**A cleaner panel and honest advice for hard drives.** Search, the state and platform filters and each drive's free space now sit above the grid; Scan for games, Send games, Download links and the notifications bell are always visible in the header, and the rest (Settings, Remove several, Log, Stop) is under **More**. Settings are grouped as Library, Add-ons and Console, with Save and Cancel always in view. In the PS4 app, Up/Down leave the search field so the controller is never trapped there. The README explains why a spinning hard drive can stream a game's update and add-ons slowly (measured: ~92 MiB/s for one file, ~22 MiB/s for an update plus four add-ons whose files sit 400-450 GB apart) and recommends a USB SSD. `tools/exfatmap.py` reads macOS raw devices (`/dev/rdisk*`). Known bugs and pending work are tracked in GitHub issues. Unused screenshots and a leftover Google Drive certificate file are removed.
+
+**Español**
+
+**Un panel más limpio y consejos claros para discos duros.** El buscador, los filtros por estado y plataforma y el espacio libre de cada unidad están ahora encima de la parrilla; Buscar juegos, Enviar juegos, Descargar enlaces y la campana de notificaciones se ven siempre en la cabecera, y el resto (Ajustes, Quitar varios, Log, Detener) está en **Más**. Los ajustes se agrupan en Biblioteca, DLC y Consola, con Guardar y Cancelar siempre a la vista. En la app de la PS4, arriba/abajo salen del buscador para que el mando nunca se quede atrapado. El README explica por qué un disco duro mecánico puede leer lento la actualización y los DLC de un juego (medido: ~92 MiB/s con un archivo, ~22 MiB/s con una actualización y cuatro DLC separados 400-450 GB en el disco) y recomienda un SSD USB. `tools/exfatmap.py` lee los dispositivos crudos de macOS (`/dev/rdisk*`). Los fallos conocidos y el trabajo pendiente están en los issues de GitHub. Se quitan capturas sin uso y un certificado sobrante de Google Drive.
 
 ## 3.0.0
 
