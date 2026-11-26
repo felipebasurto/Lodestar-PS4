@@ -47,6 +47,7 @@
 #include "bgftscan.h"
 #include "build.h"
 #include "catalog.h"
+#include "catsnap.h"
 #include "check.h"
 #include "upload.h"
 #include "crypto.h"
@@ -664,12 +665,11 @@ static int g_cat_loaded[NROOTS]; /* the saved catalog was read since the drive a
 static time_t g_cat_walked[NROOTS]; /* when the drive was last searched for pkgs */
 static pthread_mutex_t g_cat_lock = PTHREAD_MUTEX_INITIALIZER;
 
-/* Lightweight completed-epoch presence mirror for panel workers. The catalog itself stays
- * owner/Drive state behind g_cat_lock because a scan can hold that lock while pumping events;
- * copying only title IDs here gives read-only routes a consistent epoch without re-entering it. */
-static pthread_mutex_t g_cat_presence_mu = PTHREAD_MUTEX_INITIALIZER;
-static char g_cat_presence[NROOTS][MAX_TITLES][10];
-static int g_cat_npresence[NROOTS];
+/* Immutable completed-epoch snapshots for panel workers. The catalog itself stays owner/Drive
+ * state behind g_cat_lock because a scan can hold that lock while pumping events; readers
+ * instead acquire a reference here and never enter that lock. */
+static pthread_mutex_t g_cat_snap_mu = PTHREAD_MUTEX_INITIALIZER;
+static catsnap_t *g_cat_snap[NROOTS];
 
 static int root_index(const char *root) {
     char r[PATH_MAX];
@@ -681,26 +681,109 @@ static int root_index(const char *root) {
     return -1;
 }
 
-/* g_cat_lock held: the grouped catalogs of one completed epoch become the visible snapshot. */
-static void catalog_presence_publish_locked(void) {
-    pthread_mutex_lock(&g_cat_presence_mu);
-    for (int i = 0; i < NROOTS; i++) {
-        int n = g_cat[i].ngames < MAX_TITLES ? g_cat[i].ngames : MAX_TITLES;
-        for (int j = 0; j < n; j++)
-            snprintf(g_cat_presence[i][j], sizeof(g_cat_presence[i][j]), "%s", g_cat[i].games[j].title_id);
-        g_cat_npresence[i] = n;
+static void catsnap_put(char *arena, uint32_t *at, const char *text) {
+    size_t n = strlen(text) + 1;
+    memcpy(arena + *at, text, n);
+    *at += (uint32_t)n;
+}
+
+/* Builds the compact immutable form of one grouped catalog. Add-on duplicates stay in the
+ * snapshot exactly as catalog grouping chose them; src_open keeps its historical dedupe. */
+static catsnap_t *catalog_snapshot_build(const catalog_t *c) {
+    uint32_t ngames = c->ngames < MAX_TITLES ? (uint32_t)c->ngames : MAX_TITLES;
+    uint32_t ndlcs = 0;
+    uint64_t slen = 0;
+    for (uint32_t i = 0; i < ngames; i++) {
+        const cat_game_t *g = &c->games[i];
+        slen += strlen(c->pkgs[g->app].path) + 1;
+        const cat_pkg_t *patch = catalog_patch(g_cat, c, g);
+        if (patch)
+            slen += strlen(patch->path) + 1;
+        const cat_pkg_t *list[CAT_MAX_DLC];
+        int nlist = catalog_dlc_of(g_cat, c, g, list, CAT_MAX_DLC);
+        ndlcs += (uint32_t)nlist;
+        for (int k = 0; k < nlist; k++)
+            slen += strlen(list[k]->path) + 1;
     }
-    pthread_mutex_unlock(&g_cat_presence_mu);
+    if (slen > UINT32_MAX)
+        return NULL;
+    catsnap_t *s = catsnap_alloc(ngames, ndlcs, (uint32_t)slen);
+    if (!s)
+        return NULL;
+    catsnap_game_t *games = catsnap_games(s);
+    catsnap_dlc_t *dlcs = catsnap_dlcs(s);
+    char *arena = catsnap_strings(s);
+    uint32_t at = 0, di = 0;
+    for (uint32_t i = 0; i < ngames; i++) {
+        const cat_game_t *g = &c->games[i];
+        catsnap_game_t *out = &games[i];
+        memset(out, 0, sizeof(*out));
+        snprintf(out->title_id, sizeof(out->title_id), "%s", g->title_id);
+        out->app_off = at;
+        catsnap_put(arena, &at, c->pkgs[g->app].path);
+        const cat_pkg_t *patch = catalog_patch(g_cat, c, g);
+        out->patch_off = CATSNAP_NO_PATH;
+        if (patch) {
+            out->patch_off = at;
+            catsnap_put(arena, &at, patch->path);
+        }
+        const cat_pkg_t *list[CAT_MAX_DLC];
+        int nlist = catalog_dlc_of(g_cat, c, g, list, CAT_MAX_DLC);
+        out->first_dlc = di;
+        out->ndlc = (uint32_t)nlist;
+        for (int k = 0; k < nlist; k++) {
+            catsnap_dlc_t *d = &dlcs[di++];
+            d->path_off = at;
+            catsnap_put(arena, &at, list[k]->path);
+            snprintf(d->content_id, sizeof(d->content_id), "%s", list[k]->content_id);
+        }
+    }
+    return s;
+}
+
+/* g_cat_lock held: the grouped catalogs of one completed epoch become the visible snapshot.
+ * Publication is all-or-nothing across roots: a memory failure keeps the previous epoch. */
+static void catalog_epoch_publish_locked(void) {
+    catsnap_t *next[NROOTS] = {0};
+    int bad = 0;
+    for (int i = 0; i < NROOTS; i++) {
+        if (!g_cat[i].ngames)
+            continue;
+        next[i] = catalog_snapshot_build(&g_cat[i]);
+        bad |= next[i] == NULL;
+    }
+    if (bad) {
+        for (int i = 0; i < NROOTS; i++)
+            catsnap_unref(next[i]);
+        printf("[scan] could not publish the catalog snapshot: not enough memory\n");
+        return;
+    }
+    catsnap_t *old[NROOTS];
+    pthread_mutex_lock(&g_cat_snap_mu);
+    for (int i = 0; i < NROOTS; i++) {
+        old[i] = g_cat_snap[i];
+        g_cat_snap[i] = next[i];
+    }
+    pthread_mutex_unlock(&g_cat_snap_mu);
+    for (int i = 0; i < NROOTS; i++)
+        catsnap_unref(old[i]);
+}
+
+static catsnap_t *catalog_snapshot_acquire(const char *root) {
+    int idx = root_index(root);
+    if (idx < 0)
+        return NULL;
+    pthread_mutex_lock(&g_cat_snap_mu);
+    catsnap_t *s = g_cat_snap[idx];
+    catsnap_ref(s);
+    pthread_mutex_unlock(&g_cat_snap_mu);
+    return s;
 }
 
 static int catalog_presence_has(const char *root, const char *tid) {
-    int idx = root_index(root), found = 0;
-    if (idx < 0)
-        return 0;
-    pthread_mutex_lock(&g_cat_presence_mu);
-    for (int i = 0; i < g_cat_npresence[idx] && !found; i++)
-        found = !strcmp(g_cat_presence[idx][i], tid);
-    pthread_mutex_unlock(&g_cat_presence_mu);
+    catsnap_t *s = catalog_snapshot_acquire(root);
+    int found = catsnap_find(s, tid) != NULL;
+    catsnap_unref(s);
     return found;
 }
 
@@ -4494,7 +4577,7 @@ static int scan_all(int hard) {
         /* Games are grouped per drive: an update or add-on of another drive is not used,
          * so unplugging one drive never breaks a game of another. */
         catalog_link(g_cat, NROOTS, NULL, 0);
-        catalog_presence_publish_locked();
+        catalog_epoch_publish_locked();
         pthread_mutex_unlock(&g_cat_lock);
         for (int i = 0; i < NROOTS; i++) {
             root_path(i, root, sizeof(root));
@@ -4525,7 +4608,7 @@ static int scan_all(int hard) {
                 g_cat_loaded[i] = 0;
                 g_cat_walked[i] = 0;
             }
-            catalog_presence_publish_locked();
+            catalog_epoch_publish_locked();
             pthread_mutex_unlock(&g_cat_lock);
         }
         for (int i = 0; i < NROOTS; i++) {
