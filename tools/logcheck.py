@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Reads PS4Mount's log and says, in plain words, what happened and what to do.
+"""Reads Lodestar's log and says, in plain words, what happened and what to do.
 
     python3 tools/logcheck.py log.txt                      (Spanish)
     python3 tools/logcheck.py log.txt.old log.txt          (both files in order)
@@ -33,17 +33,17 @@ SIGNATURES = [
      "El sistema no tiene la tarea del juego. Reinicia la consola: la lee solo al arrancar.",
      "The system has no task for the game. Restart the console: it reads tasks only at boot."),
     ("blockmap", r"0x8002000c", "ERROR",
-     "El sistema no pudo construir el mapa de bloques del pkg: pasa cuando el pkg se alcanza por el alias /data. PS4Mount lo evita; si lo ves, es un fallo: guarda el log.",
-     "The system could not build the pkg's block map: it happens when the pkg is reached through the /data alias. PS4Mount avoids it; if you see it, it is a bug: keep the log."),
+     "El sistema no pudo construir el mapa de bloques del pkg: pasa cuando el pkg se alcanza por el alias /data. Lodestar lo evita; si lo ves, es un fallo: guarda el log.",
+     "The system could not build the pkg's block map: it happens when the pkg is reached through the /data alias. Lodestar avoids it; if you see it, it is a bug: keep the log."),
     ("svc_open", r"0x80990001", "WARN",
-     "Otro payload dejó abierto el servicio de instalación (BGFT). PS4Mount lo cierra y lo abre otra vez; si se repite, reinicia la consola.",
-     "Another payload left the installer service (BGFT) open. PS4Mount closes and opens it again; if it repeats, restart the console."),
+     "Otro payload dejó abierto el servicio de instalación (BGFT). Lodestar lo cierra y lo abre otra vez; si se repite, reinicia la consola.",
+     "Another payload left the installer service (BGFT) open. Lodestar closes and opens it again; if it repeats, restart the console."),
     ("app_ver", r"APP_VER disagree", "WARN",
      "La versión de la actualización no coincide con la del juego registrado. Esa actualización se deja fuera hasta que cambie el pkg.",
      "The update's version differs from the registered game's. That update is left out until the pkg changes."),
     ("update_registration", r"^[A-Z0-9]{9}: (?:registered as \S+, the update is |registrado como \S+, la actualización es )\S+$", "WARN",
-     "La PS4 aún tiene registrada otra versión. PS4Mount programó volver a añadir el juego, lo que puede reinstalar sus DLC.",
-     "The PS4 still lists a different version. PS4Mount queued the game for re-registration, which can reinstall its add-ons."),
+     "La PS4 aún tiene registrada otra versión. Lodestar programó volver a añadir el juego, lo que puede reinstalar sus DLC.",
+     "The PS4 still lists a different version. Lodestar queued the game for re-registration, which can reinstall its add-ons."),
     ("appledouble", r"^skip /(?:.*/)?\._[^/]*\.(?i:pkg) \(cannot read the pkg header: not a PS4 pkg, or unreadable\)$", "INFO",
      "El escaneo omitió un archivo de metadatos de macOS junto a un paquete.",
      "The scan skipped a macOS metadata sidecar next to a package."),
@@ -51,8 +51,8 @@ SIGNATURES = [
      "El sistema rechaza una actualización: se deja fuera hasta que cambie su pkg (el juego base sigue funcionando).",
      "The system refuses an update: it is left out until its pkg changes (the base game keeps working)."),
     ("erofs", r"EROFS|read-only file system", "ERROR",
-     "El sistema intentó escribir en el pkg y no pudo (solo lectura). El juego no arranca. Es el fallo que PS4Mount evita: no uses una vista de solo lectura de los pkgs.",
-     "The system tried to write to the pkg and could not (read-only). The game will not start. PS4Mount avoids this: do not use a read-only view of the pkgs."),
+     "El sistema intentó escribir en el pkg y no pudo (solo lectura). El juego no arranca. Es el fallo que Lodestar evita: no uses una vista de solo lectura de los pkgs.",
+     "The system tried to write to the pkg and could not (read-only). The game will not start. Lodestar avoids this: do not use a read-only view of the pkgs."),
     ("playgo", r"playgo-chunk\.dat unusable", "WARN",
      "Un archivo de datos de instalación (PlayGo) del juego no sirve. Se vuelve a crear al registrar el juego otra vez.",
      "A game's install data file (PlayGo) is unusable. It is made again when the game is registered again."),
@@ -69,14 +69,14 @@ SIGNATURES = [
      "No se pudo leer la base de datos de apps del sistema (solo lectura): el escaneo espera y vuelve a intentarlo.",
      "The system's app database could not be read (read-only): the scan waits and tries again."),
     ("grant", r"invalid_grant", "WARN",
-     "Google terminó el acceso de Drive (pasa con apps en modo prueba). PS4Mount pide un código nuevo en pantalla.",
-     "Google ended the Drive access (apps in testing do). PS4Mount asks for a new code on screen."),
+     "Google terminó el acceso de Drive (pasa con apps en modo prueba). Lodestar pide un código nuevo en pantalla.",
+     "Google ended the Drive access (apps in testing do). Lodestar asks for a new code on screen."),
     ("memory", r"no memory", "ERROR",
      "Se quedó sin memoria (el payload dispone de muy poca). Reinicia la consola y guarda el log.",
      "Out of memory (the payload has very little). Restart the console and keep the log."),
     ("emu_skipped", r"not mounted: ", "INFO",
-     "Una carpeta de emulador de la unidad no se montó (el motivo está en la línea: la app aún no tiene carpeta en /data, o la carpeta de la consola ya tiene archivos). PS4Mount no pisa nada de la consola.",
-     "An emulator folder of the drive was not mounted (the reason is in the line: the app has no folder in /data yet, or the console's folder already has files). PS4Mount does not cover anything of the console's."),
+     "Una carpeta de emulador de la unidad no se montó (el motivo está en la línea: la app aún no tiene carpeta en /data, o la carpeta de la consola ya tiene archivos). Lodestar no pisa nada de la consola.",
+     "An emulator folder of the drive was not mounted (the reason is in the line: the app has no folder in /data yet, or the console's folder already has files). Lodestar does not cover anything of the console's."),
     ("running", r"game running", "INFO",
      "Una acción se negó porque el juego estaba en marcha: ciérralo y repite.",
      "An action was refused because the game was running: close it and try again."),
@@ -88,25 +88,25 @@ TEXT = {
         "file": "Archivo", "lines": "líneas", "span": "Desde {a} hasta {b}",
         "version": "Versión y consola", "none": "(no aparece: ¿es un log cortado?)",
         "tags": "Líneas por módulo", "problems": "Qué hay que mirar",
-        "clean": "Archivos temporales que PS4Mount borró de la memoria interna",
+        "clean": "Archivos temporales que Lodestar borró de la memoria interna",
         "clean_none": "Ninguno.", "clean_n": "{n} aviso(s) [clean], {b} bytes en total ({mb} MB)",
         "other": "Otros avisos sin explicación conocida (primeros {n})",
         "ok": "Resultado: sin problemas conocidos.",
         "bad": "Resultado: {e} error(es) y {w} aviso(s) conocidos. Léelos arriba.",
         "x": "{n} vez/veces", "first": "primera línea", "stops": "Paradas y arranques",
-        "starts": "{n} arranque(s) de PS4Mount en este log",
+        "starts": "{n} arranque(s) de Lodestar en este log",
     },
     "en": {
         "file": "File", "lines": "lines", "span": "From {a} to {b}",
         "version": "Version and console", "none": "(not there: a cut log?)",
         "tags": "Lines by module", "problems": "What to look at",
-        "clean": "Temporary files PS4Mount deleted from internal storage",
+        "clean": "Temporary files Lodestar deleted from internal storage",
         "clean_none": "None.", "clean_n": "{n} [clean] notice(s), {b} bytes in all ({mb} MB)",
         "other": "Other warnings with no known explanation (first {n})",
         "ok": "Result: no known problems.",
         "bad": "Result: {e} known error(s) and {w} warning(s). Read them above.",
         "x": "{n} time(s)", "first": "first line", "stops": "Starts and stops",
-        "starts": "{n} start(s) of PS4Mount in this log",
+        "starts": "{n} start(s) of Lodestar in this log",
     },
 }
 
@@ -195,7 +195,7 @@ def analyze(paths, lang):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Explains PS4Mount's log in plain words.")
+    ap = argparse.ArgumentParser(description="Explains Lodestar's log in plain words.")
     ap.add_argument("logs", nargs="+", help="log.txt (and log.txt.old); - reads the standard input")
     ap.add_argument("--lang", choices=["es", "en"], default="es")
     a = ap.parse_args()

@@ -402,7 +402,7 @@ static int header(rar5dec_t *d, const uint8_t *h, size_t n) {
     const uint8_t *salt, *iv, *check;
     if (type == HEAD_CRYPT) {
         if (crypt_fields(body, xa, 0, &cf, &lg, &salt, &iv, &check))
-            return fail(d, "the archive's encryption is of a kind PS4Mount does not know");
+            return fail(d, "the archive's encryption is of a kind Lodestar does not know");
         if (find_key(d->k, salt, lg, check, d->hkey))
             return fail(d, "password");
         d->vt->init(&d->hk.vtable, d->hkey, 32);
@@ -429,7 +429,7 @@ static int header(rar5dec_t *d, const uint8_t *h, size_t n) {
         if (rtype == EX_CRYPT) {
             uint8_t key[32];
             if (crypt_fields(q, rend, 1, &cf, &lg, &salt, &iv, &check))
-                return fail(d, "the archive's encryption is of a kind PS4Mount does not know");
+                return fail(d, "the archive's encryption is of a kind Lodestar does not know");
             /* a service header's check is not one: rar may leave it zeros or stray bytes,
                and unrar checks only files' */
             if (find_key(d->k, salt, lg, type == HEAD_SERVICE ? NULL : check, key))

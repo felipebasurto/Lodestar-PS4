@@ -918,7 +918,7 @@ static void password_header(const char *req, char *out, size_t n) {
 #define LINKS_TEXT_MAX (1u << 20)
 
 /* POST /api/links/<action>: add?dest=.. (the links are the body, one a line), cancel?id=..,
- * retry?id=..; add and retry take an archive's password in X-PS4Mount-Password. The links
+ * retry?id=..; add and retry take an archive's password in X-Lodestar-Password. The links
  * thread does the work; the panel follows it in GET /api/links. */
 static void links_action(int fd, const char *req, const char *path, const char *body, size_t have, unsigned long long length,
                          long long deadline) {
@@ -1299,7 +1299,7 @@ static void web_dispatch(int fd, web_req_t *r, int slot) {
         json_msg(fd, 1, "closing");
         app_panel_close();
     } else if (post && !strcmp(path, "/api/stop")) {
-        json_msg(fd, 1, "PS4Mount is stopping");
+        json_msg(fd, 1, "Lodestar is stopping");
         app_stop();
     } else {
         reply(fd, "404 Not Found", "text/plain", "not found\n", 10);

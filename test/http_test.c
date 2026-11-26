@@ -184,7 +184,7 @@ int main(void) {
     printf("agent observability\n");
     r = ask("GET /api/agent HTTP/1.1\r\n\r\n");
     CHECK(status(r, "200") && strstr(r, "application/json"));
-    CHECK(strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.1\"") &&
+    CHECK(strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.2\"") &&
           strstr(r, "\"api_version\":1"));
     CHECK(strstr(r, "\"panel\":{\"scheme\":\"http\",\"port\":8770}") != NULL);
     CHECK(strstr(r, "\"header\":\"X-Lodestar\"") && strstr(r, "\"legacy_aliases\":[\"X-PS4Mount\"]") &&
@@ -200,7 +200,7 @@ int main(void) {
     CHECK(status(r, "404"));
 
     r = ask("GET /api/status HTTP/1.1\r\n\r\n");
-    CHECK(status(r, "200") && strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.1\""));
+    CHECK(status(r, "200") && strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.2\""));
     CHECK(strstr(r, "\"setup\":false") && strstr(r, "\"activity\":{\"busy\":false") && strstr(r, "\"notices\":[]"));
     CHECK(strstr(r, "\"queues\":{\"web_owner_pending\":0,\"web_write_pending\":0,\"web_write_active\":0}") != NULL);
     CHECK(strstr(r, "\"endpoints\":{\"agent\":\"/api/agent\",\"status\":\"/api/status\"") != NULL);

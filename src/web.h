@@ -7,7 +7,7 @@
 
 #define WEB_PORT 8770
 #define LODESTAR_PRODUCT "Lodestar"
-#define LODESTAR_VERSION "Lodestar 2.0.1"
+#define LODESTAR_VERSION "Lodestar 2.0.2"
 #define LODESTAR_API_VERSION 1
 
 /* Implemented by main.c for the web panel. */

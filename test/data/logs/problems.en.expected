@@ -4,7 +4,7 @@ From 2026-11-24 19:00:00 to 2026-11-24 19:04:00
 == Version and console
   [main] start (lock 7, pid 400)
   [main] start (lock 7, pid 411)
-  2 start(s) of PS4Mount in this log
+  2 start(s) of Lodestar in this log
 
 == Lines by module
   [klog] 3  [main] 2  [reg] 2  [-] 1  [install] 1  [clean] 1  [web] 1  [emu] 1
@@ -18,7 +18,7 @@ From 2026-11-24 19:00:00 to 2026-11-24 19:04:00
         1 time(s); first line: [reg] CUSA00004: the system refuses update 01.05: left out until the pkg changes
   [WARN] A game's install data file (PlayGo) is unusable. It is made again when the game is registered again.
         1 time(s); first line: [reg] CUSA00003: playgo-chunk.dat unusable
-  [INFO] An emulator folder of the drive was not mounted (the reason is in the line: the app has no folder in /data yet, or the console's folder already has files). PS4Mount does not cover anything of the console's.
+  [INFO] An emulator folder of the drive was not mounted (the reason is in the line: the app has no folder in /data yet, or the console's folder already has files). Lodestar does not cover anything of the console's.
         1 time(s); first line: [emu] /data/PS4SX2/roms not mounted: the console's folder already has files (it is left as it is)
   [INFO] An action was refused because the game was running: close it and try again.
         1 time(s); first line: [web] remove CUSA00001 refused: game running
@@ -26,7 +26,7 @@ From 2026-11-24 19:00:00 to 2026-11-24 19:04:00
 == Other warnings with no known explanation (first 1)
   [install] /data/ps4mount/install/x.pkg: could not open the installer
 
-== Temporary files PS4Mount deleted from internal storage
+== Temporary files Lodestar deleted from internal storage
   1 [clean] notice(s), 4194304 bytes in all (4.0 MB)
 
 Result: 2 known error(s) and 3 warning(s). Read them above.

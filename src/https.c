@@ -479,7 +479,7 @@ static int request_on(conn_t *c, const http_req_t *q, const http_url_t *u, int k
     *answered = *reusable = 0;
     buf_t h = {0};
     int body = q->body_len || strcmp(q->method, "GET");
-    buf_printf(&h, "%s %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: PS4Mount\r\nConnection: %s\r\n", q->method, u->path,
+    buf_printf(&h, "%s %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Lodestar\r\nConnection: %s\r\n", q->method, u->path,
                u->host, keep ? "keep-alive" : "close");
     if (body)
         buf_printf(&h, "Content-Length: %zu\r\n", q->body_len);

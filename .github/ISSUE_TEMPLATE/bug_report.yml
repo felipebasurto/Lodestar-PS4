@@ -12,7 +12,7 @@ body:
     attributes:
       label: Lodestar version
       description: Shown at the top of the web panel and in the startup notification.
-      placeholder: "0.2.0-beta"
+      placeholder: "2.0.2"
     validations:
       required: true
   - type: input

@@ -4,7 +4,7 @@ Desde 2026-11-24 19:00:00 hasta 2026-11-24 19:04:00
 == Versión y consola
   [main] start (lock 7, pid 400)
   [main] start (lock 7, pid 411)
-  2 arranque(s) de PS4Mount en este log
+  2 arranque(s) de Lodestar en este log
 
 == Líneas por módulo
   [klog] 3  [main] 2  [reg] 2  [-] 1  [install] 1  [clean] 1  [web] 1  [emu] 1
@@ -18,7 +18,7 @@ Desde 2026-11-24 19:00:00 hasta 2026-11-24 19:04:00
         1 vez/veces; primera línea: [reg] CUSA00004: the system refuses update 01.05: left out until the pkg changes
   [WARN] Un archivo de datos de instalación (PlayGo) del juego no sirve. Se vuelve a crear al registrar el juego otra vez.
         1 vez/veces; primera línea: [reg] CUSA00003: playgo-chunk.dat unusable
-  [INFO] Una carpeta de emulador de la unidad no se montó (el motivo está en la línea: la app aún no tiene carpeta en /data, o la carpeta de la consola ya tiene archivos). PS4Mount no pisa nada de la consola.
+  [INFO] Una carpeta de emulador de la unidad no se montó (el motivo está en la línea: la app aún no tiene carpeta en /data, o la carpeta de la consola ya tiene archivos). Lodestar no pisa nada de la consola.
         1 vez/veces; primera línea: [emu] /data/PS4SX2/roms not mounted: the console's folder already has files (it is left as it is)
   [INFO] Una acción se negó porque el juego estaba en marcha: ciérralo y repite.
         1 vez/veces; primera línea: [web] remove CUSA00001 refused: game running
@@ -26,7 +26,7 @@ Desde 2026-11-24 19:00:00 hasta 2026-11-24 19:04:00
 == Otros avisos sin explicación conocida (primeros 1)
   [install] /data/ps4mount/install/x.pkg: could not open the installer
 
-== Archivos temporales que PS4Mount borró de la memoria interna
+== Archivos temporales que Lodestar borró de la memoria interna
   1 aviso(s) [clean], 4194304 bytes en total (4.0 MB)
 
 Resultado: 2 error(es) y 3 aviso(s) conocidos. Léelos arriba.

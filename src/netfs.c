@@ -1182,8 +1182,8 @@ int nas_start(const nas_cfg_t *cfg, char *err, size_t n) {
             snprintf(err, n, "%s",
                      enxio ? TR("this start cannot use fusefs: the payload has to be loaded again",
                                    "este arranque no puede usar fusefs: hay que volver a cargar el payload")
-                     : busy   ? TR("the fuse devices are all taken by earlier loads of PS4Mount: restart the console",
-                                   "los dispositivos fuse están todos ocupados por cargas anteriores de PS4Mount: reinicia la consola")
+                     : busy   ? TR("the fuse devices are all taken by earlier loads of Lodestar: restart the console",
+                                   "los dispositivos fuse están todos ocupados por cargas anteriores de Lodestar: reinicia la consola")
                               : TR("the fuse devices cannot be opened", "no se pueden abrir los dispositivos fuse"));
             status_set(cfg, err);
             pthread_mutex_unlock(&g_lock);

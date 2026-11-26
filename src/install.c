@@ -58,7 +58,7 @@ static int bgft_open(char *msg, unsigned long n) {
     int (*start)(int) = (void *)kernel_dynlib_dlsym(getpid(), h, "sceBgftServiceDownloadStartTask");
     int (*term)(void) = (void *)kernel_dynlib_dlsym(getpid(), h, "sceBgftServiceIntTerm");
     if (!init || !reg || !start || !term) {
-        snprintf(msg, n, "the system installer lacks the functions PS4Mount uses");
+        snprintf(msg, n, "the system installer lacks the functions Lodestar uses");
         return -1;
     }
     /* the service keeps its heap for as long as the payload runs */

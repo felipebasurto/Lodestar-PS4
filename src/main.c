@@ -4573,7 +4573,7 @@ static void emu_said(const char *target, const char *why) {
 static int emu_mount_one(const char *src, const char *app, const char *folder) {
     char target[PATH_MAX], appdir[PATH_MAX];
     if (emu_target(app, folder, target, sizeof(target))) {
-        emu_said(src, TR("the name is not one PS4Mount mounts", "el nombre no es de los que PS4Mount monta"));
+        emu_said(src, TR("the name is not one Lodestar mounts", "el nombre no es de los que Lodestar monta"));
         return 0;
     }
     snprintf(appdir, sizeof(appdir), "/data/%s", app);
@@ -5756,7 +5756,7 @@ int app_remove(const char *tid, char *msg, size_t cap) {
     char root[PATH_MAX], srcmark[64];
     snprintf(srcmark, sizeof(srcmark), STATE_DIR "/%s.src", tid);
     if (!remove_owned_ok(installed_internally(tid), m != NULL, exists(srcmark), !find_root(tid, root, sizeof(root)))) {
-        printf("[web] remove %s refused: no PS4Mount ownership evidence\n", tid);
+        printf("[web] remove %s refused: no Lodestar ownership evidence\n", tid);
         snprintf(msg, cap, TR("%s is not managed by Lodestar", "%s no está gestionado por Lodestar"), tid);
         return -1;
     }
@@ -6954,8 +6954,8 @@ static void check_problem(const pkg_check_t *c, uint64_t size, char *problem, si
                  (unsigned long long)size, (unsigned long long)c->pkg_size);
     if (!problem[0] && c->kind != PKG_KIND_ADDON && installed_internally(c->title_id))
         snprintf(problem, n,
-                 TR("%s is installed on the console the normal way: PS4Mount leaves it alone",
-                    "%s está instalado en la consola de la forma normal: PS4Mount no lo toca"),
+                 TR("%s is installed on the console the normal way: Lodestar leaves it alone",
+                    "%s está instalado en la consola de la forma normal: Lodestar no lo toca"),
                  c->title_id);
 }
 

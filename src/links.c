@@ -1412,8 +1412,8 @@ static int archive_failure(struct archive *a) {
     if (g_rt.locked || (e && find_ci(e, "passphrase") && !find_ci(e, "unsupported")))
         fail_locked();
     else if (archive_read_has_encrypted_entries(a) > 0 || (e && find_ci(e, "encrypt")))
-        fail_job("%s", TR("the archive is an older RAR (RAR4) with a password, which PS4Mount cannot open",
-                          "el archivo es un RAR antiguo (RAR4) con contraseña, que PS4Mount no puede abrir"));
+        fail_job("%s", TR("the archive is an older RAR (RAR4) with a password, which Lodestar cannot open",
+                          "el archivo es un RAR antiguo (RAR4) con contraseña, que Lodestar no puede abrir"));
     else if (!halted())
         fail_job(TR("the archive could not be read: %s", "no se pudo leer el archivo comprimido: %s"), e ? e : "?");
     return -1;
@@ -1587,8 +1587,8 @@ static void *x_thread(void *arg) {
             clean_name(base, name, sizeof(name));
             if (archive_entry_is_encrypted(e) && g_rt.kind != K_ZIP) {
                 /* a RAR5's went through the decoder plain: this is an older RAR */
-                fail_job("%s", TR("the archive is an older RAR (RAR4) with a password, which PS4Mount cannot open",
-                                  "el archivo es un RAR antiguo (RAR4) con contraseña, que PS4Mount no puede abrir"));
+                fail_job("%s", TR("the archive is an older RAR (RAR4) with a password, which Lodestar cannot open",
+                                  "el archivo es un RAR antiguo (RAR4) con contraseña, que Lodestar no puede abrir"));
                 break;
             }
             if (archive_entry_filetype(e) != AE_IFREG || !ends_with(name, ".pkg") || strlen(name) <= 4) {

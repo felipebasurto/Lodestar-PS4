@@ -32,7 +32,7 @@ Probado en una PS4 con firmware **13.52** y GoldHEN; también funciona en **14.0
 > **Versión beta.** Haz una copia de seguridad de tus partidas guardadas antes de usarlo, y [cuéntanos cualquier problema](#problemas-frecuentes) con el log.
 
 > [!NOTE]
-> **Nombres legacy (compatibilidad).** Lodestar era PS4Mount PS4 antes de la 2.0.0, y las carpetas y ficheros operativos de la consola **siguen llamándose como antes** para no romper las instalaciones que ya existen: `/data/ps4mount/` (ajustes, log y estado), la carpeta `PS4Mount` de los USB, `/data/PS4Mount` en la memoria interna y la cabecera `X-PS4Mount` del protocolo del panel. Lo que cambia de nombre es el proyecto, los artefactos (`lodestar-ps4.bin`, `lodestar-panel.pkg`, `lodestar-extension.zip`) y la app del panel.
+> **Nombres legacy (compatibilidad).** Lodestar era PS4Mount PS4 antes de la 2.0.0, y las carpetas y ficheros operativos de la consola **siguen llamándose como antes** para no romper las instalaciones que ya existen: `/data/ps4mount/` (ajustes, log y estado), la carpeta `PS4Mount` de los USB, `/data/PS4Mount` en la memoria interna. La cabecera canónica del protocolo es `X-Lodestar`; `X-PS4Mount` solo se acepta como alias para clientes antiguos. Lo que cambia de nombre es el proyecto, los artefactos (`lodestar-ps4.bin`, `lodestar-panel.pkg`, `lodestar-extension.zip`) y la app del panel.
 
 ![El panel de Lodestar](docs/panel-main-es.png)
 
@@ -97,9 +97,6 @@ Al apagarlo, los juegos que Lodestar **ya había organizado** vuelven solos a su
 
 El juego aparece en la pantalla de inicio como cualquier otro, y Lodestar te va avisando de todo con notificaciones: al cargarse, al encontrar y añadir juegos, si falta el disco de un juego, al borrar uno y con las copias en Google Drive. Cada aviso lleva el icono del sistema que le corresponde (arranque, listo, aviso, descarga o Drive).
 
-![Rayman en la pantalla de inicio, con el aviso de Lodestar](docs/console-home-es.jpg)
-
-![Las notificaciones de Lodestar](docs/console-notices-es.jpg)
 
 ### Por qué hay que reiniciar una vez
 
@@ -157,8 +154,7 @@ En el panel, **Descargar enlaces**: pega los enlaces, uno por línea, elige dón
 - Un ZIP con contraseña también se abre, clásica o AES, igual que un RAR.
 - No se puede: un RAR antiguo (RAR4) con contraseña, un **7z**, o un enlace que pide iniciar sesión.
 
-| ![El panel descargando un RAR en 3 partes mientras lo extrae](docs/links-panel-es.png) | ![El aviso en la consola al empezar la descarga](docs/links-console-es.jpg) |
-|---|---|
+![El panel descargando un RAR en 3 partes mientras lo extrae](docs/links-panel-es.png)
 
 ### Extensión del navegador
 
@@ -171,8 +167,6 @@ Opcional, para el ordenador: con ella no hace falta buscar el enlace directo. Pu
 - **Experimental:** bajar también a través del navegador. La consola sigue bajando por su cuenta y el navegador le pasa además parte de los bloques, con sus cookies, por la red local (puerto 8771). Solo ayuda con sitios que no limitan cada conexión, y mientras el navegador siga abierto; si lo cierras, la consola sigue sola.
 - No hay extensiones en Chrome para Android ni en iPhone: desde el móvil, usa **Descargar enlaces** del panel.
 
-| ![La cesta con las 3 partes de un RAR, lista para enviar](docs/extension-basket-es.png) | ![El aviso del navegador al guardar una parte en la cesta](docs/extension-notice-es.png) |
-|---|---|
 
 ### Copias en Google Drive
 
@@ -186,9 +180,6 @@ Opcional. Tus juegos en **tu propio Google Drive**, para liberar espacio o tener
 
 Mientras transfiere, el panel muestra el juego, el porcentaje, la velocidad y el tiempo que queda (la barra de la [primera captura](#español) es una descarga), y la PS4 avisa en pantalla al empezar, al 25, 50 y 75 % y al terminar. **La consola no entra en reposo** mientras haya una transferencia, y puedes jugar o usar el panel a la vez. Si algo la corta (la red, detener Lodestar, apagar), **sigue sola** desde donde iba la próxima vez que cargues Lodestar. Cada archivo se comprueba con su MD5 al subir y al bajar: un archivo dañado nunca se da por bueno.
 
-| Subiendo un juego | Su ficha mientras sube |
-| --- | --- |
-| ![Subiendo a Drive](docs/panel-upload-es.png) | ![La ficha durante la subida](docs/panel-upload-game-es.png) |
 
 Al descargar, el juego llega a `PS4Mount/<Juego> [CUSAxxxxx]/` de la unidad elegida y Lodestar lo añade solo (con el reinicio de siempre). Un juego que ya está en la biblioteca no se descarga encima.
 
@@ -201,7 +192,7 @@ En Drive quedan en la carpeta `PS4Mount/<Juego> [CUSAxxxxx]/`, como `game.pkg`, 
 
 #### Conectar tu Google Drive (una vez)
 
-Lodestar no trae credenciales de Google: cada usuario usa **las suyas**, que se quedan solo en su consola. Se crean gratis en unos minutos:
+Lodestar no trae credenciales de Google: cada usuario usa **las suyas**, que se quedan solo en su consola. Se crean gratis en unos minutos. Las capturas de Google Cloud conservan el ejemplo legacy **PS4Mount** porque las credenciales antiguas siguen funcionando; para un proyecto nuevo escribe **Lodestar**:
 
 1. Abre **[console.cloud.google.com](https://console.cloud.google.com/)** con tu cuenta de Google, pulsa el selector de proyectos (arriba a la izquierda) → **Proyecto nuevo**, nombre **Lodestar** → **Crear**. Comprueba que arriba está elegido Lodestar.
 
@@ -265,13 +256,7 @@ Lodestar no trae credenciales de Google: cada usuario usa **las suyas**, que se 
 | --- | --- |
 | ![Pegar el ID y el secreto](docs/panel-drive-setup-es.png) | ![El código de conexión](docs/panel-drive-code-es.png) |
 
-En google.com/device (en el móvil o el PC):
-
-| 1. Escribe el código | 2. "Google no verificó esta app": **Continuar** |
-| --- | --- |
-| ![Escribir el código](docs/google-1-code-es.png) | ![El aviso de app no verificada](docs/google-2-unverified-es.png) |
-| **3. El permiso: solo los archivos que crea Lodestar → Continuar** | **4. Listo: vuelve al panel** |
-| ![El permiso que pide Lodestar](docs/google-3-access-es.png) | ![Dispositivo conectado](docs/google-4-done-es.png) |
+En google.com/device (en el móvil o el PC): escribe el código, pulsa **Continuar** en el aviso de app no verificada, acepta el permiso —solo los archivos que crea Lodestar— y vuelve al panel.
 
 Ya está: el panel muestra tu correo y tu espacio. La conexión se guarda en la consola y sobrevive a los reinicios. Google puede pedir a las apps en estado "Prueba" que vuelvan a conectarse pasado un tiempo: si pasa, Lodestar muestra **en la pantalla de la PS4** un código nuevo para escribir en google.com/device, y lo que estaba transfiriendo sigue después. **Desconectar** (en la ventana de Google Drive) quita el acceso en Google y lo borra de la consola; también puedes quitarlo desde tu cuenta de Google (Seguridad → Conexiones de terceros).
 
@@ -307,9 +292,7 @@ Los juegos de una **carpeta compartida en la red** (un PC con Windows, Linux o m
 
 ![Ajustes → NAS: el PC encontrado en la red y sus carpetas compartidas](docs/panel-nas-es.png)
 
-Los juegos aparecen en la biblioteca como los de un USB (la primera vez, reinicia la consola una vez). En su ficha, **En** dice **NAS**:
-
-![Marvel's Spider-Man jugándose desde el NAS](docs/panel-nas-game-es.png)
+Los juegos aparecen en la biblioteca como los de un USB (la primera vez, reinicia la consola una vez). En su ficha, **En** dice **NAS**.
 
 Los campos se pueden rellenar también a mano:
 
@@ -433,7 +416,7 @@ Tested on a PS4 on firmware **13.52** with GoldHEN; it also works on **14.00** (
 > **Beta version.** Back up your saved data before using it, and [tell us about any problem](#troubleshooting) with the log.
 
 > [!NOTE]
-> **Legacy names (compatibility).** Lodestar was PS4Mount PS4 before 2.0.0, and the console's operational folders and files **keep their old names** so existing installs are not broken: `/data/ps4mount/` (settings, log and state), the `PS4Mount` folder on USB drives, `/data/PS4Mount` on the console's storage and the panel protocol's `X-PS4Mount` header. What is renamed is the project, the artifacts (`lodestar-ps4.bin`, `lodestar-panel.pkg`, `lodestar-extension.zip`) and the panel app.
+> **Legacy names (compatibility).** Lodestar was PS4Mount PS4 before 2.0.0, and the console's operational folders and files **keep their old names** so existing installs are not broken: `/data/ps4mount/` (settings, log and state), the `PS4Mount` folder on USB drives, `/data/PS4Mount` on the console's storage. The canonical protocol header is `X-Lodestar`; `X-PS4Mount` is only accepted as an alias for older clients. What is renamed is the project, the artifacts (`lodestar-ps4.bin`, `lodestar-panel.pkg`, `lodestar-extension.zip`) and the panel app.
 
 ![The Lodestar panel](docs/panel-main.png)
 
@@ -496,11 +479,8 @@ Turning it off sends the games Lodestar **had organized** back to where they wer
 
 ### On the console
 
-The game shows on the home screen like any other, and Lodestar tells you everything with notifications: when it loads, when it finds and adds games, when a game's drive is missing, when one is deleted, and about the Google Drive backups (this console is in Spanish; they follow the console's language). Each notice carries the system icon that fits it (start, ready, warning, download or Drive).
+The game shows on the home screen like any other, and Lodestar tells you everything with notifications: when it loads, when it finds and adds games, when a game's drive is missing, when one is deleted, and about the Google Drive backups (they follow the console's language). Each notice carries the system icon that fits it (start, ready, warning, download or Drive).
 
-![Rayman on the home screen, with Lodestar's notice](docs/console-home-es.jpg)
-
-![Lodestar's notifications](docs/console-notices-es.jpg)
 
 ### Why one restart
 
@@ -558,8 +538,7 @@ In the panel, **Download links**: paste the links, one per line, pick where to s
 - A ZIP with a password opens too, classic or AES, the same way as a RAR.
 - Not possible: an older RAR (RAR4) with a password, a **7z**, or a link that needs a sign-in.
 
-| ![The panel downloading a RAR in 3 parts while it extracts it](docs/links-panel-es.png) | ![The console's notice when the download starts](docs/links-console-es.jpg) |
-|---|---|
+![The panel downloading a RAR in 3 parts while it extracts it](docs/links-panel-es.png)
 
 ### Browser extension
 
@@ -572,8 +551,6 @@ Optional, for the computer: with it there is no need to look for the direct link
 - **Experimental:** fetching through the browser too. The console keeps downloading by itself and the browser hands it part of the blocks as well, with its cookies, over your network (port 8771). It helps only with sites that do not slow each connection down, and while the browser stays open; closed, the console goes on by itself.
 - Chrome on Android and the iPhone have no extensions: from a phone, use the panel's **Download links**.
 
-| ![The basket with the 3 parts of a RAR, ready to send](docs/extension-basket-es.png) | ![The browser's notice when a part goes to the basket](docs/extension-notice-es.png) |
-|---|---|
 
 ### Google Drive backups
 
@@ -587,9 +564,6 @@ Optional. Your games in **your own Google Drive**, to free space or keep them sa
 
 While it transfers, the panel shows the game, the percentage, the speed and the time left (the bar in the [first screenshot](#english) is a download), and the PS4 tells on its screen when it starts, at 25, 50 and 75% and when it ends. **The console does not go to rest mode** while a transfer runs, and you can play or use the panel meanwhile. If something cuts it (the network, stopping Lodestar, a power off), **it goes on by itself** from where it was the next time Lodestar loads. Every file is checked with its MD5 on the way up and down: a damaged file is never taken as good.
 
-| Uploading a game | Its page while it uploads |
-| --- | --- |
-| ![Uploading to Drive](docs/panel-upload.png) | ![The game's page during the upload](docs/panel-upload-game.png) |
 
 A download arrives in `PS4Mount/<Game> [CUSAxxxxx]/` of the chosen drive and Lodestar adds it by itself (with the usual restart). A game already in the library is not downloaded over itself.
 
@@ -602,7 +576,7 @@ In Drive they are in the folder `PS4Mount/<Game> [CUSAxxxxx]/`, as `game.pkg`, `
 
 #### Connecting your Google Drive (once)
 
-Lodestar ships no Google credentials: each user uses **their own**, which stay on their console only. They are free and take a few minutes (the screenshots are of Google Cloud in Spanish; the buttons are in the same places):
+Lodestar ships no Google credentials: each user uses **their own**, which stay on their console only. They are free and take a few minutes. The Google Cloud screenshots are in Spanish and keep the legacy **PS4Mount** example because old credentials still work; for a new project enter **Lodestar** (the buttons are in the same places):
 
 1. Open **[console.cloud.google.com](https://console.cloud.google.com/)** with your Google account, click the project picker (top left) → **New project**, name **Lodestar** → **Create**. Check that Lodestar is the project chosen at the top.
 
@@ -666,13 +640,7 @@ Lodestar ships no Google credentials: each user uses **their own**, which stay o
 | --- | --- |
 | ![Pasting the ID and the secret](docs/panel-drive-setup.png) | ![The sign-in code](docs/panel-drive-code.png) |
 
-At google.com/device (on a phone or a computer; these are in Spanish, yours follow your Google language):
-
-| 1. Type the code | 2. "Google hasn't verified this app": **Continue** |
-| --- | --- |
-| ![Typing the code](docs/google-1-code-es.png) | ![The unverified app warning](docs/google-2-unverified-es.png) |
-| **3. The permission: only the files Lodestar creates → Continue** | **4. Done: back to the panel** |
-| ![The permission Lodestar asks for](docs/google-3-access-es.png) | ![Device connected](docs/google-4-done-es.png) |
+At google.com/device (on a phone or a computer): type the code, press **Continue** on the unverified-app warning, accept the permission —only the files Lodestar creates— and go back to the panel.
 
 That is all: the panel shows your email and your space. The connection is kept on the console across restarts. Google may ask apps in "Testing" to connect again after a while: if it does, Lodestar shows a new code **on the PS4's screen** to type at google.com/device, and whatever was transferring goes on after. **Disconnect** (in the Google Drive window) removes the access at Google and deletes it from the console; you can also remove it from your Google account (Security → Third-party connections).
 
@@ -708,9 +676,7 @@ The games in a **shared folder on the network** (a Windows, Linux or macOS compu
 
 ![Settings → NAS: the PC found on the network and its shared folders](docs/panel-nas.png)
 
-The games show up in the library like the ones on a USB drive (the first time, restart the console once). On their page, **On** says **NAS**:
-
-![Marvel's Spider-Man played from the NAS](docs/panel-nas-game.png)
+The games show up in the library like the ones on a USB drive (the first time, restart the console once). On their page, **On** says **NAS**.
 
 The fields can be filled in by hand too:
 

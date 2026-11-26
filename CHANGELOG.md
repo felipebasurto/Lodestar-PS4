@@ -2,6 +2,14 @@
 
 PS4Mount PS4 is a PS4-only port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (PS5); its versions start again at 0.1.0. The history of the original is in its project and in this repository's git history.
 
+## 2.0.2
+
+**Public identity polish.** The README's main panel captures now show the Lodestar interface instead of the pre-rebrand panel; stale console, extension and upload captures are no longer presented as current UI. Google Cloud setup captures are explicitly marked as legacy examples because existing PS4Mount OAuth clients remain valid. User-facing errors, the log explainer, the extension identity and outbound HTTP requests now say Lodestar. Runtime compatibility names such as `/data/ps4mount`, USB `PS4Mount` folders and accepted legacy headers are unchanged.
+
+**Español**
+
+**Pulido de la identidad pública.** Las capturas principales del panel en el README muestran ahora la interfaz de Lodestar en vez del panel anterior al cambio de nombre; las capturas viejas de consola, extensión y subidas ya no se presentan como interfaz actual. Las capturas de Google Cloud quedan marcadas explícitamente como ejemplos legacy porque los clientes OAuth de PS4Mount ya creados siguen sirviendo. Los errores visibles, el explicador del log, la identidad de la extensión y las peticiones HTTP salientes ya dicen Lodestar. Los nombres operativos de compatibilidad como `/data/ps4mount`, las carpetas `PS4Mount` de los USB y las cabeceras legacy aceptadas no cambian.
+
 ## 2.0.1
 
 **Agent protocol consistency and AutoRun safety.** The embedded panel, browser extension and download relay now use the canonical `X-Lodestar` / `X-Lodestar-Password` headers; the legacy `X-PS4Mount` names remain accepted for older clients. `GET /api/agent` and `GET /api/status` are documented in the user and agent workflows. AutoRun no longer selects a legacy `ps4mount-ps4` file as its launch target: legacy entries are removed or replaced, but only a `lodestar-ps4` artifact can be enabled, so an old installation cannot silently downgrade the boot payload.

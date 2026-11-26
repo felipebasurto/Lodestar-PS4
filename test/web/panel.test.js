@@ -17,7 +17,7 @@ const CFG = { batch: true, batch_size: 5, dlc: true, dlc_mode: 'external', dlc_b
   autorun: false, autorun_ok: true, autorun_path: '/data/payloads/lodestar-ps4.bin',
   restore_batch: 5, max_restore_batch: 10, paths: ['/'], organize: false };
 let REPLY_LANG; // the language the console reports (undefined: none, English)
-let GAMES_VERSION = 'PS4Mount test';
+let GAMES_VERSION = 'Lodestar test';
 let DRIVE = { configured: false }; // GET /api/drive (an object: the tests change it)
 let LINKS = { configured: false }; // GET /api/links
 let DRIVES = [{ label: 'usb0', free: 120.5 * 1073741824, total: 500 * 1073741824 }]; // GET /api/games drives
@@ -137,7 +137,7 @@ function tKeys(file) {
   ok(p.nav.length === 0, 'index with <dialog> stays');
   ok(d.querySelector('h1').textContent === 'Lodestar' && d.querySelector('.tagline').textContent.includes('PlayStation 4'), 'the brand header names Lodestar and what it is');
   ok(d.querySelector('.brand-mark') !== null && fs.readFileSync(W + 'index.html', 'utf8').includes('image/svg+xml'), 'the compass-star brand mark and favicon');
-  ok(d.getElementById('mc-ver').textContent === 'PS4Mount test' && d.getElementById('mc-dot').className === 'dot ok', 'the header status pill follows the version the console reports');
+  ok(d.getElementById('mc-ver').textContent === 'Lodestar test' && d.getElementById('mc-dot').className === 'dot ok', 'the header status pill follows the version the console reports');
   ok(d.querySelectorAll('.card').length === 6, 'six game cards');
   ok(d.querySelector('.card .name').textContent === 'Civ VII', 'cards sorted by name');
   { const c = d.querySelector('[data-g="CUSA34284"]'), pane = d.getElementById('inspector');
@@ -743,7 +743,7 @@ function tKeys(file) {
   // --- legacy page
   p = page('legacy.html', {}); ({ w, d, reqs } = p);
   await tick();
-  ok(d.querySelectorAll('.card').length === 6 && d.getElementById('ver').textContent === 'PS4Mount test', 'legacy lists the games');
+  ok(d.querySelectorAll('.card').length === 6 && d.getElementById('ver').textContent === 'Lodestar test', 'legacy lists the games');
   ok(d.querySelector('h1').textContent === 'Lodestar', 'legacy names Lodestar');
   ok(d.body.textContent.includes('Restart to play') && d.getElementById('restart-banner').textContent.includes('one-time console restart'), 'legacy shows the restart state');
   ok(!/=>|\blet\b|\bconst\b|`|fetch\(|showModal|<dialog/.test(fs.readFileSync(W + 'legacy.html', 'utf8').split('<script>')[1]), 'legacy script is ES5 without fetch or dialog');
