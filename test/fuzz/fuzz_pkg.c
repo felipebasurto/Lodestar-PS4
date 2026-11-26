@@ -15,7 +15,14 @@
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     static pkg_t pkg;
+#ifdef __linux__
     int fd = memfd_create("pkg", 0);
+#else
+    char tmp[] = "/tmp/lodestar-fuzz-pkg-XXXXXX";
+    int fd = mkstemp(tmp);
+    if (fd >= 0)
+        unlink(tmp);
+#endif
     if (fd < 0)
         return 0;
     if (size && write(fd, data, size) != (ssize_t)size) {
@@ -23,7 +30,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         return 0;
     }
     char path[64];
+#ifdef __linux__
     snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
+#else
+    snprintf(path, sizeof(path), "/dev/fd/%d", fd);
+#endif
     if (!pkg_open(&pkg, path)) {
         static const uint32_t ids[] = {0x1000, 0x1200, 0x0400, 0x0401, 0x0402, 0x0403, 0x1001};
         for (size_t i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
