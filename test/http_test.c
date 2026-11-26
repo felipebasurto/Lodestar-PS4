@@ -538,6 +538,15 @@ int main(void) {
         read_response_close(c, resp, sizeof(resp));
         CHECK(status(resp, "200") && strstr(resp, "\"dests\""));
 
+        c = panel_conn();
+        CHECK(c >= 0);
+        send_req_close_write(c, "GET /api/storage HTTP/1.1\r\n\r\n");
+        web_serve(ls);
+        web_pool_idle_wait();
+        CHECK(web_owner_pending() == 0);
+        read_response_close(c, resp, sizeof(resp));
+        CHECK(status(resp, "200") && strstr(resp, "\"free\":1"));
+
         before = g_stub_calls;
         c = panel_conn();
         CHECK(c >= 0);

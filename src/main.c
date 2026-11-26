@@ -2157,6 +2157,9 @@ typedef struct {
 } managed_t;
 
 static managed_t g_managed[MAX_TITLES];
+/* Storage reads only the identity fields (used/tid). The owner keeps runtime/mount use of
+ * the table; this short mutex only makes that identity snapshot consistent for workers. */
+static pthread_mutex_t g_managed_id_mu = PTHREAD_MUTEX_INITIALIZER;
 static int g_scan_manual_active; /* main-loop epoch snapshot of a panel "scan for games" request */
 static int g_walk_now;    /* a drive came (the share connected): walked now, without saying so */
 static int g_deleting; /* a delete screen is open: game folders are unmounted */
@@ -2171,6 +2174,12 @@ static int g_will_seen_registered;
 static int g_will_mount_warned;
 
 static int delete_pending_is(const char *tid) { return g_will_delete[0] && !strcmp(g_will_delete, tid); }
+
+static void managed_mark_unused(managed_t *m) {
+    pthread_mutex_lock(&g_managed_id_mu);
+    m->used = 0;
+    pthread_mutex_unlock(&g_managed_id_mu);
+}
 
 static managed_t *managed_by(const char *tid, const char *cid) {
     for (int i = 0; i < MAX_TITLES; i++)
@@ -2651,6 +2660,7 @@ static void manage_fields(const char *tid, const char *cid, const char *name, co
     if (!m)
         return;
     /* keep the runtime state across rescans */
+    pthread_mutex_lock(&g_managed_id_mu);
     managed_t keep = *m;
     memset(m, 0, sizeof(*m));
     m->used = 1;
@@ -2667,6 +2677,7 @@ static void manage_fields(const char *tid, const char *cid, const char *name, co
     snprintf(m->cid, sizeof(m->cid), "%s", cid);
     snprintf(m->name, sizeof(m->name), "%s", name);
     snprintf(m->dir, sizeof(m->dir), "%s", dir);
+    pthread_mutex_unlock(&g_managed_id_mu);
 }
 
 static void manage(const title_src_t *t) {
@@ -4125,7 +4136,7 @@ static void release_stale(void) {
             managed_t *m = managed_by(tid, NULL);
             if (m) {
                 unmount_title(tid, m->dlc_tids, m->ndlc_tids);
-                m->used = 0;
+                managed_mark_unused(m);
             } else {
                 unmount_title(tid, NULL, 0);
             }
@@ -4686,19 +4697,62 @@ static unsigned long long tree_size(const char *path) {
         return 0;
     if (!S_ISDIR(st.st_mode))
         return (unsigned long long)st.st_size;
-    unsigned long long n = 0;
-    DIR *d = opendir(path);
-    struct dirent *e;
+    /* Iterative, not recursive: panel workers have a bounded stack. A path cannot have more
+     * one-byte components than this depth, and the frames are a few bytes rather than PATH_MAX each. */
+    enum { TREE_MAX_DEPTH = PATH_MAX / 2 };
+    DIR *ds[TREE_MAX_DEPTH];
+    size_t lens[TREE_MAX_DEPTH];
     char p[PATH_MAX];
-    while (d && (e = readdir(d))) {
-        if (strcmp(e->d_name, ".") && strcmp(e->d_name, "..")) {
-            snprintf(p, sizeof(p), "%s/%s", path, e->d_name);
-            n += tree_size(p);
+    size_t len = (size_t)snprintf(p, sizeof(p), "%s", path);
+    if (len >= sizeof(p))
+        return 0;
+    DIR *first = opendir(p);
+    if (!first)
+        return 0;
+    unsigned long long total = 0;
+    int depth = 0;
+    ds[0] = first;
+    lens[0] = len;
+    while (depth >= 0) {
+        struct dirent *e = readdir(ds[depth]);
+        if (!e) {
+            closedir(ds[depth]);
+            depth--;
+            if (depth >= 0)
+                p[lens[depth]] = 0;
+            continue;
         }
+        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, ".."))
+            continue;
+        size_t base = lens[depth], nl = strlen(e->d_name);
+        if (base + 1 + nl >= sizeof(p))
+            continue;
+        memcpy(p + base, "/", 1);
+        memcpy(p + base + 1, e->d_name, nl + 1);
+        len = base + 1 + nl;
+        if (lstat(p, &st)) {
+            p[base] = 0;
+            continue;
+        }
+        if (!S_ISDIR(st.st_mode)) {
+            total += (unsigned long long)st.st_size;
+            p[base] = 0;
+            continue;
+        }
+        if (depth + 1 >= TREE_MAX_DEPTH) {
+            p[base] = 0;
+            continue;
+        }
+        DIR *next = opendir(p);
+        if (!next) {
+            p[base] = 0;
+            continue;
+        }
+        depth++;
+        ds[depth] = next;
+        lens[depth] = len;
     }
-    if (d)
-        closedir(d);
-    return n;
+    return total;
 }
 
 /* Deletes the library folder of tid, <root>/ps4/<tid> (its game, update and add-ons) and
@@ -4739,7 +4793,7 @@ static void title_deleted(managed_t *m) {
         write_file(path, m->tid, strlen(m->tid), 0666); /* not added again until asked */
         printf("[delete] %s: its pkg stays where it is: %s\n", m->tid, m->dir);
     }
-    m->used = 0;
+    managed_mark_unused(m);
 }
 
 /* PS4: "GameWillDelete(<TID>)" is the start of the system's uninstall, not proof that it
@@ -5335,7 +5389,7 @@ int app_remove(const char *tid, char *msg, size_t cap) {
     }
     mem_free(savedsrc);
     if (!rc && m)
-        m->used = 0;
+        managed_mark_unused(m);
     printf("[web] remove %s: uninstall=0x%08x\n", tid, rc);
     if (rc == -2)
         snprintf(msg, cap,
@@ -6866,17 +6920,21 @@ void app_storage_json(buf_t *out) {
         logs += (unsigned long long)st.st_size;
     if (!lstat(STATE_DIR "/log.txt.old", &st))
         logs += (unsigned long long)st.st_size;
+    char tids[MAX_TITLES][10];
     int n = 0;
+    pthread_mutex_lock(&g_managed_id_mu);
     for (int i = 0; i < MAX_TITLES; i++) {
         if (!g_managed[i].used)
             continue;
-        char tid[10], p[64];
-        snprintf(tid, sizeof(tid), "%s", g_managed[i].tid);
-        snprintf(p, sizeof(p), "/user/appmeta/%s", tid);
+        snprintf(tids[n++], sizeof(tids[0]), "%s", g_managed[i].tid);
+    }
+    pthread_mutex_unlock(&g_managed_id_mu);
+    for (int i = 0; i < n; i++) {
+        char p[64];
+        snprintf(p, sizeof(p), "/user/appmeta/%s", tids[i]);
         meta += tree_size(p);
-        snprintf(p, sizeof(p), "/system_data/playgo/%s", tid);
+        snprintf(p, sizeof(p), "/system_data/playgo/%s", tids[i]);
         playgo += tree_size(p);
-        n++;
     }
     struct statfs sf;
     unsigned long long free_b = 0, total = 0;
