@@ -38,7 +38,7 @@ without it a change to `main.c` is only compiled by CI. It does not run the payl
 
 ## Logs
 
-- Every `printf("[tag] ...")` of the payload goes to `/data/ps4mount/log.txt` with a time (`src/logts.c`),
+- Every `printf("[tag] ...")` of the payload goes to `/data/lodestar/log.txt` with a time (`src/logts.c`),
   capped near 2 MiB with the one before it in `log.txt.old`.
 - Anything PS4Mount deletes on the console's drive writes a `[clean]` line saying what and why.
 - `python3 tools/logcheck.py log.txt` explains a copy of the log in plain words (Spanish by default,

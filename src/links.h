@@ -14,7 +14,7 @@
 
 #define LINKS_MAX_JOBS 32
 #define LINKS_MAX_FILES 256 /* volumes of one archive */
-#define LINKS_RELAY_PORT 8771 /* where a helper (the browser extension) fetches blocks for the console */
+#define LINKS_RELAY_PORT 8781 /* where a helper (the browser extension) fetches blocks for the console */
 
 /* What PS4Mount gives the links thread (main.c; the tests give their own). */
 typedef struct {

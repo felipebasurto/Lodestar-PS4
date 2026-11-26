@@ -36,7 +36,7 @@ El payload se ha probado en **13.52** y **14.00** con GoldHEN. El panel y las no
 > **Versión beta.** Haz una copia de seguridad de tus partidas guardadas antes de usarlo, y [cuenta cualquier problema](#problemas-frecuentes) con el log.
 
 > [!NOTE]
-> **Nombres legacy (compatibilidad).** Lodestar era PS4Mount PS4 antes de la 2.0.0, y las carpetas operativas de la consola siguen llamándose igual para no romper instalaciones existentes: `/data/ps4mount/` (ajustes, log y estado), la carpeta `PS4Mount` de los USB y `/data/PS4Mount` en la memoria interna. La cabecera canónica del protocolo es `X-Lodestar`; `X-PS4Mount` solo se acepta como alias para clientes antiguos.
+> **Convivencia con PS4Mount.** Lodestar usa identidad propia: `/data/lodestar/` (ajustes, log y estado), la carpeta `Lodestar` de los USB, `/data/Lodestar` en la memoria interna, el panel en el puerto 8780 y la app `LODS00001`. No migra ni borra `/data/ps4mount`, `/system_data/ps4mount`, la carpeta `PS4Mount` ni la app `PSMT00001`. Los dos gestores no deben ejecutarse a la vez porque ambos controlan montajes globales de la consola: detén PS4Mount antes de cargar Lodestar. Los pkgs ya organizados en `<USB>/ps4/<TID>` siguen siendo biblioteca reutilizable; Lodestar reconstruye sus propios registros. La cabecera canónica del protocolo es `X-Lodestar`; `X-PS4Mount` solo se acepta como alias para clientes antiguos.
 
 ![El panel de Lodestar](docs/panel-main-es.png)
 
@@ -45,7 +45,7 @@ El payload se ha probado en **13.52** y **14.00** con GoldHEN. El panel y las no
 | | Estado |
 | --- | --- |
 | Juegos desde un **USB exFAT** (también pkgs de más de 4 GB) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado |
-| Juegos desde la **memoria interna** (`/data/PS4Mount`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado: opcional, activado por defecto; los juegos instalados en la consola de la forma normal se detectan y no se tocan |
+| Juegos desde la **memoria interna** (`/data/Lodestar`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado: opcional, activado por defecto; los juegos instalados en la consola de la forma normal se detectan y no se tocan |
 | **Actualizaciones** | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado |
 | Juegos **donde están**, sin mover ni renombrar los pkgs (cualquier carpeta de la unidad) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado |
 | **DLC externos** (`dlc_mode=external`, por defecto) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado con los DLC de Modern Warfare 3 y Black Ops 6: el paquete se monta desde su unidad y los metadatos se guardan en la consola. Otros juegos, sin probar |
@@ -76,9 +76,9 @@ El payload se ha probado en **13.52** y **14.00** con GoldHEN. El panel y las no
 2. **Después de cada arranque**, carga Lodestar. Aparece una notificación con `Lodestar <versión> en marcha` y la dirección del panel.
 3. **Pon los juegos** de una de estas formas:
    - **En un USB:** copia los pkgs en la carpeta `PS4Mount` y conecta el USB a la PS4. Si desactivas **Organizar** en Ajustes, puedes guardarlos en cualquier carpeta de la unidad.
-   - **En la memoria interna:** copia los pkgs en `/data/PS4Mount` por FTP.
+   - **En la memoria interna:** copia los pkgs en `/data/Lodestar` por FTP.
    - **Desde el panel:** usa **Enviar paquetes** para mandarlos por la red local.
-4. Abre el panel desde el móvil o el PC: `http://<IP de la PS4>:8770`.
+4. Abre el panel desde el móvil o el PC: `http://<IP de la PS4>:8780`.
 
 ### En la consola
 
@@ -97,7 +97,7 @@ La consola solo prepara algunos juegos nuevos al arrancar. Cuando Lodestar regis
 
 ### App nativa de PS4
 
-Descarga [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) e instálalo con el instalador de paquetes de GoldHEN. Si ya tienes el icono de Lodestar 3.0.0, instala el PKG nuevo para actualizarlo. Carga el payload de esta release y abre **Lodestar** desde la pantalla de inicio. La app usa la API local del payload.
+Descarga [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) e instálalo con el instalador de paquetes de GoldHEN. Este PKG usa `LODS00001` y aparece como un icono separado; no reemplaza la app `PSMT00001` de PS4Mount. Carga el payload de esta release y abre **Lodestar** desde la pantalla de inicio. La app usa la API local del payload.
 
 - **Flechas** para moverte entre la barra lateral y las carátulas. **X** abre la ficha, **△** abre el teclado para buscar, **□** vuelve a escanear y **○** vuelve o sale.
 - Desde la barra lateral puedes encolar una URL, consultar el progreso y abrir los ajustes de biblioteca, DLC y consola.
@@ -107,7 +107,7 @@ La compilación y las pruebas de host están verificadas. La [validación en una
 
 ### API para agentes y scripts
 
-El panel es también una API HTTP en el puerto **8770**. `GET /api/agent` devuelve el manifiesto completo de rutas, cabeceras y límites de seguridad en JSON; `GET /api/status` devuelve un estado ligero sin enumerar la biblioteca. Las peticiones que escriben necesitan la cabecera `X-Lodestar: 1` (`X-PS4Mount: 1` se acepta como alias legacy) y solo se aceptan desde la red local. La tabla completa está en [AI-WORKFLOW.md](AI-WORKFLOW.md).
+El panel es también una API HTTP en el puerto **8780**. `GET /api/agent` devuelve el manifiesto completo de rutas, cabeceras y límites de seguridad en JSON; `GET /api/status` devuelve un estado ligero sin enumerar la biblioteca. Las peticiones que escriben necesitan la cabecera `X-Lodestar: 1` (`X-PS4Mount: 1` se acepta como alias legacy) y solo se aceptan desde la red local. La tabla completa está en [AI-WORKFLOW.md](AI-WORKFLOW.md).
 
 ### Enviar paquetes desde el PC
 
@@ -139,7 +139,7 @@ Pega la URL del archivo en **Importar desde URL** y elige la unidad de destino. 
 Para ROM usadas por apps homebrew como PS4SX2/PCSX2:
 
 1. Abre la app una vez en la consola para que cree su carpeta en `/data`.
-2. En el USB crea `PS4Mount/emulators/<App>/<Carpeta>`, por ejemplo `PS4Mount/emulators/PCSX2/games`.
+2. En el USB crea `Lodestar/emulators/<App>/<Carpeta>`, por ejemplo `Lodestar/emulators/PCSX2/games`.
 3. Lodestar la expone como `/data/<App>/<Carpeta>` solo si la carpeta de la consola existe y está vacía; nunca tapa archivos de la consola.
 
 ### Borrar un juego
@@ -148,11 +148,11 @@ Al borrar un juego añadido por Lodestar desde la pantalla de inicio, Lodestar b
 
 ## Ajustes y datos en la consola
 
-- `/data/ps4mount/config.txt`: ajustes.
-- `/data/ps4mount/log.txt`: log legible.
-- `/data/ps4mount/log.txt.old`: log anterior.
-- `/data/ps4mount/<CUSA…>.src`: de dónde salió cada juego.
-- `/data/ps4mount/stop`: si existe, Lodestar se detiene.
+- `/data/lodestar/config.txt`: ajustes.
+- `/data/lodestar/log.txt`: log legible.
+- `/data/lodestar/log.txt.old`: log anterior.
+- `/data/lodestar/<CUSA…>.src`: de dónde salió cada juego.
+- `/data/lodestar/stop`: si existe, Lodestar se detiene.
 
 ## Rendimiento: disco duro mecánico o SSD
 
@@ -175,11 +175,11 @@ Lodestar no puede cambiar dónde están los archivos en el disco. Qué puedes ha
 
 ### El panel no abre
 
-Comprueba que la notificación de arranque apareció y que estás usando la IP de la consola con el puerto `8770`. El panel no tiene contraseña: úsalo solo en una red local de confianza.
+Comprueba que la notificación de arranque apareció y que estás usando la IP de la consola con el puerto `8780`. El panel no tiene contraseña: úsalo solo en una red local de confianza.
 
 ### Un juego no aparece
 
-Pulsa **Buscar juegos** y espera a que termine la pasada. Si sigue sin aparecer, copia `/data/ps4mount/log.txt` por FTP y ejecútalo con:
+Pulsa **Buscar juegos** y espera a que termine la pasada. Si sigue sin aparecer, copia `/data/lodestar/log.txt` por FTP y ejecútalo con:
 
 ```sh
 python3 tools/logcheck.py log.txt
@@ -241,14 +241,14 @@ The payload has been tested on firmware **13.52** and **14.00** with GoldHEN. Th
 > **Beta software.** Back up your saved games before using it, and [report problems](#frequent-problems) with the log.
 
 > [!NOTE]
-> **Legacy compatibility names.** Lodestar was PS4Mount PS4 before 2.0.0, and the console's operational folders keep their old names so existing installs do not break: `/data/ps4mount/` (settings, log and state), the USB `PS4Mount` folder and `/data/PS4Mount` in internal storage. The canonical protocol header is `X-Lodestar`; `X-PS4Mount` is accepted only as a legacy alias.
+> **Side-by-side with PS4Mount.** Lodestar has its own operational identity: `/data/lodestar/` (settings, log and state), the USB `Lodestar` folder, `/data/Lodestar` in internal storage, panel port 8780 and app title `LODS00001`. It does not migrate or delete `/data/ps4mount`, `/system_data/ps4mount`, the `PS4Mount` folder or app title `PSMT00001`. The two mount daemons must not run at once because both control console-wide mounts: stop PS4Mount before loading Lodestar. Packages already organized in `<USB>/ps4/<TID>` remain reusable library data; Lodestar rebuilds its own records. The canonical protocol header is `X-Lodestar`; `X-PS4Mount` is accepted only as a legacy alias.
 
 ## What works and what does not
 
 | | Status |
 | --- | --- |
 | Games from an **exFAT USB drive** (including pkgs over 4 GB) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested |
-| Games from **internal storage** (`/data/PS4Mount`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested: optional, on by default; normally installed games are detected and not touched |
+| Games from **internal storage** (`/data/Lodestar`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested: optional, on by default; normally installed games are detected and not touched |
 | **Updates** | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested |
 | Games **where they are**, without moving or renaming pkgs | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested |
 | **External DLC** (`dlc_mode=external`, the default) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested with the add-ons of Modern Warfare 3 and Black Ops 6: packages are mounted from their drive while metadata stays on the console. Other games untested |
@@ -279,9 +279,9 @@ The payload has been tested on firmware **13.52** and **14.00** with GoldHEN. Th
 2. **After every boot**, load Lodestar. A notification shows `Lodestar <version> running` and the panel address.
 3. **Add games** in one of these ways:
    - **USB:** copy the pkgs into the `PS4Mount` folder and connect the drive. If **Organize** is disabled in Settings, pkgs may stay anywhere on the drive.
-   - **Internal storage:** copy pkgs into `/data/PS4Mount` over FTP.
+   - **Internal storage:** copy pkgs into `/data/Lodestar` over FTP.
    - **Panel:** use **Send packages** to upload them over the local network.
-4. Open the panel from a phone or PC: `http://<PS4 IP>:8770`.
+4. Open the panel from a phone or PC: `http://<PS4 IP>:8780`.
 
 ### On the console
 
@@ -300,7 +300,7 @@ The console prepares some new games only during boot. When Lodestar registers a 
 
 ### Native PS4 app
 
-Download [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) and install it with GoldHEN’s Package Installer. If you already have the Lodestar 3.0.0 tile, install the new PKG to update it. Load the payload from this release and open **Lodestar** from the home screen. The app uses the payload’s local API.
+Download [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) and install it with GoldHEN’s Package Installer. This PKG uses `LODS00001` and appears as a separate tile; it does not replace PS4Mount’s `PSMT00001` app. Load the payload from this release and open **Lodestar** from the home screen. The app uses the payload’s local API.
 
 - Use the **D-pad** to move between the sidebar and the game grid. **Cross** opens details, **Triangle** opens the search keyboard, **Square** scans again, and **Circle** goes back or exits.
 - From the sidebar you can queue a URL import, check its progress, and open the library, add-on and console settings.
@@ -310,7 +310,7 @@ The package builds and the host checks pass. [PS4 hardware validation](https://g
 
 ### Agent and script API
 
-The panel is also an HTTP API on port **8770**. `GET /api/agent` returns the complete route, header and safety manifest as JSON; `GET /api/status` returns a lightweight state without listing the library. Write requests need the `X-Lodestar: 1` header (`X-PS4Mount: 1` is accepted as a legacy alias) and are accepted only from the local network. The full route table is in [AI-WORKFLOW.md](AI-WORKFLOW.md).
+The panel is also an HTTP API on port **8780**. `GET /api/agent` returns the complete route, header and safety manifest as JSON; `GET /api/status` returns a lightweight state without listing the library. Write requests need the `X-Lodestar: 1` header (`X-PS4Mount: 1` is accepted as a legacy alias) and are accepted only from the local network. The full route table is in [AI-WORKFLOW.md](AI-WORKFLOW.md).
 
 ### Sending packages from a PC
 
@@ -338,7 +338,7 @@ Paste the file URL in **Import from URL** and choose a destination. The console 
 For ROMs used by homebrew apps such as PS4SX2/PCSX2:
 
 1. Open the app once on the console so it creates its folder in `/data`.
-2. On the USB drive create `PS4Mount/emulators/<App>/<Folder>`, for example `PS4Mount/emulators/PCSX2/games`.
+2. On the USB drive create `Lodestar/emulators/<App>/<Folder>`, for example `Lodestar/emulators/PCSX2/games`.
 3. Lodestar exposes it as `/data/<App>/<Folder>` only if the console folder exists and is empty; it never covers console files.
 
 ### Deleting a game
@@ -347,11 +347,11 @@ Deleting a Lodestar-added game from the home screen also deletes its library pkg
 
 ## Settings and data on the console
 
-- `/data/ps4mount/config.txt`: settings.
-- `/data/ps4mount/log.txt`: readable log.
-- `/data/ps4mount/log.txt.old`: previous log.
-- `/data/ps4mount/<CUSA…>.src`: where each game came from.
-- `/data/ps4mount/stop`: if present, Lodestar stops.
+- `/data/lodestar/config.txt`: settings.
+- `/data/lodestar/log.txt`: readable log.
+- `/data/lodestar/log.txt.old`: previous log.
+- `/data/lodestar/<CUSA…>.src`: where each game came from.
+- `/data/lodestar/stop`: if present, Lodestar stops.
 
 ## Performance: hard drive or SSD
 
@@ -374,11 +374,11 @@ Lodestar cannot change where files sit on the disk. What you can do:
 
 ### The panel does not open
 
-Check that the startup notification appeared and that you are using the console IP with port `8770`. The panel has no password: use it only on a trusted local network.
+Check that the startup notification appeared and that you are using the console IP with port `8780`. The panel has no password: use it only on a trusted local network.
 
 ### A game does not appear
 
-Choose **Scan for games** and wait for the pass to finish. If it still does not appear, copy `/data/ps4mount/log.txt` over FTP and run:
+Choose **Scan for games** and wait for the pass to finish. If it still does not appear, copy `/data/lodestar/log.txt` over FTP and run:
 
 ```sh
 python3 tools/logcheck.py log.txt --lang en

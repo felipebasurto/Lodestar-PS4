@@ -27,7 +27,7 @@
 #include "mem.h"
 #include "pkg.h"
 
-#define LOG_PATH "/data/ps4mount/log.txt"
+#define LOG_PATH "/data/lodestar/log.txt"
 #define LOG_TAIL_BYTES 16384
 #define CHECK_MAX (16u << 20) /* most a pkg check is given */
 #define REQ_MS 30000          /* headers and the start of a body: this long, all told */

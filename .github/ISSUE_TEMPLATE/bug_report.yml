@@ -45,7 +45,7 @@ body:
     id: drives
     attributes:
       label: Where the game is
-      description: A USB drive (how it is formatted, how many are connected) or the console's storage (/data/PS4Mount). Write "none" if the problem is unrelated to storage.
+      description: A USB drive (how it is formatted, how many are connected) or the console's storage (/data/Lodestar). Write "none" if the problem is unrelated to storage.
       placeholder: "1 USB SSD, exFAT, one partition"
     validations:
       required: true
@@ -60,7 +60,7 @@ body:
     id: log
     attributes:
       label: Log
-      description: Open the web panel, click **Log** and copy the text, or download `/data/ps4mount/log.txt` over FTP. Include the lines from when the problem happened. Remove private links, passwords, and personal data.
+      description: Open the web panel, click **Log** and copy the text, or download `/data/lodestar/log.txt` over FTP. Include the lines from when the problem happened. Remove private links, passwords, and personal data.
       render: text
     validations:
       required: true

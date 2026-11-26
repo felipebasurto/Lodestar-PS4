@@ -5,9 +5,9 @@
 
 #include "build.h"
 
-#define WEB_PORT 8770
+#define WEB_PORT 8780
 #define LODESTAR_PRODUCT "Lodestar"
-#define LODESTAR_VERSION "Lodestar 3.1.0-rc.2"
+#define LODESTAR_VERSION "Lodestar 3.1.0-rc.3"
 #define LODESTAR_API_VERSION 1
 
 /* Implemented by main.c for the web panel. */

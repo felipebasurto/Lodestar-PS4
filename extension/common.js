@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 gasb07
  * What the background and the popup share: the settings, the basket of RAR parts and
- * talking to Lodestar's panel (port 8770) on the console. */
+ * talking to Lodestar's panel (port 8780) on the console. */
 var api = typeof browser !== 'undefined' ? browser : chrome;
-var PORT = 8770;
+var PORT = 8780;
 
 function msg(key, sub) { return api.i18n.getMessage(key, sub) || key; }
 

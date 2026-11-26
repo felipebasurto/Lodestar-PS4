@@ -89,7 +89,7 @@ jobs:
         run: |
           OO_PS4_TOOLCHAIN=~/openorbis/OpenOrbis/PS4Toolchain CC=clang-18 LD=ld.lld-18 \
             SSL_LIBS=~/libssl11/usr/lib/x86_64-linux-gnu bash panel-app/build.sh
-          cp build/panel-app/IV0000-PSMT00001_00-PS4MOUNTPANEL000.pkg build/lodestar-panel.pkg
+          cp build/panel-app/IV0000-LODS00001_00-LODESTARPANEL000.pkg build/lodestar-panel.pkg
 
       - name: Checksum
         run: cd build && sha256sum lodestar-ps4.elf lodestar-ps4.bin lodestar-panel.pkg > lodestar-ps4.sha256

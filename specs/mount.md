@@ -22,9 +22,9 @@ the console still has to prove the forced-unmount and drive-reconnection behavio
 
 ### MNT-1: ownership is evidence, never the target path alone
 A nullfs layer is current-owned only when its source is byte-exactly the hold folder the caller
-intends to mount (`/system_data/ps4mount/app/<TID>`, `patch/<TID>` or `addcont/<TID>`). For app
+intends to mount (`/system_data/lodestar/app/<TID>`, `patch/<TID>` or `addcont/<TID>`). For app
 and patch targets only, a layer is legacy-owned when its source is under `/mnt/` and the first
-line of `/data/ps4mount/<TID>.src` is byte-exactly that source; this is the direct drive-folder
+line of `/data/lodestar/<TID>.src` is byte-exactly that source; this is the direct drive-folder
 mount left by versions before the hold-folder migration. Anything else is foreign. Missing or
 unreadable ownership evidence makes the layer foreign for decision purposes, never owned.
 Check: test (security/data loss). Test: `test/unit.c` › `test_mountplan`.

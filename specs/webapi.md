@@ -135,8 +135,8 @@ Source: panel/API architecture audit and WEBAPI-2 implementation design.
 ### WEBAPI-7: the agent manifest and status endpoints are read-only additive contracts
 The product version exposed through the existing API (`version` in responses such as
 `GET /api/games`) is the build's `LODESTAR_VERSION`, including any prerelease suffix.
-The internal state and log paths remain under `/data/ps4mount` for compatibility; this rule does
-not migrate console state.
+The internal state and log paths are under `/data/lodestar`. PS4Mount-PS4 state under
+`/data/ps4mount` is foreign and is not migrated.
 
 `GET /api/agent` returns a machine-readable JSON manifest with `product` (`Lodestar`),
 `version` (the same build version), `api_version` (`1`), the panel scheme/port, the write-header
@@ -167,15 +167,15 @@ local/non-public IPv4 peer. `X-Lodestar: 1` is accepted everywhere the panel hea
 required. `X-PS4Mount: 1` remains accepted as a legacy alias for existing panels, extensions
 and scripts. Archive passwords may be sent as `X-Lodestar-Password`; the legacy
 `X-PS4Mount-Password` remains accepted as its alias. This rule does not add a token,
-change a port, or weaken the network boundary.
+change the port assignments, or weaken the network boundary.
 Check: test through `test/http_test.c`; read for header-block-only parsing in `may_write`.
 Source: Lodestar compatibility contract.
 
 ### WEBAPI-9: `/api/log` metadata is additive
 `GET /api/log` keeps returning the JSON string field `log` with the same tail of
-`/data/ps4mount/log.txt` as before (at most 16 KiB, with the same escaping). It also returns
+`/data/lodestar/log.txt` as before (at most 16 KiB, with the same escaping). It also returns
 `bytes` (the number of raw log bytes read into that tail before JSON escaping/filtering), `truncated`
-(true when the file had bytes before that tail), and `path` (`/data/ps4mount/log.txt`).
+(true when the file had bytes before that tail), and `path` (`/data/lodestar/log.txt`).
 Clients that only read `log` must keep working. Byte ranges are not part of this contract.
 Check: test through `test/http_test.c`; read for bounded file reading.
 Source: Lodestar agent observability contract.

@@ -2,6 +2,18 @@
 
 Lodestar (PS4Mount PS4 before 2.0.0) began as a PS4-only port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (PS5); its versions start again at 0.1.0. The history of the original is in its project and in this repository's git history.
 
+## 3.1.0-rc.3
+
+**Side-by-side identity test build.** Lodestar now uses its own console identity so it can be tested next to PS4Mount-PS4 without adopting or deleting that installation: state in `/data/lodestar`, hold files in `/system_data/lodestar`, USB scan folder `Lodestar`, internal packages in `/data/Lodestar`, web panel port 8780, helper relay port 8781 and native panel title `LODS00001`.
+
+PS4Mount's `/data/ps4mount`, `/system_data/ps4mount`, `PS4Mount` scan folder, `PSMT00001` panel and `ps4mount-ps4` AutoRun entries are foreign and are preserved. The organized package bytes already present in `<USB>/ps4/<TID>` remain reusable library data. Only one mount daemon can run at a time: the loopback lock on port 9032 is deliberately shared as a safety interlock, so stop PS4Mount before loading Lodestar.
+
+**Español**
+
+**Build de prueba con identidad separada.** Lodestar ya usa identidad propia para probarse junto a PS4Mount-PS4 sin adoptar ni borrar esa instalación: estado en `/data/lodestar`, archivos de montaje en `/system_data/lodestar`, carpeta USB `Lodestar`, paquetes internos en `/data/Lodestar`, panel web en el puerto 8780, relay en 8781 y app nativa `LODS00001`.
+
+`/data/ps4mount`, `/system_data/ps4mount`, la carpeta `PS4Mount`, la app `PSMT00001` y las entradas AutoRun `ps4mount-ps4` son ajenos y se conservan. Los pkgs ya organizados en `<USB>/ps4/<TID>` siguen siendo biblioteca reutilizable. Solo puede ejecutarse un gestor de montaje cada vez: el bloqueo loopback del puerto 9032 se comparte a propósito como protección, así que detén PS4Mount antes de cargar Lodestar.
+
 ## 3.1.0-rc.2
 
 **Test release with the native PS4 app.** Browse and search your library with the DualShock 4, open game details, adjust settings, and import files from a URL you supply. The separate web panel works on mobile and desktop and supports file uploads and transfer management.

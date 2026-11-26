@@ -186,7 +186,7 @@ int main(void) {
     CHECK(status(r, "200") && strstr(r, "application/json"));
     CHECK(strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"" LODESTAR_VERSION "\"") &&
           strstr(r, "\"api_version\":1"));
-    CHECK(strstr(r, "\"panel\":{\"scheme\":\"http\",\"port\":8770}") != NULL);
+    CHECK(strstr(r, "\"panel\":{\"scheme\":\"http\",\"port\":8780}") != NULL);
     CHECK(strstr(r, "\"header\":\"X-Lodestar\"") && strstr(r, "\"legacy_aliases\":[\"X-PS4Mount\"]"));
     CHECK(strstr(r, "\"safety_rails\"") && strstr(r, "\"system_databases_read_only\":true") &&
           strstr(r, "\"system_delete_never_reaches_pkg\":true"));
@@ -217,7 +217,7 @@ int main(void) {
 
     r = ask("GET /api/log HTTP/1.1\r\n\r\n");
     CHECK(status(r, "200") && strstr(r, "{\"log\":\"") && strstr(r, "\"bytes\":") && strstr(r, "\"truncated\":") &&
-          strstr(r, "\"path\":\"/data/ps4mount/log.txt\""));
+          strstr(r, "\"path\":\"/data/lodestar/log.txt\""));
 
     printf("state changes need POST\n");
     const char *changing[] = {"/api/mount?title_id=CUSA00001", "/api/unmount?title_id=CUSA00001", "/api/rescan",

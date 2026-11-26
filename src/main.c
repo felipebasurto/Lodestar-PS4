@@ -81,12 +81,12 @@
 /* A full walk of the drive is slower on drives with many files: the catalog is brought
  * up to date every so often, while the games already found are checked every scan. */
 #define CATALOG_SECONDS 60
-#define STATE_DIR "/data/ps4mount"
+#define STATE_DIR "/data/lodestar"
 /* Internal folders mounted over /user/app/<TID> and /user/patch/<TID>: the files an
  * install leaves there plus app.pkg/patch.pkg as symlinks to the pkgs on the drive.
  * /user is bfs, which has no symlinks; /system_data is ufs. A delete from the
  * console only ever removes these links, never the pkgs. */
-#define HOLD_DIR "/system_data/ps4mount"
+#define HOLD_DIR "/system_data/lodestar"
 #define MAX_TITLES 768
 #define MAX_DLC 64
 #define BATCH_QUIET 10 /* seconds without writes to the system databases between groups */
@@ -132,7 +132,7 @@ typedef struct {
     char paths[MAX_SCAN_PATHS][128]; /* folders searched for pkgs, relative to each drive; "" is the root */
     int npaths;
     int restore_batch; /* games removed from the library per group when moving pkgs back */
-    int internal;      /* pkgs in the console's /data/PS4Mount are used too */
+    int internal;      /* pkgs in the console's /data/Lodestar are used too */
     int organize;      /* pkgs are moved into <root>/ps4/<TID>/ (default); off: used where they are */
     int lang;          /* LANG_* of notifications and the panel, -1: the console's */
     int dlc_big;       /* add-ons over DLC_INSTALL_MAX are installed too (they take space on the console) */
@@ -143,9 +143,9 @@ typedef struct {
 
 #define MAX_RESTORE_BATCH 10
 
-/* The folder searched by default: one of PS4Mount's own, so nothing else on a drive is
+/* The folder searched by default: one of Lodestar's own, so nothing else on a drive is
  * moved until the user puts it there (the drive root, "", is still a choice). */
-#define DEFAULT_SCAN_PATH "PS4Mount"
+#define DEFAULT_SCAN_PATH "Lodestar"
 
 static config_t g_cfg = {1, 5, 1, DLC_EXTERNAL, {DEFAULT_SCAN_PATH}, 1, 5, 1, 1, -1, 1, 1, 0};
 
@@ -536,7 +536,7 @@ static int is_mountpoint(const char *path) {
 /* --- where games are looked for --- */
 
 /* The USB drives, the extended storage, when turned on the console's own storage (pkgs
- * sent to /data/PS4Mount are registered from there, library /data/ps4, with no second
+ * sent to /data/Lodestar are registered from there, library /data/ps4, with no second
  * copy and no install to wait for; they still take internal space). */
 #define NROOTS 11
 #define INTERNAL_ROOT "/data"
@@ -4512,7 +4512,7 @@ static void titles_file_save(const char *root) {
 }
 
 /* --- emulators ---
- * <drive>/PS4Mount/emulators/<App>/<Folder> is shown as /data/<App>/<Folder> (emu.h), where
+ * <drive>/Lodestar/emulators/<App>/<Folder> is shown as /data/<App>/<Folder> (emu.h), where
  * an emulator app looks for its ROMs and BIOS, so they stay on the drive. Nothing is
  * configured: the folders are the setting. Nothing of the console's is replaced: only an
  * empty folder (or one made here) is covered, and only when the app's own folder is there
@@ -4637,7 +4637,7 @@ static void emu_sync(void) {
         root_path(i, root, sizeof(root));
         if (!is_mountpoint(root))
             continue;
-        snprintf(parent, sizeof(parent), "%s/PS4Mount", root);
+        snprintf(parent, sizeof(parent), "%s/Lodestar", root);
         snprintf(base, sizeof(base), "%s/" EMU_DIR, root);
         if (!emu_is_dir_now(parent) || !emu_is_dir_now(base))
             continue;
@@ -6016,7 +6016,7 @@ int sceKernelGetAppInfo(pid_t pid, app_info_t *info);
 int sceSystemServiceKillApp(uint32_t app_id, int how, int reason, int core_dump);
 
 /* The panel app (panel-app/): a home screen tile that shows the panel. It is no game. */
-#define PANEL_APP_TID "PSMT00001"
+#define PANEL_APP_TID "LODS00001"
 
 /* Open apps: processes named eboot.bin (PS4 and PS5 games alike), the games or only the
  * panel app. Fills up to max app ids and title ids, returns how many are open. */
@@ -6650,7 +6650,7 @@ static uint64_t free_bytes(const char *dir) {
 }
 
 /* The folder a pkg sent to dest ("usb0".."usb7", "ext0", "ext1", "internal") goes to: the
- * first scan folder of the drive, or /data/PS4Mount. -1 when dest is not usable now. */
+ * first scan folder of the drive, or /data/Lodestar. -1 when dest is not usable now. */
 static int upload_dir(const char *dest, char *dir, size_t n) {
     char root[PATH_MAX], id[64];
     for (int i = 0; i < NROOTS; i++) {
@@ -7188,19 +7188,16 @@ static int single_instance(void) {
 /* ---- GoldHEN's AutoRun ---- */
 
 /* A Lodestar payload file that the console's loader takes: the wrapped .bin (or the ELF).
- * Legacy ps4mount-ps4 names are deliberately not launch targets (P4N-19): AutoRun may
- * remove their old entries, but must not silently boot a downgrade. Only the first bytes
- * are read: the file is 3 MB and this runs where the heap is small. */
+ * PS4Mount-named files are foreign and are neither launch targets nor AutoRun cleanup targets
+ * (P4N-19). Only the first bytes are read: the file is 3 MB and this runs where the heap is small. */
 static const char *payload_file(char *out, size_t n) {
     static const char *cand[] = {
         "/data/payloads/lodestar-ps4.bin",       "/data/payloads/Lodestar-PS4.bin",
         "/data/GoldHEN/payloads/lodestar-ps4.bin", "/data/GoldHEN/payloads/Lodestar-PS4.bin",
         "/user/data/payloads/lodestar-ps4.bin",  "/user/data/payloads/Lodestar-PS4.bin",
-        "/data/ps4mount/lodestar-ps4.bin",       "/data/ps4mount/Lodestar-PS4.bin",
         "/data/payloads/lodestar-ps4.elf",       "/data/payloads/Lodestar-PS4.elf",
         "/data/GoldHEN/payloads/lodestar-ps4.elf", "/data/GoldHEN/payloads/Lodestar-PS4.elf",
         "/user/data/payloads/lodestar-ps4.elf",  "/user/data/payloads/Lodestar-PS4.elf",
-        "/data/ps4mount/lodestar-ps4.elf",       "/data/ps4mount/Lodestar-PS4.elf",
         NULL};
     out[0] = 0;
     for (int i = 0; cand[i]; i++) {
@@ -7403,7 +7400,7 @@ static const char *panel_url(char *out, size_t n) {
     if (lan_ip(&ip) && inet_ntop(AF_INET, &ip, t, sizeof(t)))
         snprintf(out, n, "http://%s:%d", t, WEB_PORT);
     else
-        snprintf(out, n, "%s", TR("http://<PS4 IP>:8770", "http://<IP de la PS4>:8770"));
+        snprintf(out, n, "%s", TR("http://<PS4 IP>:8780", "http://<IP de la PS4>:8780"));
     return out;
 }
 
@@ -7440,11 +7437,11 @@ int main(void) {
     setvbuf(stdout, NULL, _IOLBF, 0);
     int lock = single_instance();
     if (lock < 0) {
-        apply_lang(); /* the settings are the running one's: the console's language */
-        printf("[main] already running: this load ends here\n");
-        char url[48];
-        notify(TR(VERSION " is already running. Panel at %s", VERSION " ya está en marcha. Panel en %s"),
-               panel_url(url, sizeof(url)));
+        apply_lang(); /* the running daemon may be either product: use the console's language */
+        printf("[main] another mount daemon is running: this load ends here\n");
+        notify_kind(NOTIFY_WARN, "%s",
+                    TR(VERSION " not started: PS4Mount or another mount daemon is running. Stop it first.",
+                       VERSION " no arrancó: PS4Mount u otro gestor de montaje está en marcha. Deténlo antes."));
         log_stop();
         return 0;
     }
@@ -7486,7 +7483,7 @@ int main(void) {
             close(lock);
             if ((lock = single_instance()) < 0) {
                 notify_kind(NOTIFY_WARN, "%s",
-                            TR(VERSION " stopped: another Lodestar is running", VERSION " detenido: hay otro Lodestar en marcha"));
+                            TR(VERSION " stopped: another mount daemon is running", VERSION " detenido: hay otro gestor de montaje en marcha"));
                 shutdown_daemon(-1);
                 return 0;
             }

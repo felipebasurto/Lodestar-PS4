@@ -16,7 +16,7 @@ costs gigabytes, so every deletion is bounded, logged, and limited to PS4Mount's
 ## Rules
 
 ### STORE-1: only PS4Mount's own files are deleted, except on a user's delete of a game
-PS4Mount deletes files in its own folders (`/data/ps4mount`, `/system_data/ps4mount`), the working
+Lodestar deletes files in its own folders (`/data/lodestar`, `/system_data/lodestar`), the working
 folders and part files it makes on a drive, and records it wrote for a game. It never deletes anything
 the system installed (`/user/app`, `/user/patch`, `/user/addcont`). A file the user put on a drive or in
 the internal library is deleted in one case only: the user deletes a game on the console and the file is in

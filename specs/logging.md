@@ -5,7 +5,7 @@ Sources: AI-WORKFLOW.md sections 4 and 5, user (2026-11-24: "a good testing and 
 
 ## Purpose
 
-Everything Lodestar does is a line in `/data/ps4mount/log.txt`, and the system's own reasons come
+Everything Lodestar does is a line in `/data/lodestar/log.txt`, and the system's own reasons come
 through `[klog]` lines. Whoever fixes a problem (usually from a copy of that file) reads it first.
 The analyzer turns a copy of it into plain words for someone who does not know the PS4.
 

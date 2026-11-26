@@ -1,7 +1,7 @@
 # Emulators spec
 
 Governs: `src/emu.h`, `emu_sync` and its helpers in `src/main.c`, and the skips of
-`<drive>/PS4Mount/emulators` in `src/catalog.c` and `add_subdirs` (`src/main.c`).
+`<drive>/Lodestar/emulators` in `src/catalog.c` and `add_subdirs` (`src/main.c`).
 Sources: PS4SX2's README (its package is shown as PS4SX2, but it reads games from `/data/PCSX2/games/`, BIOS
 from `/data/PCSX2/bios/`, and settings beside them), user (2026-11-24: "tambien quiero poder usar emuladores",
 and "no volverme loco con settings innecesarias").
@@ -9,12 +9,12 @@ and "no volverme loco con settings innecesarias").
 ## Purpose
 
 An emulator app on the console looks for its ROMs inside `/data/<App>/`, which is the console's own
-storage. ROMs are gigabytes. PS4Mount shows a folder of a drive there, so the ROMs stay on the drive.
+storage. ROMs are gigabytes. Lodestar shows a folder of a drive there, so the ROMs stay on the drive.
 There is no setting: the folder names are the setting.
 
 ```
-<drive>/PS4Mount/emulators/<App>/<Folder>   is shown as   /data/<App>/<Folder>
-e.g. /mnt/usb0/PS4Mount/emulators/PCSX2/games  ->  /data/PCSX2/games
+<drive>/Lodestar/emulators/<App>/<Folder>   is shown as   /data/<App>/<Folder>
+e.g. /mnt/usb0/Lodestar/emulators/PCSX2/games  ->  /data/PCSX2/games
 ```
 
 `<App>` is the folder the emulator itself uses under `/data`, not necessarily the name shown on the home
@@ -33,7 +33,7 @@ Check: test (keep bar 2: security, a name from outside becomes a path). Test: `t
 Source: this change.
 
 ### EMU-2: the folders PS4Mount and the system use are never an app's
-`<App>` is never `PS4Mount`, `ps4`, `pkg`, `GoldHEN` or `payloads` (any case).
+`<App>` is never `PS4Mount`, `Lodestar`, `ps4`, `pkg`, `GoldHEN` or `payloads` (any case).
 Check: test (keep bar 2). Test: `test/unit.c` › `test_emu`. Source: this change.
 
 ### EMU-3: only an empty folder of the console is covered
@@ -48,14 +48,14 @@ Check: test (mount admission ordering). Test: `test/unit.c` › `test_emu`. Sour
 2026-11-25. `emu_mount_one`.
 
 ### EMU-4: a mount whose drive is gone is taken off
-Mounts of PS4Mount (a nullfs mount on `/data/...` whose source is under `/mnt/` in a `PS4Mount/emulators/`
+Mounts of Lodestar (a nullfs mount on `/data/...` whose source is under `/mnt/` in a `Lodestar/emulators/`
 folder) are taken off when the source folder is gone or its drive was disconnected, and made again when it
 is back. It is done at every scan; repeating it does nothing.
 Check: test (ownership/stale unmount ordering). Test: `test/unit.c` › `test_emu`. Source: emulator planner extraction 2026-11-25. `emu_sync`.
 
 ### EMU-5: the games searches leave the emulators folder alone
 The search for pkgs (`catalog_walk`) and the tidying of the scan folder (`adopt_dir_pkgs`) skip
-`<drive>/PS4Mount/emulators`: it has thousands of ROMs and no games, and tidying must never remove an empty
+`<drive>/Lodestar/emulators`: it has thousands of ROMs and no games, and tidying must never remove an empty
 ROM folder as if it were a game folder left empty.
 Check: test (keep bar 3: data loss, and a walk that must not be slowed down). Test: `test/unit.c` › `test_emu`
 (`emu_is_dir`), `test/catalog_test.c` › `test_skip_dir`. Source: this change.

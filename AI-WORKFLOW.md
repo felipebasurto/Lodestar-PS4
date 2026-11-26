@@ -25,7 +25,7 @@ A chat in a web browser cannot reach your console: the assistant must be an agen
 
 ## 3. Connecting
 
-Lodestar shows a notification with the panel's address (port 8770). The API, with `curl` (requests that write files need the header `X-Lodestar: 1` (`X-PS4Mount: 1` remains a legacy alias)):
+Lodestar shows a notification with the panel's address (port 8780). The API, with `curl` (requests that write files need the header `X-Lodestar: 1` (`X-PS4Mount: 1` remains a legacy alias)):
 
 | Request | Does |
 | --- | --- |
@@ -46,10 +46,10 @@ Lodestar shows a notification with the panel's address (port 8770). The API, wit
 | `GET /api/dests` | The drives a pkg can go to, with their free space |
 | `GET /api/links` | Downloads from links: `jobs` (name, files, state queued/running/failed, error), `job` (phase probing/receiving/extracting/retrying, `done`/`total`, `speed`, `file`, `pkg`), `result` |
 | `POST /api/links/add?dest=` | Body: the links, one a line (`link | name` names one); the volumes of a RAR become one download. An archive's password in the header `X-Lodestar-Password` (percent-encoded) |
-| Port 8771 (or the next free one: `relay_port` in `GET /api/links`): `POST /claim`, `/put?job=&vol=&block=`, `/drop?...` | A helper (the browser extension, `extension/relay.js`) takes a block to fetch, delivers it whole, or gives it back; header `X-Lodestar: 1` (`X-PS4Mount: 1` remains a legacy alias) |
+| Port 8781 (or the next free one: `relay_port` in `GET /api/links`): `POST /claim`, `/put?job=&vol=&block=`, `/drop?...` | A helper (the browser extension, `extension/relay.js`) takes a block to fetch, delivers it whole, or gives it back; header `X-Lodestar: 1` (`X-PS4Mount: 1` remains a legacy alias) |
 | `POST /api/links/cancel?id=`, `retry?id=` | Stop or drop a download (its files deleted), try a failed one again (with `X-Lodestar-Password`: with that password; `jobs[].locked` says it failed for want of one) |
 
-Files on the console (FTP): `/data/ps4mount/log.txt`, `config.txt`, `<TID>.src` (where each game comes from), `<TID>.removed`, `<TID>.restart`; an empty `/data/ps4mount/stop` stops Lodestar; `links_queue.txt`, `passwords.txt` (archive passwords that worked, tried on the next ones) and `<scan folder>/.ps4mount-links/<n>/` (downloads from links: `vNNN.dl` parts, `out/` the pkgs extracted so far); an empty `/data/ps4mount/klog_all` copies the whole kernel log into Lodestar's log, which is how the system's side of every problem in this project was found. The kernel log server (port 3232) takes one reader: Lodestar is that reader while it runs.
+Files on the console (FTP): `/data/lodestar/log.txt`, `config.txt`, `<TID>.src` (where each game comes from), `<TID>.removed`, `<TID>.restart`; an empty `/data/lodestar/stop` stops Lodestar; `links_queue.txt`, `passwords.txt` (archive passwords that worked, tried on the next ones) and `<scan folder>/.ps4mount-links/<n>/` (downloads from links: `vNNN.dl` parts, `out/` the pkgs extracted so far); an empty `/data/lodestar/klog_all` copies the whole kernel log into Lodestar's log, which is how the system's side of every problem in this project was found. The kernel log server (port 3232) takes one reader: Lodestar is that reader while it runs.
 
 GoldHEN's FTP reports the size of files over 4 GB modulo 4 GiB; the console itself sees the real size.
 
@@ -79,7 +79,7 @@ Facts that cost time to learn:
 - The SDK's runtime must know the firmware's kernel offsets: with an older SDK the payload ends before `main` with no trace.
 - A game starts only when BGFT has its game task (`/user/bgft/task/<id>/d0.pdb`, `d1.pdb`), and BGFT reads them at boot only. Logging out and finishing a real install do not reload them.
 - BGFT accepts `/mnt/usb…` and `/user/data/…` paths in a task, not `/data/…` (`invalid content_url`).
-- `/user/app/<TID>` is a nullfs mount of `/system_data/ps4mount/app/<TID>`, whose `app.pkg` links to the pkg. `readlink` fails for payloads here (`0xffffffd1`): links are checked by following them (`stat`).
+- `/user/app/<TID>` is a nullfs mount of `/system_data/lodestar/app/<TID>`, whose `app.pkg` links to the pkg. `readlink` fails for payloads here (`0xffffffd1`): links are checked by following them (`stat`).
 - The delete screens are `ConfirmContentDeleteScene` / `Parent_ContentDeleteScene` (Options > Delete) and `storage_data#application…` / `Parent_NormalStack` (Settings > Storage). `GameWillDelete(<TID>)` names the game; a delete that works logs nothing after it.
 - Add-ons are listed from `addcont.db`, which only an install fills: Lodestar installs add-ons up to 256 MB with BGFT (`sceBgftServiceIntDownloadRegisterTaskByStorageEx`). The content type byte cannot tell a small add-on from one with data.
 - GoldHEN runs payloads in ScePartyDaemon, or SceSpZeroConf when that one is gone. A service another payload left open there (BGFT) answers `0x80990001`: close it and open it again.
@@ -107,10 +107,10 @@ Open an [issue](https://github.com/felipebasurto/Lodestar-PS4/issues) or a pull 
 - what you changed and why, and how you tested it (the checks and the real console);
 - if an AI helped you, say so, and let it write the explanation of the system's behaviour and of the change.
 
-Lodestar is an independent project that began as a PS4 port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07, under GPL-3.0-or-later: keep the notices, distribute changes under the same license, and keep the attribution to gasb07/PS4Mount as the origin project. Since the 2.0.0 rebrand the artifacts are `lodestar-ps4.elf`/`lodestar-ps4.bin`, but the operational names on the console stay as before for compatibility: `/data/ps4mount/`, the `PS4Mount` scan folders; the API uses canonical `X-Lodestar` headers and accepts the legacy `X-PS4Mount` aliases.
+Lodestar is an independent project that began as a PS4 port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07, under GPL-3.0-or-later: keep the notices, distribute changes under the same license, and keep the attribution to gasb07/PS4Mount as the origin project. Since the 2.0.0 rebrand the artifacts are `lodestar-ps4.elf`/`lodestar-ps4.bin`. Lodestar's operational identity is separate from PS4Mount-PS4: `/data/lodestar/`, `/system_data/lodestar`, the `Lodestar` scan folders, `/data/Lodestar`, panel port 8780 and relay port 8781. PS4Mount's own state is foreign and is not migrated. The API uses canonical `X-Lodestar` headers and accepts the legacy `X-PS4Mount` aliases. Only one mount daemon may run: the loopback lock on port 9032 is deliberately shared as a cross-product safety interlock.
 
 ## 8. Prompt to start with
 
 Copy this to the assistant:
 
-> You are going to help me with Lodestar. Read `AI-WORKFLOW.md` and `README.md` in this repository completely before doing anything, and follow the rules of section 2. My PS4 is at `<ip>` with GoldHEN (FTP on 2121, payloader on 9090) and runs Lodestar (its version is at the top of the panel). The problem: `<what happens>`. Start by reading `/data/ps4mount/log.txt`, `GET /api/agent` and `GET /api/status`; use `GET /api/games` only when the library is needed; ask me before turning on `klog_all` or doing anything on the console. Explain what happens, propose one change, test it with the checks, build the ELF and tell me how to load it. At the end, write the explanation I will post in an issue, saying that an AI helped.
+> You are going to help me with Lodestar. Read `AI-WORKFLOW.md` and `README.md` in this repository completely before doing anything, and follow the rules of section 2. My PS4 is at `<ip>` with GoldHEN (FTP on 2121, payloader on 9090) and runs Lodestar (its version is at the top of the panel). The problem: `<what happens>`. Start by reading `/data/lodestar/log.txt`, `GET /api/agent` and `GET /api/status`; use `GET /api/games` only when the library is needed; ask me before turning on `klog_all` or doing anything on the console. Explain what happens, propose one change, test it with the checks, build the ELF and tell me how to load it. At the end, write the explanation I will post in an issue, saying that an AI helped.

@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 int autorun_is_ours(const char *line, size_t len) {
-    static const char *const names[] = {"lodestar-ps4.bin", "lodestar-ps4.elf", "ps4mount-ps4.bin", "ps4mount-ps4.elf"};
+    static const char *const names[] = {"lodestar-ps4.bin", "lodestar-ps4.elf"};
     size_t a = 0;
     while (a < len && (line[a] == ' ' || line[a] == '\t'))
         a++;

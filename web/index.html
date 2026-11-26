@@ -244,7 +244,7 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
     </label>
     <label class="check"><input type="checkbox" id="s-organize"> Organize pkgs into the ps4 folder</label>
     <span class="hint">Moves each .pkg into ps4/&lt;title ID&gt;/ on its drive, so the console's installer does not pick it up. Off: pkgs stay where they are, with their names.</span>
-    <label class="check"><input type="checkbox" id="s-internal"> Also use pkgs in the console's /data/PS4Mount</label>
+    <label class="check"><input type="checkbox" id="s-internal"> Also use pkgs in the console's /data/Lodestar</label>
     <span class="hint">Pkgs sent to the console's storage are added from there, with no install to wait for. They still take internal space.</span>
     <label class="check"><input type="checkbox" id="s-batch"> Add new games in groups</label>
     <label>Games per group
@@ -853,7 +853,7 @@ function fillDests(list) {
     return '<option value="' + esc(d.id) + '">' + esc(d.label) + ' (' + esc(d.folder) + ', ' + esc(t('{0} free', mb(d.free))) + ')</option>';
   }).join('') || '<option value="">' + t('No drive connected') + '</option>') +
     /* the console's storage is a place to send to only when it is used: say where to turn it on */
-    (destById('internal') ? '' : '<option value="" disabled>' + esc(t("Console storage: turn on \"Also use pkgs in the console's /data/PS4Mount\" in Settings")) + '</option>');
+    (destById('internal') ? '' : '<option value="" disabled>' + esc(t("Console storage: turn on \"Also use pkgs in the console's /data/Lodestar\" in Settings")) + '</option>');
   if (destById(cur)) $('dest').value = cur;
 }
 /* Why it cannot be sent to the chosen place, or '' when it can. */

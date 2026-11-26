@@ -277,7 +277,7 @@ const setting fields[SETTINGS_COUNT] = {
     SET(organize, "Organize packages", "Organizar los paquetes",
         "Moves packages into ps4/<title ID> on their drive.", "Mueve los paquetes a ps4/<ID del juego> en su unidad.", 0, 1),
     SET(internal, "Use internal storage", "Usar almacenamiento interno",
-        "Scan the console’s /data/PS4Mount folder.", "Busca paquetes en /data/PS4Mount en la consola.", 0, 1),
+        "Scan the console’s /data/Lodestar folder.", "Busca paquetes en /data/Lodestar en la consola.", 0, 1),
     SET(batch, "Add games in groups", "Añadir juegos en grupos",
         "Register smaller batches when many games are found.", "Registra en grupos pequeños cuando encuentra muchos juegos.", 0, 1),
     SET(batch_size, "Games per group", "Juegos por grupo",
@@ -366,7 +366,7 @@ static void show_phone(const panel_view *v, canvas c) {
     text(c, LEFT, 322, 1400, 34, WHITE,
          tr(v, "Open Lodestar on your phone or computer", "Abre Lodestar en tu móvil u ordenador"));
     text(c, LEFT, 397, 1500, 45, BLUE, *v->local_url ? v->local_url :
-         tr(v, "http://<PS4 IP>:8770", "http://<IP de la PS4>:8770"));
+         tr(v, "http://<PS4 IP>:8780", "http://<IP de la PS4>:8780"));
     if (!*v->local_url)
         text(c, LEFT, 464, 1500, 28, MUTED,
              tr(v, "Use the address in the Lodestar startup notification.",

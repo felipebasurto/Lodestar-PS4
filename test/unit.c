@@ -613,18 +613,18 @@ static void test_autorun(void) {
     printf("autorun ini\n");
     const char *me = "/data/payloads/lodestar-ps4.bin";
 
-    /* the matcher: our file, any path and case; not comments nor look-alikes. The legacy
-     * ps4mount names count too: AutoRun replaces them rather than listing both. */
+    /* the matcher: our file, any path and case; not comments, look-alikes nor the foreign
+     * PS4Mount payload names. */
     CHECK(ini_ours("/data/payloads/lodestar-ps4.bin = 1"));
     CHECK(ini_ours("/data/GoldHEN/payloads/lodestar-ps4.elf=1"));
     CHECK(ini_ours("lodestar-ps4.bin"));
     CHECK(ini_ours("/x/LODESTAR-PS4.BIN\r"));
-    CHECK(ini_ours("/data/payloads/ps4mount-ps4.bin = 1"));
-    CHECK(ini_ours("/data/GoldHEN/payloads/ps4mount-ps4.elf=1"));
-    CHECK(ini_ours("ps4mount-ps4.bin"));
-    CHECK(ini_ours("/x/PS4MOUNT-PS4.BIN\r"));
-    CHECK(ini_ours("/x/ps4mount-ps4.bin\t= 1"));
-    CHECK(ini_ours("  ps4mount-ps4.bin = 1"));
+    CHECK(!ini_ours("/data/payloads/ps4mount-ps4.bin = 1"));
+    CHECK(!ini_ours("/data/GoldHEN/payloads/ps4mount-ps4.elf=1"));
+    CHECK(!ini_ours("ps4mount-ps4.bin"));
+    CHECK(!ini_ours("/x/PS4MOUNT-PS4.BIN\r"));
+    CHECK(!ini_ours("/x/ps4mount-ps4.bin\t= 1"));
+    CHECK(!ini_ours("  ps4mount-ps4.bin = 1"));
     CHECK(!ini_ours("# /data/payloads/ps4mount-ps4.bin = 1"));
     CHECK(!ini_ours("   ; ps4mount-ps4.elf was here"));
     CHECK(!ini_ours("/x/myps4mount-ps4.bin = 1"));
@@ -656,26 +656,28 @@ static void test_autorun(void) {
     ini_result("  [AuToRun]  \r\n/data/other/x.bin = 1\r\n", me, 1,
                "  [AuToRun]  \r\n/data/payloads/lodestar-ps4.bin = 1\n/data/other/x.bin = 1\r\n");
 
-    /* an older entry, any path, case or extension: replaced, not duplicated */
+    /* PS4Mount entries are foreign: kept verbatim, never replaced or duplicated */
     ini_result("[AutoRun]\n/data/payloads/PS4Mount-PS4.bin = 1\n"
                "/data/GoldHEN/payloads/ps4mount-ps4.elf = 1\n"
                "/data/payloads/other.bin = 1\n",
                me, 1,
-               "[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n/data/payloads/other.bin = 1\n");
+               "[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n/data/payloads/PS4Mount-PS4.bin = 1\n"
+               "/data/GoldHEN/payloads/ps4mount-ps4.elf = 1\n/data/payloads/other.bin = 1\n");
 
-    /* other sections and comments stay verbatim; ours goes even from another section */
+    /* other sections and comments stay verbatim, including foreign PS4Mount entries */
     ini_result("# mine\n[Other]\n/foo.bin = 1\n/old/ps4mount-ps4.bin = 1\n"
                "[AutoRun]\n# /data/ps4mount-ps4.bin = 1\n   ; ps4mount-ps4.elf\n/x.bin = 1\n",
                me, 1,
-               "# mine\n[Other]\n/foo.bin = 1\n[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n"
+               "# mine\n[Other]\n/foo.bin = 1\n/old/ps4mount-ps4.bin = 1\n[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n"
                "# /data/ps4mount-ps4.bin = 1\n   ; ps4mount-ps4.elf\n/x.bin = 1\n");
 
-    /* off: ours goes, everything else stays */
-    ini_result("[AutoRun]\n/data/payloads/ps4mount-ps4.bin = 1\n"
+    /* off: ours goes, everything else stays; foreign PS4Mount entries stay too */
+    ini_result("[AutoRun]\n/data/payloads/lodestar-ps4.bin = 1\n/data/payloads/ps4mount-ps4.bin = 1\n"
                "/data/GoldHEN/payloads/PS4MOUNT-PS4.ELF = 1\n"
                "/data/payloads/other.bin = 1\n[Other]\n# c\n",
                NULL, 0,
-               "[AutoRun]\n/data/payloads/other.bin = 1\n[Other]\n# c\n");
+               "[AutoRun]\n/data/payloads/ps4mount-ps4.bin = 1\n/data/GoldHEN/payloads/PS4MOUNT-PS4.ELF = 1\n"
+               "/data/payloads/other.bin = 1\n[Other]\n# c\n");
 
     /* a last line without a line end stays without one; a bare header gets one */
     ini_result("[AutoRun]\n/x.bin = 1", NULL, 0, "[AutoRun]\n/x.bin = 1");
@@ -1192,7 +1194,7 @@ static void test_mountplan(void) {
     CHECK(mount_target_kind("/data/PCSX2/games", NULL) == MOUNT_TARGET_NONE);
 
     const char *target = "/user/app/CUSA00001";
-    const char *expected = "/system_data/ps4mount/app/CUSA00001";
+    const char *expected = "/system_data/lodestar/app/CUSA00001";
     CHECK(mount_layer_owner(target, expected, "nullfs", expected, NULL) == MOUNT_OWNER_EXACT);
     CHECK(mount_layer_owner(target, expected, "nullfs", "/mnt/usb0/ps4/CUSA00001", "/mnt/usb0/ps4/CUSA00001") ==
           MOUNT_OWNER_LEGACY);
@@ -1203,7 +1205,7 @@ static void test_mountplan(void) {
     CHECK(mount_layer_owner(target, expected, "nullfs", "/mnt/usb0/ps4/CUSA00001", NULL) == MOUNT_OWNER_FOREIGN);
     CHECK(mount_layer_owner(target, expected, "nullfs", "/mnt/usb0/ps4/CUSA00001", "/mnt/usb0/ps4/CUSA00002") ==
           MOUNT_OWNER_FOREIGN);
-    CHECK(mount_layer_owner(target, expected, "nullfs", "/system_data/ps4mount/app/CUSA00002", NULL) ==
+    CHECK(mount_layer_owner(target, expected, "nullfs", "/system_data/lodestar/app/CUSA00002", NULL) ==
           MOUNT_OWNER_FOREIGN);
     CHECK(mount_layer_owner(target, expected, "exfat", expected, NULL) == MOUNT_OWNER_FOREIGN);
     CHECK(mount_layer_owner("/user/app/CUSA00001/extra", expected, "nullfs", expected, NULL) == MOUNT_OWNER_FOREIGN);
@@ -1317,12 +1319,12 @@ static void test_emu(void) {
     CHECK(emu_mount_step(1, 0, 0, 1, 0, 0, 0) == EMU_STEP_REFUSE); /* start the app once first */
     CHECK(emu_mount_step(0, 1, 0, 1, 0, 0, 0) == EMU_STEP_REFUSE);
 
-    CHECK(emu_mount_owned("/mnt/usb0", "/mnt/usb0/PS4Mount/emulators/PCSX2/games", "/data/PCSX2/games"));
-    CHECK(emu_mount_owned("/mnt/ext1", "/mnt/ext1/PS4Mount/emulators/retro/bios", "/data/retro/bios"));
-    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0/PS4Mount/emulators/PCSX2/games", "/data/PCSX2/roms"));
-    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0x/PS4Mount/emulators/PCSX2/games", "/data/PCSX2/games"));
-    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0/PS4Mount/emulators/PCSX2/games/extra", "/data/PCSX2/games"));
-    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0/PS4Mount/emulators/PCSX2/games", "/user/data/PCSX2/games"));
+    CHECK(emu_mount_owned("/mnt/usb0", "/mnt/usb0/Lodestar/emulators/PCSX2/games", "/data/PCSX2/games"));
+    CHECK(emu_mount_owned("/mnt/ext1", "/mnt/ext1/Lodestar/emulators/retro/bios", "/data/retro/bios"));
+    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0/Lodestar/emulators/PCSX2/games", "/data/PCSX2/roms"));
+    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0x/Lodestar/emulators/PCSX2/games", "/data/PCSX2/games"));
+    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0/Lodestar/emulators/PCSX2/games/extra", "/data/PCSX2/games"));
+    CHECK(!emu_mount_owned("/mnt/usb0", "/mnt/usb0/Lodestar/emulators/PCSX2/games", "/user/data/PCSX2/games"));
 
     CHECK(emu_stale_unmount_ok(0, 0, 1));  /* source gone, single layer */
     CHECK(emu_stale_unmount_ok(0, 1, 1));  /* disconnected/dead layer */
@@ -1349,18 +1351,18 @@ static void test_emu(void) {
     CHECK(emu_target("PS4SX2", "..", out, sizeof(out)) == -1);
     CHECK(emu_target("..", "roms", out, sizeof(out)) == -1);
     /* the folders PS4Mount and the system use, in any case */
-    const char *reserved[] = {"PS4Mount", "ps4mount", "PS4", "pkg", "GoldHEN", "goldhen", "payloads", "PAYLOADS"};
+    const char *reserved[] = {"PS4Mount", "ps4mount", "Lodestar", "lodestar", "PS4", "pkg", "GoldHEN", "goldhen", "payloads", "PAYLOADS"};
     for (size_t i = 0; i < sizeof(reserved) / sizeof(reserved[0]); i++)
         CHECK(emu_target(reserved[i], "roms", out, sizeof(out)) == -1);
     CHECK(emu_target("PS4Mounts", "roms", out, sizeof(out)) == 0); /* only the exact names */
     char tiny[16];
     CHECK(emu_target("PS4SX2", "roms", tiny, sizeof(tiny)) == -1); /* does not fit: not cut */
     /* the folder the games searches leave alone, and nothing else */
-    CHECK(emu_is_dir("/mnt/usb0/PS4Mount/emulators"));
-    CHECK(emu_is_dir("/mnt/usb0/ps4mount/Emulators"));
-    CHECK(!emu_is_dir("/mnt/usb0/PS4Mount/emulators2"));
-    CHECK(!emu_is_dir("/mnt/usb0/PS4Mount/Games/emulators"));
-    CHECK(!emu_is_dir("PS4Mount/emulators/PS4SX2"));
+    CHECK(emu_is_dir("/mnt/usb0/Lodestar/emulators"));
+    CHECK(emu_is_dir("/mnt/usb0/lodestar/Emulators"));
+    CHECK(!emu_is_dir("/mnt/usb0/Lodestar/emulators2"));
+    CHECK(!emu_is_dir("/mnt/usb0/Lodestar/Games/emulators"));
+    CHECK(!emu_is_dir("Lodestar/emulators/PS4SX2"));
     CHECK(!emu_is_dir(""));
 }
 

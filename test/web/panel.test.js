@@ -40,7 +40,7 @@ function page(file, opts) {
   // as build.sh does: the language tables where the page says <!--LANG-->
   const html = fs.readFileSync(W + file, 'utf8').replace('<!--LANG-->', () => '<script>' + INLINE + '</script>');
   const dom = new JSDOM(html, {
-    url: 'http://ps4:8770/' + (opts.suffix || ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
+    url: 'http://ps4:8780/' + (opts.suffix || ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w) {
       w.setInterval = () => 0;
       w.scrollTo = () => {};
@@ -296,9 +296,9 @@ function tKeys(file) {
   ok(sent.length === 3 && sent[1].url.includes('name=Game2.pkg') && sent[2].url.includes('name=Upd2.pkg'), 'then the game, then its update');
   // internal storage on: it is a normal place to send to, no hint
   w.fillDests([{ id: 'usb0', label: 'usb0', folder: '/mnt/usb0/pmscan', free: 1e12, fits: true },
-    { id: 'internal', label: 'internal storage', folder: '/data/PS4Mount', free: 5e10, fits: true }]);
+    { id: 'internal', label: 'internal storage', folder: '/data/Lodestar', free: 5e10, fits: true }]);
   let dopts = d.getElementById('dest').options;
-  ok(dopts.length === 2 && dopts[1].value === 'internal' && !dopts[1].disabled && dopts[1].textContent.includes('/data/PS4Mount'),
+  ok(dopts.length === 2 && dopts[1].value === 'internal' && !dopts[1].disabled && dopts[1].textContent.includes('/data/Lodestar'),
     'internal storage on: a normal place to send to');
   // the settings offer the add-on modes and the console-storage options
   d.getElementById('settingsbtn').click(); await tick();

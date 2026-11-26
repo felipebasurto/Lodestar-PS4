@@ -4,12 +4,11 @@
 # stops before main on 13.52; see SDK_COMMIT in .github/workflows/build.yml).
 # Set PS4_PAYLOAD_SDK when the SDK is not in /opt/ps4-payload-sdk.
 #
-# Rebrand note (Lodestar 2.0.0): the build artifacts are named lodestar-ps4.*, but the
-# operational names inside the payload stay as before for compatibility with existing
-# consoles: /data/ps4mount (config, log, state), the PS4Mount scan folder on USB drives,
-# /data/PS4Mount on the internal storage and the X-PS4Mount panel protocol header.
-# (The AutoRun detection accepts the lodestar-ps4.bin/.elf names and the legacy
-# ps4mount-ps4 ones.) Renaming those is a data-migration decision, not a build one.
+# Lodestar's operational identity is separate from PS4Mount-PS4: lodestar-ps4.* artifacts,
+# /data/lodestar state, the Lodestar scan folder, /data/Lodestar internal packages, panel
+# port 8780 and relay port 8781. The X-PS4Mount panel protocol headers remain legacy aliases,
+# and AutoRun detection accepts both lodestar-ps4 and ps4mount-ps4 payload names. The instance
+# lock port stays shared deliberately so the two mount daemons alternate rather than run at once.
 set -e
 cd "$(dirname "$0")"
 B=${PS4_PAYLOAD_SDK:-/opt/ps4-payload-sdk}/bin

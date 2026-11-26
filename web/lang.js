@@ -22,8 +22,8 @@ var LANGS = {
     'Save': 'Guardar',
     'Cancel': 'Cancelar',
     'Close': 'Cerrar',
-    'No PS4 games found. Put the .pkg files (game, update and add-ons) in the PS4Mount folder of a USB drive.':
-      'No hay juegos de PS4. Pon los .pkg (juego, actualización y DLC) en la carpeta PS4Mount de un USB.',
+    'No PS4 games found. Put the .pkg files (game, update and add-ons) in the Lodestar folder of a USB drive.':
+      'No hay juegos de PS4. Pon los .pkg (juego, actualización y DLC) en la carpeta Lodestar de un USB.',
     'No PS4 games found. Put the .pkg files (game, update and add-ons) on a USB drive, then Scan for games or send them from this page.':
       'No hay juegos de PS4. Pon los .pkg (juego, actualización y DLC) en un USB y pulsa Buscar juegos o envíalos desde esta página.',
     'Adding games': 'Añadir juegos',
@@ -45,11 +45,11 @@ var LANGS = {
     'Console storage (installs add-ons, up to 256 MB)': 'Memoria de la consola (instala los DLC, hasta 256 MB)',
     'Off': 'Apagado',
     'Also install big add-ons (over 256 MB)': 'Instalar también los DLC grandes (más de 256 MB)',
-    "Also use pkgs in the console's /data/PS4Mount": 'Usar también los pkgs de /data/PS4Mount de la consola',
+    "Also use pkgs in the console's /data/Lodestar": 'Usar también los pkgs de /data/Lodestar de la consola',
     "Pkgs sent to the console's storage are added from there, with no install to wait for. They still take internal space.":
       'Los pkgs enviados a la memoria de la consola se añaden desde ahí, sin esperar una instalación. Ocupan espacio interno.',
-    "Console storage: turn on \"Also use pkgs in the console's /data/PS4Mount\" in Settings":
-      'Memoria de la consola: activa "Usar también los pkgs de /data/PS4Mount de la consola" en Ajustes',
+    "Console storage: turn on \"Also use pkgs in the console's /data/Lodestar\" in Settings":
+      'Memoria de la consola: activa "Usar también los pkgs de /data/Lodestar de la consola" en Ajustes',
     "Read the console's log (game start and stop)": 'Leer el log de la consola (inicio y fin de juego)',
     'Only one payload can read it. Turn it off if another one needs it, such as AnyPad. Lodestar then notices a running game a few seconds later.':
       'Solo un payload puede leerlo. Desactívalo si otro lo necesita, como AnyPad. Lodestar notará entonces un juego en marcha unos segundos más tarde.',

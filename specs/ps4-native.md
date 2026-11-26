@@ -163,15 +163,15 @@ Check: test through the existing concurrent links integration harness (`test/lin
 for the ownership split between byte/progress state and stop signals.
 Source: transfer-thread cancellation audit.
 
-### P4N-19: legacy payload names are cleanup aliases, not AutoRun launch targets
-`lodestar-ps4.bin` and `lodestar-ps4.elf` are the only payload names Lodestar may choose when enabling
-GoldHEN AutoRun. Legacy `ps4mount-ps4.bin/.elf` entries are still recognized and removed so an old
-installation is replaced rather than duplicated, but a legacy file is never selected as the new AutoRun
-target: doing so could silently downgrade the boot payload to PS4Mount. If only a legacy file exists,
-the panel reports that no Lodestar payload file is available and asks for the current artifact.
+### P4N-19: PS4Mount payload names are foreign AutoRun entries, not Lodestar cleanup targets
+`lodestar-ps4.bin` and `lodestar-ps4.elf` are the only payload names Lodestar may choose or remove when
+enabling or disabling GoldHEN AutoRun. `ps4mount-ps4.bin/.elf` entries belong to the independent
+PS4Mount-PS4 installation (or are indistinguishable from it), so Lodestar must preserve them verbatim and
+must never select one as its AutoRun target. If only a PS4Mount-named file exists, the panel reports that
+no Lodestar payload file is available and asks for the current artifact.
 Check: read (the file selection is console-facing and compiled through `test/sdkcheck.sh`; ini replacement
-and legacy-entry cleanup are host-tested in `test/unit.c` › `test_autorun`).
-Source: Lodestar independence audit, 2026-11-26.
+and foreign-entry preservation are host-tested in `test/unit.c` › `test_autorun`).
+Source: user hardware coexistence requirement, 2026-11-26.
 
 ### P4N-20: routine scans yield to gameplay
 The routine scan period is 10 seconds while no PS4 title has a sandbox application mount. While any
@@ -256,6 +256,26 @@ can break the game. The runtime mitigations are limited to work Lodestar owns: g
 default (P4N-25).
 Check: read. Source: CUSA23827 evidence bundle archived in commit
 `ef98120b6524ea959fcd2a0e5e234333ba7ae0ac` and the design decision of 2026-11-26.
+
+### P4N-27: Lodestar is side-by-side with PS4Mount, but only one mount daemon runs
+Lodestar's operational identity is distinct from PS4Mount-PS4: state in `/data/lodestar`, hold files in
+`/system_data/lodestar`, the default USB scan folder `Lodestar`, internal packages in `/data/Lodestar`,
+web panel port 8780, helper relay base port 8781, emulator source folder `Lodestar/emulators`, and native
+panel title id `LODS00001`. Lodestar does not read, migrate, adopt or delete PS4Mount's state in
+`/data/ps4mount`, `/system_data/ps4mount`, the `PS4Mount` scan folder or panel title `PSMT00001`; those
+files and mount layers are foreign and fail closed.
+
+The loopback instance lock on port 9032 remains deliberately shared with PS4Mount-PS4. It is a
+cross-product safety interlock, not shared product identity: both daemons mutate the same global mount
+table, BGFT tasks, system installer state and kernel-log consumer, so they must alternate rather than run
+at once. Stopping one payload and loading the other must preserve each product's own library and state.
+
+The organized package bytes in `<drive>/ps4/<TITLE_ID>/` are user/library data, not product-private state.
+Lodestar may scan and serve them, but without Lodestar ownership evidence it must treat their mount layers and
+management records conservatively. A user-initiated console delete follows the normal delete contract; daemon
+cleanup must never use PS4Mount's `.src`, `.removed` or hold files as Lodestar evidence.
+Check: test for port/manifest and ownership decision tables; read for the console-wide service interlock.
+Source: user hardware coexistence requirement, 2026-11-26.
 
 ## Toshiba reference profile (not a compatibility requirement)
 
