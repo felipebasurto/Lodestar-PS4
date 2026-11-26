@@ -93,6 +93,16 @@ configuration changes and `/api/app/close` remain owner routes because they read
 state or call process-control services of the system. Unknown routes are worker safe because
 they produce only the fixed 404 response.
 
+`/api/games` is deliberately still an owner route. Its moving pieces are now synchronized
+small state (configuration snapshot, setup flag, restart membership, running titles and
+per-call response buffers), but the game rows still depend on two coupled owners: the live
+grouped catalog and the title cache. A worker-side version must preserve on-demand pkg
+reading after a cache miss, not only a fingerprint snapshot. That means the catalog epoch
+snapshot must carry enough grouped game/update/add-on paths and identities to open the
+same pkg sources without `g_cat_lock`, and title information must be copied under the
+title-cache mutex without exposing its add-on pool pointers. Publishing only title IDs or
+using a cached fingerprint would change freshness and is not a valid migration.
+
 An owner route transfers both the connected fd and the parsed request object exactly once
 to the owner queue. The main loop executes it through the same dispatcher, preserving the
 response contract. A worker must adjust the body pointer when copying the request into a
