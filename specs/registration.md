@@ -38,6 +38,14 @@ Check: read (kernel-log/registration ordering is system-facing and compiled thro
 Source: firmware 14.00 Uncharted `CUSA02320` run, 2026-11-24: a valid `gp` 01.02 update was marked
 bad while the registered 01.00/expected 01.02 repair was already pending.
 
+### REG-5: a hard scan invalidates exactly the refused-update marks
+A hard scan must remove every state-file name ending exactly in `.badpatch`, no more and no less.
+The suffix check must include the dot; a shorter comparison that never matches, or a looser one
+that can remove unrelated user state, violates the hard-scan contract.
+Check: test (persistent state boundary and deletion correctness). Test: `test/badpatch_test.c`.
+Source: firmware 14.00 hard rescan 2026-11-26: `CUSA02320.badpatch` survived the intended
+invalidation because the implementation compared only eight trailing bytes.
+
 ### REG-3: registration-time add-on arrays grow by demand within the fixed cap
 The transient `dlc_src_t` array of a title is owned by that `title_src_t` and released by
 `src_close`. It must not reserve `MAX_DLC` descriptors when the first add-on is seen: the

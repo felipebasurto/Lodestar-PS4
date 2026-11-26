@@ -5356,8 +5356,7 @@ static void rescan_invalidate(void) {
     DIR *d = opendir(STATE_DIR);
     struct dirent *e;
     while (d && (e = readdir(d))) {
-        size_t l = strlen(e->d_name);
-        if (l > 8 && !strcmp(e->d_name + l - 8, ".badpatch")) {
+        if (badpatch_name(e->d_name)) {
             char p[PATH_MAX];
             snprintf(p, sizeof(p), STATE_DIR "/%s", e->d_name);
             unlink(p);

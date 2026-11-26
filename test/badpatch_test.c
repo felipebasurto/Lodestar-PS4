@@ -78,6 +78,14 @@ int main(void) {
     CHECK(tiny[sizeof(tiny) - 1] == 0);
     badpatch_text(NULL, 0, size, mtime);
 
-    printf("%s: %d check(s), %d failed\n", fails ? "FAIL" : "bad patch", 21, fails);
+    /* hard-scan invalidation recognizes exactly the state files it may remove (REG-5) */
+    CHECK(badpatch_name("CUSA02320.badpatch") == 1);
+    CHECK(badpatch_name(".badpatch") == 1);
+    CHECK(badpatch_name("CUSA02320.badpatch.bak") == 0);
+    CHECK(badpatch_name("CUSA02320badpatch") == 0);
+    CHECK(badpatch_name("badpatch") == 0);
+    CHECK(badpatch_name(NULL) == 0);
+
+    printf("%s: %d check(s), %d failed\n", fails ? "FAIL" : "bad patch", 27, fails);
     return fails ? 1 : 0;
 }

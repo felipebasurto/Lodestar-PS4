@@ -75,3 +75,10 @@ int badpatch_digest_matches(const char *text, const uint8_t digest[32]) {
     }
     return 1;
 }
+
+int badpatch_name(const char *name) {
+    static const char suffix[] = ".badpatch";
+    size_t n = name ? strlen(name) : 0;
+    size_t s = sizeof(suffix) - 1;
+    return n >= s && !memcmp(name + n - s, suffix, s);
+}

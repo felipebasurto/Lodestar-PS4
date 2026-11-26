@@ -21,3 +21,6 @@ int badpatch_digest_matches(const char *text, const uint8_t digest[32]);
 
 /* The text of the mark of a pkg of this size and time, in out (n bytes). */
 void badpatch_text(char *out, size_t n, uint64_t size, int64_t mtime);
+
+/* 1 when a state-file name is exactly a refused-update mark (ends in `.badpatch`). */
+int badpatch_name(const char *name);
