@@ -6034,7 +6034,7 @@ int sceKernelGetAppInfo(pid_t pid, app_info_t *info);
 int sceSystemServiceKillApp(uint32_t app_id, int how, int reason, int core_dump);
 
 /* The panel app (panel-app/): a home screen tile that shows the panel. It is no game. */
-#define PANEL_APP_TID "LDST00001"
+#define PANEL_APP_TID "PSMT00001"
 
 /* Open apps: processes named eboot.bin (PS4 and PS5 games alike), the games or only the
  * panel app. Fills up to max app ids and title ids, returns how many are open. */

@@ -1,9 +1,9 @@
 #!/bin/bash
-# Builds build/panel-app/IV0000-LDST00001_00-LODESTARPANEL000.pkg (the panel app) with the
+# Builds build/panel-app/IV0000-PSMT00001_00-PS4MOUNTPANEL000.pkg (the panel app) with the
 # OpenOrbis toolchain (https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain, v0.5.4): its
 # create-fself, create-gp4 and PkgTool.Core, a clang and an ld.lld. Lodestar downloads it
 # from the release (lodestar-panel.pkg) and installs it.
-# Rebrand note: the title id changed with the Lodestar rebrand (PSMT00001 -> LDST00001).
+# Rebrand note: PSMT00001 stays as the opaque, migration-compatible title id.
 # PANEL_APP_TID in src/main.c must name the same id, or the payload will not find, install
 # or open this app.
 # Set OO_PS4_TOOLCHAIN to the toolchain root, CC and LD when clang and ld.lld are not in PATH, and
@@ -14,8 +14,8 @@ O=${OO_PS4_TOOLCHAIN:?set OO_PS4_TOOLCHAIN to the OpenOrbis toolchain}
 T=$O/bin/linux
 CC=${CC:-clang}
 LD=${LD:-ld.lld}
-TITLE_ID=LDST00001 # must match PANEL_APP_TID in src/main.c
-CONTENT_ID=IV0000-${TITLE_ID}_00-LODESTARPANEL000
+TITLE_ID=PSMT00001 # must match PANEL_APP_TID in src/main.c
+CONTENT_ID=IV0000-${TITLE_ID}_00-PS4MOUNTPANEL000
 VER=01.00
 W=../build/panel-app
 export OO_PS4_TOOLCHAIN=$O DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1

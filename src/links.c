@@ -937,7 +937,7 @@ static void *relay_conn(void *arg) {
         const char *cl = find_ci(req, "content-length:");
         unsigned long long length = cl ? strtoull(cl + 15, NULL, 10) : 0;
         /* the panel's header: a page on another site cannot send it */
-        int ours = find_ci(req, "\r\nx-ps4mount:") != NULL;
+        int ours = find_ci(req, "\r\nx-lodestar:") || find_ci(req, "\r\nx-ps4mount:");
         char path[512];
         if (!ours || sscanf(req, "POST %511s", path) != 1)
             relay_reply(fd, "403 Forbidden", "{\"ok\":false}");

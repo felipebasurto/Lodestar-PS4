@@ -125,7 +125,7 @@ $CC $FLAGS -o "$B/log_test" test/log_test.c src/logts.c -lpthread
 "$B/log_test"
 
 echo "== drive auditor (tools/driveaudit.py)"
-python3 -m unittest test/driveaudit_test.py
+python3 test/driveaudit_test.py
 
 echo "== log analyzer (tools/logcheck.py)"
 bash test/logcheck_test.sh

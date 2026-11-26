@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Felipe Basurto
 #!/usr/bin/env python3
 """Renders the Lodestar icon PNGs from the same geometry as lodestar.svg.
 

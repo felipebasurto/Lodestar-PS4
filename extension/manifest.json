@@ -9,5 +9,5 @@
   "background": { "service_worker": "background.js", "scripts": ["common.js", "relay.js", "background.js"] },
   "permissions": ["downloads", "storage", "notifications", "alarms", "declarativeNetRequestWithHostAccess"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
-  "browser_specific_settings": { "gecko": { "id": "lodestar-send@felipebasurto.github.io", "strict_min_version": "128.0" } }
+  "browser_specific_settings": { "gecko": { "id": "ps4mount-send@vld439.github.io", "strict_min_version": "128.0" } }
 }

@@ -10,9 +10,9 @@
 Lodestar es un proyecto independiente para PS4, publicado como [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
 Lodestar is an independent PS4 project, published as [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
 
-**Independencia y atribución.** Lodestar nació como un port para PS4 de [PS4Mount](https://github.com/gasb07/ps4mount), de **gasb07** (para PS5), y desde la versión 2.0.0 sigue su propio camino como proyecto independiente. No se presenta como un fork ni pretende seguir el desarrollo del original, pero, como exige la licencia GPL-3.0-or-later, **conserva la atribución a gasb07/PS4Mount como proyecto origen**, sus avisos de copyright y la misma licencia. Sin PS4Mount, Lodestar no existiría: gran parte del payload (la lectura de pkgs, el montaje, el panel) nace de su trabajo.
+**Independencia y atribución.** Lodestar nació como un port para PS4 de [PS4Mount](https://github.com/gasb07/ps4mount), de **gasb07** (para PS5), continuado después desde [Vld439/PS4Mount-PS4](https://github.com/Vld439/PS4Mount-PS4) y sus contribuidores; desde la versión 2.0.0 sigue su propio camino como proyecto independiente. No se presenta como un fork ni pretende seguir el desarrollo del original, pero, como exige la licencia GPL-3.0-or-later, **conserva la atribución a gasb07/PS4Mount como proyecto origen**, sus avisos de copyright y la misma licencia. Sin PS4Mount, Lodestar no existiría: gran parte del payload (la lectura de pkgs, el montaje, el panel) nace de su trabajo.
 
-**Independence and attribution.** Lodestar began as a PS4 port of [PS4Mount](https://github.com/gasb07/ps4mount) by **gasb07** (for the PS5) and, since version 2.0.0, continues on its own path as an independent project. It is not presented as a fork and does not track the original's development, but, as the GPL-3.0-or-later license requires, **it keeps the attribution to gasb07/PS4Mount as the origin project**, its copyright notices and the same license. Without PS4Mount, Lodestar would not exist: much of the payload (pkg reading, mounting, the panel) comes from that work.
+**Independence and attribution.** Lodestar began as a PS4 port of [PS4Mount](https://github.com/gasb07/ps4mount) by **gasb07** (for the PS5), then continued from [Vld439/PS4Mount-PS4](https://github.com/Vld439/PS4Mount-PS4) and its contributors; since version 2.0.0, continues on its own path as an independent project. It is not presented as a fork and does not track the original's development, but, as the GPL-3.0-or-later license requires, **it keeps the attribution to gasb07/PS4Mount as the origin project**, its copyright notices and the same license. Without PS4Mount, Lodestar would not exist: much of the payload (pkg reading, mounting, the panel) comes from that work.
 
 *Proyecto no oficial, sin relación con Sony Interactive Entertainment. PlayStation y PS4 son marcas de Sony Interactive Entertainment. Úsalo solo con juegos que te pertenecen.*
 *Unofficial project, not affiliated with Sony Interactive Entertainment. PlayStation and PS4 are trademarks of Sony Interactive Entertainment. Only use it with games you own.*
@@ -429,7 +429,6 @@ It also has a **web panel** (from a phone or a computer) with your library, artw
 
 Tested on a PS4 on firmware **13.52** with GoldHEN; it also works on **14.00** (NAS not yet: the FUSE patch for that firmware is missing). The panel and the notifications are in **English and Spanish**: they follow the console's language (English for any other), and **Settings → Language** changes it.
 
-> [!WARNING]
 > [!WARNING]
 > **Beta version.** Back up your saved data before using it, and [tell us about any problem](#troubleshooting) with the log.
 
