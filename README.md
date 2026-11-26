@@ -52,8 +52,8 @@ El payload se ha probado en **13.52** y **14.00** con GoldHEN. El panel y las no
 | DLC **instalados** (`dlc_mode=internal`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado: se instalan con el instalador del sistema y ocupan memoria interna. Los de más de 256 MB también, salvo que desmarques **Instalar también los DLC grandes** (marcado por defecto); sin esa opción no se usan |
 | DLC **apagados** (`dlc_mode=off`) | <img src="docs/icons/no.svg" width="14" height="14" alt=""> No se usan |
 | **Enviar paquetes desde el PC** por la red local, con comprobación previa | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado (unos 16 MB/s por cable) |
-| **Descargar desde enlaces**: un pkg, un ZIP o un RAR (también en partes y con contraseña) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado en la consola |
-| **Extensión del navegador**: las descargas de pkg, ZIP y RAR van a la consola | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado en Brave; Firefox sin probar |
+| **Importar desde URL**: un pkg, un ZIP o un RAR (también en partes y con contraseña) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado en la consola |
+| **Extensión del navegador**: las transferencias de pkg, ZIP y RAR van a la consola | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado en Brave; Firefox sin probar |
 | **Borrar** un juego desde la consola | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado: borra también sus pkgs y libera el espacio |
 | Un juego **nuevo**, o una actualización que llega después del juego | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Necesita **reiniciar la consola una vez**; después se juega siempre |
 | **Ports homebrew** (juegos sin CUSA, como `SMWR00001` o `SSBU00001`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado si pesan **1 GB o más** |
@@ -100,8 +100,8 @@ La consola solo prepara algunos juegos nuevos al arrancar. Cuando Lodestar regis
 Descarga [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) e instálalo con el instalador de paquetes de GoldHEN. Si ya tienes el icono de Lodestar 3.0.0, instala el PKG nuevo para actualizarlo. Carga el payload de esta release y abre **Lodestar** desde la pantalla de inicio. La app usa la API local del payload.
 
 - **Flechas** para moverte entre la barra lateral y las carátulas. **X** abre la ficha, **△** abre el teclado para buscar, **□** vuelve a escanear y **○** vuelve o sale.
-- Desde la barra lateral puedes encolar un enlace, consultar el progreso y abrir los ajustes de biblioteca, DLC y consola.
-- **Enviar paquetes** muestra la dirección del panel para abrirlo desde otro equipo. Allí se envían archivos del móvil o PC y se gestionan descargas y ajustes avanzados.
+- Desde la barra lateral puedes encolar una URL, consultar el progreso y abrir los ajustes de biblioteca, DLC y consola.
+- **Enviar paquetes** muestra la dirección del panel para abrirlo desde otro equipo. Allí se envían archivos del móvil o PC y se gestionan importaciones y ajustes avanzados.
 
 La compilación y las pruebas de host están verificadas. La [validación en una PS4 real](https://github.com/felipebasurto/Lodestar-PS4/issues/13) sigue pendiente.
 
@@ -254,9 +254,9 @@ The payload has been tested on firmware **13.52** and **14.00** with GoldHEN. Th
 | **External DLC** (`dlc_mode=external`, the default) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested with the add-ons of Modern Warfare 3 and Black Ops 6: packages are mounted from their drive while metadata stays on the console. Other games untested |
 | **Installed DLC** (`dlc_mode=internal`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested: installed through the system installer; they use internal storage. Those over 256 MB are installed too unless you untick **Also install big add-ons** (ticked by default); without it they are not used |
 | **DLC off** (`dlc_mode=off`) | <img src="docs/icons/no.svg" width="14" height="14" alt=""> Not used |
-| **Sending games from a PC** over the local network, with preflight validation | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested (about 16 MB/s wired) |
-| **Downloading from links**: a pkg, ZIP or RAR (including parts and passwords) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested on console |
-| **Browser extension**: pkg, ZIP and RAR downloads go to the console | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested in Brave; Firefox untested |
+| **Sending packages from a PC** over the local network, with preflight validation | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested (about 16 MB/s wired) |
+| **Importing from a URL**: a pkg, ZIP or RAR (including parts and passwords) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested on console |
+| **Browser extension**: pkg, ZIP and RAR transfers go to the console | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested in Brave; Firefox untested |
 | **Deleting** a game from the console | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested: also deletes its pkgs and frees the space |
 | A **new** game, or an update arriving after the game | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Needs **one console restart**; then it stays ready |
 | **Homebrew ports** (non-CUSA games such as `SMWR00001` or `SSBU00001`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested when they are **1 GB or larger** |
@@ -303,8 +303,8 @@ The console prepares some new games only during boot. When Lodestar registers a 
 Download [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) and install it with GoldHEN’s Package Installer. If you already have the Lodestar 3.0.0 tile, install the new PKG to update it. Load the payload from this release and open **Lodestar** from the home screen. The app uses the payload’s local API.
 
 - Use the **D-pad** to move between the sidebar and the game grid. **Cross** opens details, **Triangle** opens the search keyboard, **Square** scans again, and **Circle** goes back or exits.
-- From the sidebar you can queue a download link, check its progress, and open the library, add-on and console settings.
-- **Send packages** shows the panel address to open on another device. Use that panel to upload files from your phone or PC and manage advanced download options and settings.
+- From the sidebar you can queue a URL import, check its progress, and open the library, add-on and console settings.
+- **Send packages** shows the panel address to open on another device. Use that panel to upload files from your phone or PC and manage advanced imports and settings.
 
 The package builds and the host checks pass. [PS4 hardware validation](https://github.com/felipebasurto/Lodestar-PS4/issues/13) is still pending.
 
