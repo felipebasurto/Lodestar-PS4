@@ -1873,7 +1873,11 @@ static void dlc_refused_add(const dlc_src_t *a) {
 /* Big add-ons being installed: the system copies them in the background, minutes for a
  * few GB, while PS4Mount goes on. Each one is said when it is there. */
 #define MAX_DLC_PENDING 64
-#define DLC_SPACE_MARGIN (2ull << 30) /* left free on the console after an install */
+#define DLC_SPACE_MARGIN (2ull << 30) /* left free on the console after queued installs */
+/* Bytes submitted to BGFT in this payload run. Installed add-ons keep occupying /user after
+ * they finish, so the reservation is deliberately not lowered; a failed one is retried after
+ * the next load reevaluates the real disk. */
+static uint64_t g_dlc_install_reserved;
 #define DLC_PENDING_SECONDS (2 * 3600) /* an install not done by then is given up for this run */
 
 typedef struct {
@@ -2198,13 +2202,20 @@ static int dlc_install(dlc_src_t *a) {
             snprintf(g_dlc_failed[g_ndlc_failed++], sizeof(g_dlc_failed[0]), "%s", a->pkg.content_id);
         return 2;
     }
+    if (!a->pkg.pkg_size) {
+        printf("[dlc] %s: a nonzero pkg whose header declares 0 bytes is damaged; not queued\n", a->pkg.content_id);
+        dlc_refused_add(a);
+        if (g_ndlc_failed < MAX_DLC_FAILED)
+            snprintf(g_dlc_failed[g_ndlc_failed++], sizeof(g_dlc_failed[0]), "%s", a->pkg.content_id);
+        return 2;
+    }
     int big = a->pkg.pkg_size > DLC_INSTALL_MAX;
     if (big && dlc_pending(a->pkg.content_id))
         return 3;
     uint64_t fb_user = free_bytes("/user");
-    /* pkg_size + margin can wrap: compare without adding */
-    if (big && ((a->pkg.pkg_size > fb_user || fb_user - a->pkg.pkg_size < DLC_SPACE_MARGIN) ||
-                g_ndlc_pending == MAX_DLC_PENDING)) {
+    uint64_t usable = fb_user > DLC_SPACE_MARGIN ? fb_user - DLC_SPACE_MARGIN : 0;
+    int no_room = a->pkg.pkg_size > usable || g_dlc_install_reserved > usable - a->pkg.pkg_size;
+    if (no_room || g_ndlc_pending == MAX_DLC_PENDING) {
         const char *dlc_name = a->meta.title_valid ? a->meta.title : a->pkg.content_id;
         notify_kind(NOTIFY_WARN, TR("Not enough space on the console to install the add-on %s (%llu MB): free some space and load PS4Mount again",
                   "No hay espacio en la consola para instalar el DLC %s (%llu MB): libera espacio y vuelve a cargar PS4Mount"),
@@ -2231,6 +2242,12 @@ static int dlc_install(dlc_src_t *a) {
     int task = install_pkg(pkg_url(a->pkg.title_id, kind, a->path, url, sizeof(url)),
                            dlc_name, user, msg, sizeof(msg));
     printf("[dlc] %s: %s\n", a->pkg.content_id, msg);
+    if (task >= 0) {
+        if (UINT64_MAX - g_dlc_install_reserved < a->pkg.pkg_size)
+            g_dlc_install_reserved = UINT64_MAX;
+        else
+            g_dlc_install_reserved += a->pkg.pkg_size;
+    }
     if (big && task >= 0) { /* minutes: followed by dlc_pending_check() */
         pthread_mutex_lock(&g_act_mu);
         dlc_pending_t *p = &g_dlc_pending[g_ndlc_pending++];
@@ -6540,10 +6557,11 @@ static void config_load(void) {
      * from the next save on. */
     if (ver < 2)
         c.organize = 1;
-    /* ver 3 adds dlc_mode: a file from before only has dlc=, where on meant "add-ons
-     * installed inside". Now on maps to internal installs; off stays off. */
+    /* ver 3 adds dlc_mode: a file from before only has dlc=, where on meant only that
+     * add-ons were served. It is not consent to duplicate today's very large add-ons
+     * internally, so on maps to external mounts; off stays off. */
     if (ver < 3 && !dlc_mode_seen)
-        c.dlc_mode = c.dlc ? DLC_INTERNAL : DLC_OFF;
+        c.dlc_mode = c.dlc ? DLC_EXTERNAL : DLC_OFF;
     c.dlc = c.dlc_mode != DLC_OFF;
     config_publish(&c);
     printf("[config] batch=%d batch_size=%d dlc=%d dlc_mode=%s restore_batch=%d organize=%d folders=%d\n",
@@ -6761,12 +6779,12 @@ int app_config_set(const char *body, char *msg, size_t cap) {
         }
         p = amp ? amp + 1 : NULL;
     }
-    /* dlc_mode wins over the legacy dlc flag; dlc alone maps to off/internal. */
+    /* dlc_mode wins over the legacy dlc flag; dlc alone maps to off/external. */
     if (!dlc_mode_seen && dlc_seen >= 0) {
         if (!dlc_seen)
             c.dlc_mode = DLC_OFF;
         else if (c.dlc_mode == DLC_OFF)
-            c.dlc_mode = DLC_INTERNAL;
+            c.dlc_mode = DLC_EXTERNAL;
     }
     c.dlc = c.dlc_mode != DLC_OFF;
     if (c.batch_size < 1 || c.batch_size > 50) {

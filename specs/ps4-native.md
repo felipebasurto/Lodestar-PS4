@@ -54,6 +54,25 @@ It may be shown as a problem, but PS4Mount must not queue it to BGFT. The observ
 correlates with such a file; causality is not proven.
 Check: test (keep bar 5: real hardware regression). Source: Toshiba audit 2026-11-25; PR #11 Uncharted DLC timeout.
 
+### P4N-17: legacy add-on enablement does not consent to unbounded internal copies
+Configuration files before `ver=3` have no add-on mode key. Their `dlc=1` means only that add-ons
+are served; it must migrate to `external`, never to `internal`. Internal installation is a choice
+only when a `ver=3` configuration or the current panel explicitly names `dlc_mode=internal`.
+The same mapping applies when a legacy client sends the boolean `dlc` key without a mode.
+Check: read (configuration parsing is system-facing and compiled through `test/sdkcheck.sh`).
+Source: firmware 14.00 live run, 2026-11-26: a `ver=2` file migrated to internal mode queued
+about 150 GB of Call of Duty add-on copies with under 60 GB free.
+
+### P4N-18: internal add-on install space is preflighted as a queue, not per file
+Before an internal add-on install is submitted, PS4Mount must account for every add-on byte
+already submitted in the same payload run plus the current package and the safety margin. If that
+aggregate does not fit in `/user`, the package is not submitted. Per-file free-space checks are
+insufficient because BGFT copies asynchronously: many individually accepted packages can together
+exceed the disk. Bytes conservatively remain reserved for the payload run even when an install
+finishes or fails; a later payload load reevaluates the real disk.
+Check: read (BGFT completion is system-facing and compiled through `test/sdkcheck.sh`).
+Source: firmware 14.00 live run, 2026-11-26.
+
 ### P4N-8: kernel-log copying is rate-limited without dropping new information
 The first instance of a relevant kernel line is copied. Exact repeats inside a one-minute window are counted
 and summarized once; different lines are never suppressed. `klog_all` diagnosis remains available.
