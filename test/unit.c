@@ -1376,6 +1376,11 @@ static void test_scanreq(void) {
     scanreq_finish(&q, seq, 10, 10);
     CHECK(!scanreq_due(&q, 19) && scanreq_due(&q, 20));
 
+    scanreq_init(&q);
+    seq = scanreq_begin(&q, &manual, &hard);
+    scanreq_finish(&q, seq, 10, scanreq_period(1));
+    CHECK(!scanreq_due(&q, 129) && scanreq_due(&q, 130)); /* P4N-20: gameplay cadence */
+
     scanreq_request(&q, 1);
     CHECK(scanreq_due(&q, 1));
     seq = scanreq_begin(&q, &manual, &hard);
