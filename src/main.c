@@ -214,6 +214,11 @@ static int g_setup; /* a first start: no game is added until the settings are sa
 static time_t g_setup_start;
 static time_t g_setup_seen; /* the panel's last look at the list during a first start */
 
+static int setup_active(void) { return __atomic_load_n(&g_setup, __ATOMIC_ACQUIRE); }
+static void setup_set(int on) { __atomic_store_n(&g_setup, on, __ATOMIC_RELEASE); }
+static time_t setup_seen_at(void) { return __atomic_load_n(&g_setup_seen, __ATOMIC_ACQUIRE); }
+static void setup_seen_touch(void) { __atomic_store_n(&g_setup_seen, time(NULL), __ATOMIC_RELEASE); }
+
 int sceSystemServiceParamGetInt(int param_id, int *value);
 int sceSystemServicePowerTick(void);
 
@@ -5069,9 +5074,9 @@ static int find_root(const char *tid, char *root, size_t n) { return find_root_i
 static int find_root_snapshot(const char *tid, char *root, size_t n) { return find_root_impl(tid, root, n, 1); }
 
 void app_games_json(buf_t *out) {
-    if (g_setup)
-        g_setup_seen = time(NULL); /* someone is at the panel: the defaults wait */
-    buf_printf(out, "{\"lang\":\"%s\",\"setup\":%s,\"version\":", lang_tag(lang_current()), g_setup ? "true" : "false");
+    if (setup_active())
+        setup_seen_touch(); /* someone is at the panel: the defaults wait */
+    buf_printf(out, "{\"lang\":\"%s\",\"setup\":%s,\"version\":", lang_tag(lang_current()), setup_active() ? "true" : "false");
     json_str(out, VERSION);
     /* the drives in use, with room left: where the pkgs are and what a send needs */
     buf_printf(out, ",\"drives\":[");
@@ -6104,7 +6109,7 @@ static int first_start(void) {
 }
 
 static void config_save(void) {
-    g_setup = 0; /* the settings were chosen: games are added from now on */
+    setup_set(0); /* the settings were chosen: games are added from now on */
     buf_t b = {0};
     buf_printf(&b, "ver=3\nbatch=%d\nbatch_size=%d\ndlc=%d\ndlc_mode=%s\ndlc_big=%d\nrestore_batch=%d\ninternal=%d\norganize=%d\nlang=%s\n",
                g_cfg.batch, g_cfg.batch_size, g_cfg.dlc, dlc_mode_name(g_cfg.dlc_mode), g_cfg.dlc_big, g_cfg.restore_batch,
@@ -6850,7 +6855,7 @@ static void panel_app_step(void) {
         if (fd >= 0)
             close(fd);
     }
-    if (have && g_setup && !opened && db_is_registered(PANEL_APP_TID)) {
+    if (have && setup_active() && !opened && db_is_registered(PANEL_APP_TID)) {
         uint32_t ids[1];
         char tids[1][10];
         opened = 1;
@@ -7806,7 +7811,7 @@ static const char *panel_url(char *out, size_t n) {
 /* The start, as the console shows it. */
 static void notify_running(void) {
     char url[48];
-    if (g_setup && g_reg_mode != REG_NONE && g_web >= 0)
+    if (setup_active() && g_reg_mode != REG_NONE && g_web >= 0)
         notify(TR(VERSION ": first start. Choose the settings in the panel (%s) and press Save. Without it, the games "
                           "are added with the default settings in 2 minutes.",
                   VERSION ": primera vez. Elige los ajustes en el panel (%s) y pulsa Guardar. Si no, en 2 minutos se "
@@ -7851,13 +7856,13 @@ int main(void) {
      * shutdown() before main returns */
     printf("[main] start (lock %d, pid %d)\n", lock, (int)getpid());
     cat_pump = pump_now; /* the panel answers during a walk of a share */
-    g_setup = first_start();
+    setup_set(first_start());
     g_setup_start = time(NULL);
     config_load();
     apply_lang();
     if (g_cfg.autorun && autorun_apply(1))
         printf("[config] autorun on: could not update payloads.ini\n");
-    if (g_setup)
+    if (setup_active())
         printf("[main] first start: no game is added until the settings are saved\n");
     signal(SIGPIPE, SIG_IGN);
     check_firmware();
@@ -7924,7 +7929,8 @@ int main(void) {
         install_received(); /* an app sent with "Send and install" */
         panel_app_step();
         if (scan_due(time(NULL)) && !g_deleting) {
-            if (g_setup && time(NULL) >= (g_setup_seen > g_setup_start ? g_setup_seen : g_setup_start) + SETUP_WAIT) {
+            time_t seen = setup_seen_at();
+            if (setup_active() && time(NULL) >= (seen > g_setup_start ? seen : g_setup_start) + SETUP_WAIT) {
                 printf("[main] first start: nobody at the panel, the default settings are saved\n");
                 config_save();
             }
@@ -7932,7 +7938,7 @@ int main(void) {
             unsigned scan_seq = scan_begin(&manual, &hard);
             g_scan_manual_active = manual;
             int scanned = 1;
-            if (g_setup) {
+            if (setup_active()) {
                 if (manual)
                     notify("%s", TR("Save the settings in the panel first: no game is added until then",
                                     "Guarda primero los ajustes en el panel: hasta entonces no se añade ningún juego"));
