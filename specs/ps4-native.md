@@ -54,7 +54,7 @@ It may be shown as a problem, but PS4Mount must not queue it to BGFT. The observ
 correlates with such a file; causality is not proven.
 Check: test (keep bar 5: real hardware regression). Source: Toshiba audit 2026-11-25; PR #11 Uncharted DLC timeout.
 
-### P4N-17: legacy add-on enablement does not consent to unbounded internal copies
+### P4N-24: legacy add-on enablement does not consent to unbounded internal copies
 Configuration files before `ver=3` have no add-on mode key. Their `dlc=1` means only that add-ons
 are served; it must migrate to `external`, never to `internal`. Internal installation is a choice
 only when a `ver=3` configuration or the current panel explicitly names `dlc_mode=internal`.
@@ -62,6 +62,15 @@ The same mapping applies when a legacy client sends the boolean `dlc` key withou
 Check: read (configuration parsing is system-facing and compiled through `test/sdkcheck.sh`).
 Source: firmware 14.00 live run, 2026-11-26: a `ver=2` file migrated to internal mode queued
 about 150 GB of Call of Duty add-on copies with under 60 GB free.
+
+### P4N-25: add-ons are served from the drive by default
+The default add-on mode is `external`: packages are mounted from their drive and nothing of them is
+copied to internal storage. Installing them is only what the user chooses.
+The user's PS4 ran the add-ons of Modern Warfare 3 and Black Ops 6 this way, with about 70 GB free
+internally. Not established: that every game sees a mounted add-on, or that records left by earlier
+install attempts played no part (on 2026-10-19 a mounted add-on was seen to be invisible, commit
+`ab38c85`).
+Check: read. Source: user report, 2026-11-26.
 
 ### P4N-18: internal add-on install space is preflighted as a queue, not per file
 Before an internal add-on install is submitted, PS4Mount must account for every add-on byte
@@ -145,13 +154,13 @@ Check: read (the system-service boundary is compiled through `test/sdkcheck.sh`;
 call the PS4 installer). Source: concurrency audit of existing install/uninstall helper threads.
 
 ### P4N-17: transfer cancellation and stop signals are ordered atomics
-Drive/links cancellation, worker-quit, per-transfer stop and HTTP cancellation observations must use
+Links cancellation, worker-quit, per-transfer stop and HTTP cancellation observations must use
 atomic loads/stores (or stronger synchronization), never plain shared-word or `volatile` accesses.
 Mutexes remain the owner of queues, progress and byte accounting; atomics only publish one-way stop
 signals across worker, network and owner threads. Clearing cancellation before a new job and setting
 it from a panel/stop action must both be ordered publications.
-Check: test through the existing concurrent Drive/links integration harnesses (`test/drive_test.c`,
-`test/links_test.c`); read for the ownership split between byte/progress state and stop signals.
+Check: test through the existing concurrent links integration harness (`test/links_test.c`); read
+for the ownership split between byte/progress state and stop signals.
 Source: transfer-thread cancellation audit.
 
 ### P4N-19: legacy payload names are cleanup aliases, not AutoRun launch targets

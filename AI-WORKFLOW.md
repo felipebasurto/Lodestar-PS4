@@ -95,7 +95,7 @@ Facts that cost time to learn:
 1. **Reproduce it with the log**: turn on `klog_all`, do the thing on the console, read both Lodestar's lines and the system's.
 2. **Find the system's own behaviour first** (a normal install, the console's own files and records) and copy it, instead of guessing.
 3. **Write the change and a test** in `test/` that fails without it (`test/unit.c`, `test/upload_test.c`, `test/http_test.c`, `test/web/panel.test.js`). Texts for people go through `TR("English", "Español")` in C and `t('English')` in the pages, with the translation in the same change.
-4. **Run the checks** (rule 5), build, stop Lodestar, load the new ELF, test on the console, watching the log.
+4. **Run the checks** (rule 4), build, stop Lodestar, load the new ELF, test on the console, watching the log.
 5. **Share it** (section 7).
 
 ## 7. Sharing the result

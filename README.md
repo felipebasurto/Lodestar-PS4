@@ -46,8 +46,8 @@ Probado en una PS4 con firmware **13.52** y GoldHEN; también funciona en **14.0
 | Juegos desde la **memoria interna** (`/data/PS4Mount`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado: opcional, activado por defecto; los juegos instalados en la consola de la forma normal se detectan y no se tocan |
 | **Actualizaciones** | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado |
 | Juegos **donde están**, sin mover ni renombrar los pkgs (cualquier carpeta de la unidad) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado |
-| **DLC externos** (`dlc_mode=external`) | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Pendiente de verificar en consola: el paquete se monta desde su unidad y los metadatos se guardan en la consola |
-| DLC **instalados** (`dlc_mode=internal`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado: se instalan con el instalador del sistema, los de hasta 256 MB cada uno (o todos con `dlc_big=1`); ocupan memoria interna |
+| **DLC externos** (`dlc_mode=external`, por defecto) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado con los DLC de Modern Warfare 3 y Black Ops 6: el paquete se monta desde su unidad y los metadatos se guardan en la consola. Otros juegos, sin probar |
+| DLC **instalados** (`dlc_mode=internal`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado: se instalan con el instalador del sistema y ocupan memoria interna. Los de más de 256 MB también, salvo que desmarques **Instalar también los DLC grandes** (marcado por defecto); sin esa opción no se usan |
 | DLC **apagados** (`dlc_mode=off`) | <img src="docs/icons/no.svg" width="14" height="14" alt=""> No se usan |
 | **Enviar juegos desde el PC** por la red local, con comprobación previa | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado (unos 16 MB/s por cable) |
 | **Descargar desde enlaces**: un pkg, un ZIP o un RAR (también en partes y con contraseña) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado en la consola |
@@ -133,7 +133,7 @@ Para ROM usadas por apps homebrew como PS4SX2/PCSX2:
 
 ### Borrar un juego
 
-Al borrar un juego añadido por Lodestar desde la pantalla de inicio, Lodestar borra también sus pkgs de la biblioteca para liberar espacio. Los juegos instalados de forma normal no se tocan. **Quitar de la biblioteca** en el panel solo lo quita de la consola y conserva los pkgs.
+Al borrar un juego añadido por Lodestar desde la pantalla de inicio, Lodestar borra también sus pkgs de la biblioteca para liberar espacio. Si el juego está en su carpeta `ps4/<ID>/`, se borra **la carpeta entera**, con todo lo que hayas metido dentro. Los pkgs usados donde tú los dejaste (con **Organizar** desactivado, fuera de esa carpeta) se conservan. Los juegos instalados de forma normal no se tocan. **Quitar de la biblioteca** en el panel solo lo quita de la consola y conserva los pkgs.
 
 ## Ajustes y datos en la consola
 
@@ -201,8 +201,8 @@ Tested on a PS4 running firmware **13.52** with GoldHEN; it also works on **14.0
 | Games from **internal storage** (`/data/PS4Mount`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested: optional, on by default; normally installed games are detected and not touched |
 | **Updates** | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested |
 | Games **where they are**, without moving or renaming pkgs | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested |
-| **External DLC** (`dlc_mode=external`) | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Console verification pending: packages are mounted from their drive while metadata stays on the console |
-| **Installed DLC** (`dlc_mode=internal`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested: installed through the system installer, up to 256 MB each (or all with `dlc_big=1`); uses internal storage |
+| **External DLC** (`dlc_mode=external`, the default) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested with the add-ons of Modern Warfare 3 and Black Ops 6: packages are mounted from their drive while metadata stays on the console. Other games untested |
+| **Installed DLC** (`dlc_mode=internal`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested: installed through the system installer; they use internal storage. Those over 256 MB are installed too unless you untick **Also install big add-ons** (ticked by default); without it they are not used |
 | **DLC off** (`dlc_mode=off`) | <img src="docs/icons/no.svg" width="14" height="14" alt=""> Not used |
 | **Sending games from a PC** over the local network, with preflight validation | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested (about 16 MB/s wired) |
 | **Downloading from links**: a pkg, ZIP or RAR (including parts and passwords) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested on console |
@@ -282,7 +282,7 @@ For ROMs used by homebrew apps such as PS4SX2/PCSX2:
 
 ### Deleting a game
 
-Deleting a Lodestar-added game from the home screen also deletes its library pkgs to free space. Normally installed games are not touched. **Remove from library** in the panel only unregisters it and keeps the pkgs.
+Deleting a Lodestar-added game from the home screen also deletes its library pkgs to free space. If the game is in its `ps4/<ID>/` folder, **the whole folder** is deleted, with anything you put in it. Pkgs used where you left them (with **Organize** off, outside that folder) are kept. Normally installed games are not touched. **Remove from library** in the panel only unregisters it and keeps the pkgs.
 
 ## Settings and data on the console
 

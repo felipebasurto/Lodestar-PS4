@@ -42,7 +42,6 @@ fi
     (cd web && xxd -i -n index_html index.html)
     (cd web && xxd -i -n legacy_html legacy.html)
 } > "$B/gen/page_data.h"
-(cd assets && xxd -i -n icon0_png icon0.png) > "$B/gen/icon_data.h"
 
 fail=0
 n=0

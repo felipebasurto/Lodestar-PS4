@@ -31,7 +31,7 @@ par() {
     return "$fail"
 }
 mkdir -p build
-# Embedded data: panel page, Media tab icon, playgo record templates.
+# Embedded data: panel page, playgo record templates.
 # Inline the translations and shared shelf controls so each page is self-contained.
 mkdir -p build/web
 for page in index legacy; do
@@ -43,7 +43,6 @@ done
     (cd build/web && xxd -i -n index_html index.html)
     (cd build/web && xxd -i -n legacy_html legacy.html)
 } > build/page_data.h
-(cd assets && xxd -i -n icon0_png icon0.png) > build/icon_data.h
 {
     (cd tools && xxd -i -n k_pdb_template pdb_app_template.bin)
     (cd tools && xxd -i -n k_pdb_patch_template pdb_patch_template.bin)

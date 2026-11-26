@@ -15,10 +15,12 @@ costs gigabytes, so every deletion is bounded, logged, and limited to PS4Mount's
 
 ## Rules
 
-### STORE-1: only PS4Mount's own copies are deleted
-PS4Mount deletes files in its own folders (`/data/ps4mount`, `/system_data/ps4mount`) and records it
-wrote for a game. It never deletes a pkg the user put on a drive, nor anything the system installed
-(`/user/app`, `/user/patch`, `/user/addcont`).
+### STORE-1: only PS4Mount's own files are deleted, except on a user's delete of a game
+PS4Mount deletes files in its own folders (`/data/ps4mount`, `/system_data/ps4mount`), the working
+folders and part files it makes on a drive, and records it wrote for a game. It never deletes anything
+the system installed (`/user/app`, `/user/patch`, `/user/addcont`). A file the user put on a drive or in
+the internal library is deleted in one case only: the user deletes a game on the console and the file is in
+that game's library folder `<root>/ps4/<TID>`, which goes whole (`specs/delete.md`, DEL-1, DEL-2 and DEL-6).
 Check: read. Source: AI-WORKFLOW.md rule 2.
 
 ### STORE-2: a received pkg waits at least 10 minutes before it is looked at

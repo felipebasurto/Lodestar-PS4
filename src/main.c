@@ -75,7 +75,6 @@
 #include "telemetry.h"
 #include "titlecache.h"
 #include "web.h"
-#include "icon_data.h"
 
 #define VERSION LODESTAR_VERSION
 #define LOCK_PORT 9032
@@ -7139,22 +7138,6 @@ static void links_begin(void) {
     links_start(STATE_DIR, &host);
 }
 
-/* --- Media tab shortcut (category 65536 + deeplinkUri, as other PS5 web panels) --- */
-
-#define PANEL_ID "PMNT00001"
-static const char k_panel_param[] =
-    "{\n"
-    "    \"titleId\": \"" PANEL_ID "\",\n"
-    "    \"applicationCategoryType\": 65536,\n"
-    "    \"deeplinkUri\": \"http://127.0.0.1:8770/\",\n"
-    "    \"localizedParameters\": {\n"
-    "        \"defaultLanguage\": \"en-US\",\n"
-    "        \"en-US\": {\n"
-    "            \"titleName\": \"Lodestar\"\n"
-    "        }\n"
-    "    }\n"
-    "}\n";
-
 static int same_file(const char *path, const void *data, size_t size) {
     struct stat st;
     if (stat(path, &st) || (size_t)st.st_size != size)
@@ -7167,29 +7150,6 @@ static int same_file(const char *path, const void *data, size_t size) {
     mem_free(tmp);
     close(fd);
     return same;
-}
-
-/* Installs the shortcut when it is missing or out of date (deleting it from the
- * home screen makes the next start install it again). */
-__attribute__((unused)) static void install_panel_shortcut(void) {
-    const char *param = "/user/app/" PANEL_ID "/sce_sys/param.json", *icon = "/user/app/" PANEL_ID "/sce_sys/icon0.png";
-    /* sceAppInstUtilAppExists reports 0 for this shortcut on fw 13.20; app.db is reliable */
-    int present = db_is_registered(PANEL_ID), rc = 0;
-    int same_param = same_file(param, k_panel_param, sizeof(k_panel_param) - 1);
-    int same_icon = same_file(icon, icon0_png, sizeof(icon0_png));
-    printf("[panel] exists rc=0x%08x present=%d param=%d icon=%d\n", rc, present, same_param, same_icon);
-    if (!rc && present && same_param && same_icon)
-        return;
-    mkdirs("/user/app/" PANEL_ID "/sce_sys", 0755);
-    if (write_file(param, k_panel_param, sizeof(k_panel_param) - 1, 0644) ||
-        write_file(icon, icon0_png, sizeof(icon0_png), 0644)) {
-        printf("[panel] shortcut files: %s\n", strerror(errno));
-        return;
-    }
-    rc = register_call(PANEL_ID);
-    printf("[panel] shortcut install rc=0x%08x\n", rc);
-    if (!rc)
-        notify_kind(NOTIFY_READY, "%s", TR("Lodestar added to the Media tab", "Lodestar añadido a la pestaña Multimedia"));
 }
 
 static int g_klog = -1, g_web = -1;
@@ -7507,8 +7467,6 @@ int main(void) {
     check_firmware();
     if (user_app_masked())
         unmask_leftover();
-    /* no Media tab shortcut: it is a PS5 web app (param.json); the panel is opened from
-     * a browser */
     /* left behind if an earlier load stopped mid-check: removed before the panel can ask for one */
     check_temp_cleanup();
     web_status_provider(app_status_state_json);

@@ -5,16 +5,19 @@ Sources: AI-WORKFLOW.md rule 2; PR #11 compatibility work; testectomy audit 2026
 
 ## Purpose
 
-The console's delete flows must be able to remove what the system owns, and PS4Mount may remove only the
-files it explicitly owns. A mistake in this area is not a glitch; it is user data loss or a library that can
-never be freed.
+The console's delete flows must be able to remove what the system owns, and PS4Mount may remove only what
+it owns: its generated files and the library folder of a game, `<root>/ps4/<TID>`. A mistake in this area is
+not a glitch; it is user data loss or a library that can never be freed.
 
 ## Rules
 
 ### DEL-1: a real library delete removes only `<root>/ps4/<TID>` byte-exactly
 The delete path must be exactly the library folder of the same valid title id under one scanned root.
 A trailing slash, case variation, in-place pkg path, foreign root, invalid title id, or parent path is refused.
-Check: test (keep bar 2: data loss). Test: `test/unit.c` › `test_delete_target`. Source: AI-WORKFLOW.md rule 2.
+The folder goes whole: the game, its update, its add-ons and any other file in it, whoever put it there.
+Check: test for the path (keep bar 2: data loss), `test/unit.c` › `test_delete_target`; read for the
+whole-folder removal (`delete_game_files`). Source: AI-WORKFLOW.md rule 2; user (2026-11-26: deleting a game
+deletes its whole folder).
 
 ### DEL-2: in-place user packages are never deleted by the console-delete path
 When a game is used where the user put it, console deletion removes registration/holds only and leaves the
@@ -77,7 +80,7 @@ Source: `.removed`/DLC retention audit 2026-11-25.
 ## Non-goals
 
 - Interpreting a failed read of system databases as proof that a title is absent.
-- Deleting foreign files that happen to share a folder with PS4Mount files.
+- Deleting anything outside the game's library folder, even in a drive folder PS4Mount also uses.
 - Treating unmount failure as successful deletion.
 
 ## Open questions
