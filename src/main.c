@@ -3201,21 +3201,30 @@ static int register_finish(title_src_t *t) {
 static int first_time(const char *path) {
     static char **seen;
     static size_t n, cap;
+    static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
+    int first = 0;
+    pthread_mutex_lock(&mu);
     for (size_t i = 0; i < n; i++)
-        if (!strcmp(seen[i], path))
+        if (!strcmp(seen[i], path)) {
+            pthread_mutex_unlock(&mu);
             return 0;
+        }
     if (n == cap) {
         size_t ncap = cap ? cap * 2 : 64;
         char **grown = realloc(seen, ncap * sizeof(*seen));
-        if (!grown)
-            return 1;
-        seen = grown;
-        cap = ncap;
+        if (grown) {
+            seen = grown;
+            cap = ncap;
+        }
     }
-    seen[n] = strdup(path);
-    if (seen[n])
-        n++;
-    return 1;
+    if (n < cap) {
+        seen[n] = strdup(path);
+        if (seen[n])
+            n++;
+    }
+    first = 1;
+    pthread_mutex_unlock(&mu);
+    return first;
 }
 
 
