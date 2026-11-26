@@ -5074,6 +5074,8 @@ static int find_root(const char *tid, char *root, size_t n) { return find_root_i
 static int find_root_snapshot(const char *tid, char *root, size_t n) { return find_root_impl(tid, root, n, 1); }
 
 void app_games_json(buf_t *out) {
+    config_t cfg;
+    cfg_snapshot(&cfg);
     if (setup_active())
         setup_seen_touch(); /* someone is at the panel: the defaults wait */
     buf_printf(out, "{\"lang\":\"%s\",\"setup\":%s,\"version\":", lang_tag(lang_current()), setup_active() ? "true" : "false");
@@ -5147,7 +5149,7 @@ void app_games_json(buf_t *out) {
             json_str(out, t->update_issue);
             /* used where they are: nothing was moved or renamed, so there are no original
              * files to move back (also for games found in the old ps4/<TID> folders) */
-            int inpl = !g_cfg.organize || !strncmp(t->dir, NAS_ROOT_PATH "/", sizeof(NAS_ROOT_PATH));
+            int inpl = !cfg.organize || !strncmp(t->dir, NAS_ROOT_PATH "/", sizeof(NAS_ROOT_PATH));
             buf_printf(out, ",\"in_place\":%s", inpl ? "true" : "false");
             char svt[16] = "";
             if (t->system_ver)
@@ -5192,7 +5194,7 @@ void app_games_json(buf_t *out) {
     }
     if (sd)
         closedir(sd);
-    buf_printf(out, "],\"dlc_mode\":\"%s\"", dlc_mode_name(g_cfg.dlc_mode));
+    buf_printf(out, "],\"dlc_mode\":\"%s\"", dlc_mode_name(cfg.dlc_mode));
     /* the last notifications the console was sent, newest first */
     notice_entry_t nsnap[NOTICE_MAX];
     int nn;
