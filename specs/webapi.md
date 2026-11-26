@@ -151,11 +151,11 @@ Source: panel/API architecture audit and WEBAPI-2 implementation design.
 
 ### WEBAPI-7: the agent manifest and status endpoints are read-only additive contracts
 The product version exposed through the existing API (`version` in responses such as
-`GET /api/games`) is `Lodestar 2.0.0`. The internal state and log paths remain under
+`GET /api/games`) is `Lodestar 2.0.1`. The internal state and log paths remain under
 `/data/ps4mount` for compatibility; this rule does not migrate console state.
 
 `GET /api/agent` returns a machine-readable JSON manifest with `product` (`Lodestar`),
-`version` (`Lodestar 2.0.0`), `api_version` (`1`), the panel scheme/port, the write-header
+`version` (`Lodestar 2.0.1`), `api_version` (`1`), the panel scheme/port, the write-header
 model (including that the server checks for the custom header's presence), an endpoint list
 in which every entry has `method`, `path`, `mutating` and `summary`, and safety rails.
 In that list `mutating` means intentionally starting or changing application/system state or
@@ -181,7 +181,9 @@ Requests that write files or otherwise change state keep the existing threat mod
 (and the network-probing NAS scan) must carry the panel header and come from an allowed
 local/non-public IPv4 peer. `X-Lodestar: 1` is accepted everywhere the panel header is
 required. `X-PS4Mount: 1` remains accepted as a legacy alias for existing panels, extensions
-and scripts. This rule does not add a token, change a port, or weaken the network boundary.
+and scripts. Archive passwords may be sent as `X-Lodestar-Password`; the legacy
+`X-PS4Mount-Password` remains accepted as its alias. This rule does not add a token,
+change a port, or weaken the network boundary.
 Check: test through `test/http_test.c`; read for header-block-only parsing in `may_write`.
 Source: Lodestar compatibility contract.
 

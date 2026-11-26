@@ -886,15 +886,17 @@ static void drive_action(int fd, const char *path, const char *body) {
     json_msg(fd, !rc, msg);
 }
 
-/* The panel's X-PS4Mount-Password header (percent-encoded: any password is plain ASCII
-   there, and none is ever in a path the log could show), decoded into out; "" without it. */
+/* The panel's X-Lodestar-Password header, or the legacy X-PS4Mount-Password alias
+   (percent-encoded: any password is plain ASCII there, and none is ever in a path the log
+   could show), decoded into out; "" without it. */
 static void password_header(const char *req, char *out, size_t n) {
     out[0] = 0;
     for (const char *h = req; (h = strchr(h, '\n'));) {
         h++;
         if (*h == '\r' || *h == '\n')
             return; /* the end of the headers */
-        if (strncasecmp(h, "X-PS4Mount-Password:", 20))
+        int legacy_password = !strncasecmp(h, "X-PS4Mount-Password:", 20);
+        if (strncasecmp(h, "X-Lodestar-Password:", 20) && !legacy_password)
             continue;
         const char *v = h + 20;
         while (*v == ' ')

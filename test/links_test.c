@@ -468,7 +468,7 @@ static int relay_post(const char *path, const void *body, size_t len, char *out,
     http_req_t q = {0};
     q.method = "POST";
     q.url = url;
-    q.headers = "X-PS4Mount: 1\r\n";
+    q.headers = "X-Lodestar: 1\r\n";
     q.body = body;
     q.body_len = len;
     q.stall = 10;

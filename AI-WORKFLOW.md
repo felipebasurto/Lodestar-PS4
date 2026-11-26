@@ -25,10 +25,12 @@ A chat in a web browser cannot reach your console: the assistant must be an agen
 
 ## 3. Connecting
 
-Lodestar shows a notification with the panel's address (port 8770). The API, with `curl` (requests that write files need the header `X-PS4Mount: 1`):
+Lodestar shows a notification with the panel's address (port 8770). The API, with `curl` (requests that write files need the header `X-Lodestar: 1` (`X-PS4Mount: 1` remains a legacy alias)):
 
 | Request | Does |
 | --- | --- |
+| `GET /api/agent` | Machine-readable manifest: product/version, auth model, endpoint table and safety rails |
+| `GET /api/status` | Lightweight state: setup, activity, queue counters and up to five notices, without the game list |
 | `GET /api/games` | JSON: `lang`, `version`, `games` (`title_id`, `name`, `state`, `version`, `source`, `storage`, `dlc`, …) |
 | `GET /api/config` | The settings, with `lang` (`auto`, `en`, `es`) and `ui_lang` (the one in use) |
 | `GET /api/log` | The tail of the log |
@@ -47,9 +49,9 @@ Lodestar shows a notification with the panel's address (port 8770). The API, wit
 | `POST /api/drive/connect`, `disconnect`, `refresh`, `cancel` | Sign in with a code, revoke, read Drive again, stop the transfer and empty the queue |
 | `POST /api/drive/upload[?title_id=]`, `download?title_id=&dest=`, `trash?title_id=` | Upload a game (none: the library), download one to `dest`, move one to Drive's trash |
 | `GET /api/links` | Downloads from links: `jobs` (name, files, state queued/running/failed, error), `job` (phase probing/receiving/extracting/retrying, `done`/`total`, `speed`, `file`, `pkg`), `result` |
-| `POST /api/links/add?dest=` | Body: the links, one a line (`link | name` names one); the volumes of a RAR become one download. An archive's password in the header `X-PS4Mount-Password` (percent-encoded) |
+| `POST /api/links/add?dest=` | Body: the links, one a line (`link | name` names one); the volumes of a RAR become one download. An archive's password in the header `X-Lodestar-Password` (percent-encoded) |
 | Port 8771 (or the next free one: `relay_port` in `GET /api/links`): `POST /claim`, `/put?job=&vol=&block=`, `/drop?...` | A helper (the browser extension, `extension/relay.js`) takes a block to fetch, delivers it whole, or gives it back; header `X-PS4Mount: 1` |
-| `POST /api/links/cancel?id=`, `retry?id=` | Stop or drop a download (its files deleted), try a failed one again (with `X-PS4Mount-Password`: with that password; `jobs[].locked` says it failed for want of one) |
+| `POST /api/links/cancel?id=`, `retry?id=` | Stop or drop a download (its files deleted), try a failed one again (with `X-Lodestar-Password`: with that password; `jobs[].locked` says it failed for want of one) |
 
 Files on the console (FTP): `/data/ps4mount/log.txt`, `config.txt`, `<TID>.src` (where each game comes from), `<TID>.removed`, `<TID>.restart`; an empty `/data/ps4mount/stop` stops Lodestar; `drive_client.txt`, `drive.txt` (Google: never share them), `drive_queue.txt` and `drive_upload.txt` (unfinished transfers, resumed at load), `<scan folder>/.ps4mount-drive/<id>.dl` (a download in progress); `links_queue.txt`, `passwords.txt` (archive passwords that worked, tried on the next ones) and `<scan folder>/.ps4mount-links/<n>/` (downloads from links: `vNNN.dl` parts, `out/` the pkgs extracted so far); an empty `/data/ps4mount/klog_all` copies the whole kernel log into Lodestar's log, which is how the system's side of every problem in this project was found. The kernel log server (port 3232) takes one reader: Lodestar is that reader while it runs.
 

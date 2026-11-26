@@ -7656,8 +7656,10 @@ static int send_all(int s, const void *data, size_t len) {
     return 0;
 }
 
-/* A payload file that the console's loader takes: the wrapped .bin (or the ELF). Only the
- * first bytes are read: the file is 3 MB and this runs where the heap is small. */
+/* A Lodestar payload file that the console's loader takes: the wrapped .bin (or the ELF).
+ * Legacy ps4mount-ps4 names are deliberately not launch targets (P4N-19): AutoRun may
+ * remove their old entries, but must not silently boot a downgrade. Only the first bytes
+ * are read: the file is 3 MB and this runs where the heap is small. */
 static const char *payload_file(char *out, size_t n) {
     static const char *cand[] = {
         "/data/payloads/lodestar-ps4.bin",       "/data/payloads/Lodestar-PS4.bin",
@@ -7668,14 +7670,6 @@ static const char *payload_file(char *out, size_t n) {
         "/data/GoldHEN/payloads/lodestar-ps4.elf", "/data/GoldHEN/payloads/Lodestar-PS4.elf",
         "/user/data/payloads/lodestar-ps4.elf",  "/user/data/payloads/Lodestar-PS4.elf",
         "/data/ps4mount/lodestar-ps4.elf",       "/data/ps4mount/Lodestar-PS4.elf",
-        "/data/payloads/ps4mount-ps4.bin",       "/data/payloads/PS4Mount-PS4.bin",
-        "/data/GoldHEN/payloads/ps4mount-ps4.bin", "/data/GoldHEN/payloads/PS4Mount-PS4.bin",
-        "/user/data/payloads/ps4mount-ps4.bin",  "/user/data/payloads/PS4Mount-PS4.bin",
-        "/data/ps4mount/ps4mount-ps4.bin",       "/data/ps4mount/PS4Mount-PS4.bin",
-        "/data/payloads/ps4mount-ps4.elf",       "/data/payloads/PS4Mount-PS4.elf",
-        "/data/GoldHEN/payloads/ps4mount-ps4.elf", "/data/GoldHEN/payloads/PS4Mount-PS4.elf",
-        "/user/data/payloads/ps4mount-ps4.elf",  "/user/data/payloads/PS4Mount-PS4.elf",
-        "/data/ps4mount/ps4mount-ps4.elf",       "/data/ps4mount/PS4Mount-PS4.elf",
         NULL};
     out[0] = 0;
     for (int i = 0; cand[i]; i++) {

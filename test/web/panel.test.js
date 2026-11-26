@@ -14,7 +14,7 @@ const GAMES = [
   { title_id: 'CUSA34284', name: 'Moving Out 2', version: '01.04', game_version: '01.00', has_patch: true, size: 2.6e9, state: 'restart', mount: 'rw', source: '/mnt/usb0/ps4/CUSA34284', dlc: 0, update_issue: '', content_id: 'EP4064-CUSA34284_00-MOVINGOUT2000000', system_ver: '9.00', storage: 'usb0' },
   { title_id: 'CUSA00069', name: 'Rayman Legends', version: '', has_patch: false, size: 0, state: 'offline', mount: '', source: '/mnt/usb1/ps4/CUSA00069', dlc: 0, update_issue: '', content_id: '', game_version: '', system_ver: '', storage: 'usb1' }];
 const CFG = { batch: true, batch_size: 5, dlc: true, dlc_mode: 'external', dlc_big: false, internal: true,
-  autorun: false, autorun_ok: true, autorun_path: '/data/payloads/ps4mount-ps4.bin',
+  autorun: false, autorun_ok: true, autorun_path: '/data/payloads/lodestar-ps4.bin',
   restore_batch: 5, max_restore_batch: 10, paths: ['/'], organize: false };
 let REPLY_LANG; // the language the console reports (undefined: none, English)
 let GAMES_VERSION = 'PS4Mount test';
@@ -255,7 +255,7 @@ function tKeys(file) {
   const file = (name, n) => new w.File([new Uint8Array(n)], name);
   d.getElementById('drop').ondrop({ preventDefault() {}, dataTransfer: { files: [file('Good.pkg', 1000), file('New.pkg', 1100), file('Upd.pkg', 2000)] } });
   await tick(); await tick();
-  ok(checks.length === 3 && checks.every(c => c.headers['X-PS4Mount'] === '1'), 'each pkg is checked first, with the panel header');
+  ok(checks.length === 3 && checks.every(c => c.headers['X-Lodestar'] === '1'), 'each pkg is checked first, with the panel header');
   ok(checks[0].url === '/api/check?size=1000', 'the check says the size of the whole file');
   let items = d.querySelectorAll('#queue .item');
   ok(items.length === 3, 'three pkgs in the list');
@@ -273,7 +273,7 @@ function tKeys(file) {
   d.getElementById('send-go').click();
   for (let i = 0; i < 10; i++) await tick();
   ok(sent.length === 2, 'only the two usable pkgs are sent');
-  ok(sent[0].url === '/api/upload?dest=usb1&name=Good.pkg' && sent[0].method === 'POST' && sent[0].headers['X-PS4Mount'] === '1', 'upload goes to the chosen place, with the panel header');
+  ok(sent[0].url === '/api/upload?dest=usb1&name=Good.pkg' && sent[0].method === 'POST' && sent[0].headers['X-Lodestar'] === '1', 'upload goes to the chosen place, with the panel header');
   ok(sent[1].url.includes('name=Upd.pkg') && sent[1].size === 2000, 'then the next one, the whole file');
   items = d.querySelectorAll('#queue .item');
   ok(items[0].textContent.includes('Sent') && items[2].textContent.includes('Sent') && items[1].textContent.includes('Cannot be used'), 'both sent, the refused one stays refused');
@@ -348,7 +348,7 @@ function tKeys(file) {
   d.getElementById('d-csecret').value = 'GOCSPX-a+b';
   d.getElementById('d-setup').dispatchEvent(new w.Event('submit', { cancelable: true })); await tick();
   const cl = reqs.find((r) => r.url === '/api/drive/client');
-  ok(cl && cl.method === 'POST' && cl.headers['X-PS4Mount'] === '1' &&
+  ok(cl && cl.method === 'POST' && cl.headers['X-Lodestar'] === '1' &&
     cl.body === 'client_id=123-abc.apps.googleusercontent.com&client_secret=GOCSPX-a%2Bb', 'the client goes in the body, with the panel header');
   ok(!reqs.some((r) => /GOCSPX/.test(r.url)), 'never in an address');
   DRIVE = Object.assign({}, DRIVE, { client: true, client_id: '123-abc.apps.googleusercontent.com' });
@@ -361,7 +361,7 @@ function tKeys(file) {
   reqs.length = 0;
   d.getElementById('d-connect').click(); await tick();
   const conn = reqs.find((r) => r.url === '/api/drive/connect');
-  ok(conn && conn.method === 'POST' && conn.headers['X-PS4Mount'] === '1', 'Connect posts with the panel header');
+  ok(conn && conn.method === 'POST' && conn.headers['X-Lodestar'] === '1', 'Connect posts with the panel header');
   DRIVE = Object.assign({}, DRIVE, { login: { active: true, code: 'ABCD-EFGH', url: 'https://www.google.com/device', expires: 1700, error: '' } });
   w.loadDrive(); await tick();
   ok(d.getElementById('d-usercode').textContent === 'ABCD-EFGH' && d.getElementById('d-url').href === 'https://www.google.com/device', 'the code and the address to type it in');
@@ -383,7 +383,7 @@ function tKeys(file) {
   reqs.length = 0;
   drows[1].querySelector('[data-dl]').click(); await tick();
   const dl = reqs.find((r) => r.url.indexOf('/api/drive/download') === 0);
-  ok(dl && dl.url === '/api/drive/download?title_id=CUSA99999&dest=usb0' && dl.headers['X-PS4Mount'] === '1', 'Download goes to the chosen drive');
+  ok(dl && dl.url === '/api/drive/download?title_id=CUSA99999&dest=usb0' && dl.headers['X-Lodestar'] === '1', 'Download goes to the chosen drive');
   reqs.length = 0; w.__confirm = false;
   drows[1].querySelector('[data-tr]').click(); await tick();
   ok(!reqs.some((r) => r.url.indexOf('/api/drive/trash') === 0), 'Delete from Drive asks first (and a no stops it)');
@@ -400,7 +400,7 @@ function tKeys(file) {
   ok(d.getElementById('g-facts').textContent.includes('not in Drive'), 'and says it is not in Drive');
   reqs.length = 0;
   up.click(); await tick();
-  ok(reqs.some((r) => r.url === '/api/drive/upload?title_id=CUSA41712' && r.headers['X-PS4Mount'] === '1'), 'Send to Drive uploads that game');
+  ok(reqs.some((r) => r.url === '/api/drive/upload?title_id=CUSA41712' && r.headers['X-Lodestar'] === '1'), 'Send to Drive uploads that game');
   w.showGame('CUSA00791');
   ok(d.querySelector('#g-actions [data-d="upload"]').textContent === 'Send to Drive again' && d.getElementById('g-facts').textContent.includes('in Drive (3.7 GB)'), 'a game already there: Send to Drive again');
   w.showGame('CUSA00190');
@@ -452,16 +452,16 @@ function tKeys(file) {
   d.getElementById('l-text').value = pasted;
   d.getElementById('l-form').dispatchEvent(new w.Event('submit', { cancelable: true })); await tick(); await tick();
   const add = reqs.find((r) => r.url.indexOf('/api/links/add') === 0);
-  ok(add && add.url === '/api/links/add?dest=usb0' && add.method === 'POST' && add.headers['X-PS4Mount'] === '1' && add.body === pasted,
+  ok(add && add.url === '/api/links/add?dest=usb0' && add.method === 'POST' && add.headers['X-Lodestar'] === '1' && add.body === pasted,
     'the links go in the body as pasted, to the chosen drive, with the panel header');
   ok(d.getElementById('l-text').value === '', 'and the box is emptied once they are taken');
-  ok(!('X-PS4Mount-Password' in add.headers), 'no password given: none sent');
+  ok(!('X-Lodestar-Password' in add.headers), 'no password given: none sent');
   reqs.length = 0;
   d.getElementById('l-text').value = pasted;
   d.getElementById('l-pw').value = 'a b&cñ';
   d.getElementById('l-form').dispatchEvent(new w.Event('submit', { cancelable: true })); await tick(); await tick();
   const add2 = reqs.find((r) => r.url.indexOf('/api/links/add') === 0);
-  ok(add2 && add2.headers['X-PS4Mount-Password'] === 'a%20b%26c%C3%B1' && add2.url === '/api/links/add?dest=usb0',
+  ok(add2 && add2.headers['X-Lodestar-Password'] === 'a%20b%26c%C3%B1' && add2.url === '/api/links/add?dest=usb0',
     'a password goes percent-encoded in its own header, never in the address');
   ok(d.getElementById('l-pw').value === '', 'and is emptied with the links');
   LINKS = { configured: true, result: 'Big Game was downloaded: 2 pkg(s), 40.0 GB in ~1 h', ok: true, job: { busy: false },
@@ -478,7 +478,7 @@ function tKeys(file) {
   ok(!reqs.some((r) => r.url.indexOf('/api/links/retry') === 0), 'Try again on a locked one asks for the password (cancel: nothing)');
   w.__prompt = 'secret';
   lrows[1].querySelector('[data-retry]').click(); await tick();
-  ok(reqs.some((r) => r.url === '/api/links/retry?id=5' && r.headers['X-PS4Mount'] === '1' && r.headers['X-PS4Mount-Password'] === 'secret'),
+  ok(reqs.some((r) => r.url === '/api/links/retry?id=5' && r.headers['X-Lodestar'] === '1' && r.headers['X-Lodestar-Password'] === 'secret'),
     'Try again, with the password written');
   reqs.length = 0; w.__confirm = false;
   lrows[0].querySelector('[data-drop]').click(); await tick();
@@ -596,7 +596,7 @@ function tKeys(file) {
   }
   {
     d.getElementById('settingsbtn').click(); await tick(); await tick();
-    ok(d.getElementById('autorun-hint').textContent.includes('/data/payloads/ps4mount-ps4.bin'), 'the AutoRun hint names the found payload');
+    ok(d.getElementById('autorun-hint').textContent.includes('/data/payloads/lodestar-ps4.bin'), 'the AutoRun hint names the found payload');
     CFG.dlc_mode = 'internal'; CFG.dlc_big = true;
     d.getElementById('settingsbtn').click(); await tick(); await tick();
     ok(d.getElementById('s-dlc-mode').value === 'internal' && d.getElementById('s-dlcbig').checked === true &&

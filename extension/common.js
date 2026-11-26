@@ -53,10 +53,10 @@ function panel(host, path, opts) {
 }
 
 /* The links to the console: {ok, message} as Lodestar answers. */
-/* The X-PS4Mount headers are the payload's protocol since before the Lodestar rebrand:
-   the console answers only to those names, so they stay as they are. */
+/* The X-Lodestar headers are Lodestar's canonical panel protocol; the payload keeps
+   the X-PS4Mount names as legacy aliases for older clients. */
 function sendLinks(host, dest, lines, password) {
-  var h = { 'X-PS4Mount': '1', 'Content-Type': 'text/plain; charset=utf-8' };
-  if (password) h['X-PS4Mount-Password'] = encodeURIComponent(password);
+  var h = { 'X-Lodestar': '1', 'Content-Type': 'text/plain; charset=utf-8' };
+  if (password) h['X-Lodestar-Password'] = encodeURIComponent(password);
   return panel(host, '/api/links/add?dest=' + encodeURIComponent(dest), { method: 'POST', headers: h, body: lines.join('\n') });
 }

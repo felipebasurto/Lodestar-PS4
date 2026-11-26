@@ -184,7 +184,7 @@ int main(void) {
     printf("agent observability\n");
     r = ask("GET /api/agent HTTP/1.1\r\n\r\n");
     CHECK(status(r, "200") && strstr(r, "application/json"));
-    CHECK(strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.0\"") &&
+    CHECK(strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.1\"") &&
           strstr(r, "\"api_version\":1"));
     CHECK(strstr(r, "\"panel\":{\"scheme\":\"http\",\"port\":8770}") != NULL);
     CHECK(strstr(r, "\"header\":\"X-Lodestar\"") && strstr(r, "\"legacy_aliases\":[\"X-PS4Mount\"]") &&
@@ -200,7 +200,7 @@ int main(void) {
     CHECK(status(r, "404"));
 
     r = ask("GET /api/status HTTP/1.1\r\n\r\n");
-    CHECK(status(r, "200") && strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.0\""));
+    CHECK(status(r, "200") && strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.1\""));
     CHECK(strstr(r, "\"setup\":false") && strstr(r, "\"activity\":{\"busy\":false") && strstr(r, "\"notices\":[]"));
     CHECK(strstr(r, "\"queues\":{\"web_owner_pending\":0,\"web_write_pending\":0,\"web_write_active\":0}") != NULL);
     CHECK(strstr(r, "\"endpoints\":{\"agent\":\"/api/agent\",\"status\":\"/api/status\"") != NULL);
@@ -390,9 +390,12 @@ int main(void) {
     r = ask("POST /api/links/add?dest=usb0 HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 24\r\n\r\nhttp://example.com/a.pkg");
     CHECK(status(r, "200") && !strcmp(g_stub_call, "links_add") && !strcmp(g_stub_arg, "usb0|24|http://example.com/a.pkg|"));
     /* an archive's password, percent-encoded in its own header */
-    r = ask("POST /api/links/add?dest=usb0 HTTP/1.1\r\nX-PS4Mount: 1\r\nX-PS4Mount-Password: a%20b%26c%C3%B1\r\nContent-Length: 24\r\n\r\n"
+    r = ask("POST /api/links/add?dest=usb0 HTTP/1.1\r\nX-Lodestar: 1\r\nX-Lodestar-Password: a%20b%26c%C3%B1\r\nContent-Length: 24\r\n\r\n"
             "http://example.com/a.pkg");
     CHECK(status(r, "200") && !strcmp(g_stub_arg, "usb0|24|http://example.com/a.pkg|a b&c\xc3\xb1"));
+    r = ask("POST /api/links/add?dest=usb0 HTTP/1.1\r\nX-PS4Mount: 1\r\nX-PS4Mount-Password: legacy\r\nContent-Length: 24\r\n\r\n"
+            "http://example.com/a.pkg");
+    CHECK(status(r, "200") && !strcmp(g_stub_arg, "usb0|24|http://example.com/a.pkg|legacy"));
     before = g_stub_calls;
     r = ask("POST /api/links/add?dest=../x HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 3\r\n\r\nabc");
     CHECK(status(r, "400") && g_stub_calls == before);
@@ -413,7 +416,7 @@ int main(void) {
     CHECK(status(r, "200") && !strcmp(g_stub_call, "links_cancel") && !strcmp(g_stub_arg, "7"));
     r = ask("POST /api/links/retry?id=3 HTTP/1.1\r\nX-PS4Mount: 1\r\n\r\n");
     CHECK(status(r, "200") && !strcmp(g_stub_call, "links_retry") && !strcmp(g_stub_arg, "3|"));
-    r = ask("POST /api/links/retry?id=3 HTTP/1.1\r\nX-PS4Mount: 1\r\nx-ps4mount-password: secret\r\n\r\n");
+    r = ask("POST /api/links/retry?id=3 HTTP/1.1\r\nX-PS4Mount: 1\r\nx-lodestar-password: secret\r\n\r\n");
     CHECK(status(r, "200") && !strcmp(g_stub_arg, "3|secret"));
     before = g_stub_calls;
     r = ask("POST /api/links/cancel HTTP/1.1\r\nX-PS4Mount: 1\r\n\r\n");

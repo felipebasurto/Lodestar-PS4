@@ -178,7 +178,7 @@ function say(text) {
 function api(path, method, body, done) {
   var x = new XMLHttpRequest();
   x.open(method || 'GET', path, true);
-  x.setRequestHeader('X-PS4Mount', '1');
+  x.setRequestHeader('X-Lodestar', '1');
   if (body !== null && body !== undefined) x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
   x.onreadystatechange = function () {
     if (x.readyState !== 4) return;

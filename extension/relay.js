@@ -10,7 +10,7 @@ var WORKERS = 12, running = 0, fails = 0, relayPort = 8771;
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
 function relayPost(host, path, body) {
-  return fetch('http://' + host + ':' + relayPort + path, { method: 'POST', headers: { 'X-PS4Mount': '1' }, body: body || '' });
+  return fetch('http://' + host + ':' + relayPort + path, { method: 'POST', headers: { 'X-Lodestar': '1' }, body: body || '' });
 }
 
 async function relayWorker(host) {

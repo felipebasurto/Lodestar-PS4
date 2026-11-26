@@ -468,7 +468,7 @@ function gb(n) { return (n / 1073741824).toFixed(n >= 10737418240 ? 0 : 1) + ' G
 function toast(msg) { var t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = 'none'; }, 4000); }
 
 function api(path, method, body) {
-  var opt = {method: method || 'GET', cache: 'no-store', headers: {'X-PS4Mount': '1'}};
+  var opt = {method: method || 'GET', cache: 'no-store', headers: {'X-Lodestar': '1'}};
   if (body !== undefined) { opt.body = body; opt.headers['Content-Type'] = 'application/x-www-form-urlencoded'; }
   return fetch(path, opt).then(function (r) {
     return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; });
@@ -892,7 +892,7 @@ $('s-nas-proto').onchange = nasFields;
  * answered, then what the chosen one shares. Picking one fills in the fields below. */
 function nasPost(path, body) {
   return fetch(path, {method: body === undefined ? 'GET' : 'POST', cache: 'no-store', body: body,
-    headers: {'X-PS4Mount': '1', 'Content-Type': 'application/x-www-form-urlencoded'}})
+    headers: {'X-Lodestar': '1', 'Content-Type': 'application/x-www-form-urlencoded'}})
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
 }
 function nasPick(list, btn) {
@@ -1095,7 +1095,7 @@ $('setform').onsubmit = function (e) {
     '&nas_sub=' + encodeURIComponent($('s-nas-sub').value.trim()) +
     '&nas_user=' + encodeURIComponent($('s-nas-user').value.trim()) +
     '&nas_pass=' + encodeURIComponent($('s-nas-pass').value);
-  fetch('/api/config', {method: 'POST', cache: 'no-store', headers: {'X-PS4Mount': '1', 'Content-Type': 'application/x-www-form-urlencoded'}, body: body})
+  fetch('/api/config', {method: 'POST', cache: 'no-store', headers: {'X-Lodestar': '1', 'Content-Type': 'application/x-www-form-urlencoded'}, body: body})
     .then(function (r) { return r.json(); })
     .then(function (j) { toast(j.message || j.error); if (j.ok) { $('setdlg').close(); load(); } })
     .catch(function (err) { toast(t('Error: {0}', err.message)); });
@@ -1160,7 +1160,7 @@ function checkFile(it) {
   renderQueue();
   var head = it.file.slice(0, Math.min(it.file.size, 4194304));
   return fetch('/api/check?size=' + it.file.size, {method: 'POST', cache: 'no-store', body: head,
-      headers: {'X-PS4Mount': '1', 'Content-Type': 'application/octet-stream'}})
+      headers: {'X-Lodestar': '1', 'Content-Type': 'application/octet-stream'}})
     .then(function (r) { return r.json(); })
     .then(function (j) { it.check = j; if (j.dests) fillDests(j.dests); it.state = 'checked'; })
     .catch(function (e) { it.check = {ok: false, problem: t('could not be checked: {0}', e.message)}; it.state = 'checked'; })
@@ -1188,7 +1188,7 @@ function sendNext() {
   it.sent = 0;
   x.open('POST', '/api/upload?dest=' + encodeURIComponent($('dest').value) + '&name=' + encodeURIComponent(it.file.name) +
     (it.check.install ? '&install=1' : ''));
-  x.setRequestHeader('X-PS4Mount', '1');
+  x.setRequestHeader('X-Lodestar', '1');
   x.setRequestHeader('Content-Type', 'application/octet-stream');
   x.upload.onprogress = function (e) { it.sent = e.loaded; renderQueue(); };
   function failed(msg) {
@@ -1269,7 +1269,7 @@ function driveState(tid) {
 function driveGame(tid) { var l = drive.games || []; for (var i = 0; i < l.length; i++) if (l[i].title_id === tid) return l[i]; return null; }
 /* Drive actions send the panel's header: a download writes files, an upload sends them out. */
 function driveAct(action, query) {
-  return fetch('/api/drive/' + action + (query ? '?' + query : ''), {method: 'POST', cache: 'no-store', headers: {'X-PS4Mount': '1'}})
+  return fetch('/api/drive/' + action + (query ? '?' + query : ''), {method: 'POST', cache: 'no-store', headers: {'X-Lodestar': '1'}})
     .then(function (r) { return r.json(); })
     .then(function (j) { toast(j.message || j.error); setTimeout(loadDrive, 500); return j; })
     .catch(function (err) { toast(t('Error: {0}', err.message)); });
@@ -1389,7 +1389,7 @@ $('d-setup').onsubmit = function (e) {
   e.preventDefault();
   var body = 'client_id=' + encodeURIComponent($('d-cid').value.trim()) + '&client_secret=' + encodeURIComponent($('d-csecret').value.trim());
   fetch('/api/drive/client', {method: 'POST', cache: 'no-store', body: body,
-      headers: {'X-PS4Mount': '1', 'Content-Type': 'application/x-www-form-urlencoded'}})
+      headers: {'X-Lodestar': '1', 'Content-Type': 'application/x-www-form-urlencoded'}})
     .then(function (r) { return r.json(); })
     .then(function (j) {
       toast(j.message || j.error);
@@ -1420,8 +1420,8 @@ loadDrive();
 /* --- downloads from links --- */
 var links = {}, linksBusyBefore = false;
 function linkAct(action, query, body, password) {
-  var h = {'X-PS4Mount': '1', 'Content-Type': 'text/plain; charset=utf-8'};
-  if (password) h['X-PS4Mount-Password'] = encodeURIComponent(password);
+  var h = {'X-Lodestar': '1', 'Content-Type': 'text/plain; charset=utf-8'};
+  if (password) h['X-Lodestar-Password'] = encodeURIComponent(password);
   return fetch('/api/links/' + action + (query ? '?' + query : ''), {method: 'POST', cache: 'no-store', body: body || '', headers: h})
     .then(function (r) { return r.json(); })
     .then(function (j) { toast(j.message || j.error); setTimeout(loadLinks, 500); return j; })

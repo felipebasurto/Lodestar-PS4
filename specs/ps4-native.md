@@ -154,6 +154,16 @@ Check: test through the existing concurrent Drive/links integration harnesses (`
 `test/links_test.c`); read for the ownership split between byte/progress state and stop signals.
 Source: transfer-thread cancellation audit.
 
+### P4N-19: legacy payload names are cleanup aliases, not AutoRun launch targets
+`lodestar-ps4.bin` and `lodestar-ps4.elf` are the only payload names Lodestar may choose when enabling
+GoldHEN AutoRun. Legacy `ps4mount-ps4.bin/.elf` entries are still recognized and removed so an old
+installation is replaced rather than duplicated, but a legacy file is never selected as the new AutoRun
+target: doing so could silently downgrade the boot payload to PS4Mount. If only a legacy file exists,
+the panel reports that no Lodestar payload file is available and asks for the current artifact.
+Check: read (the file selection is console-facing and compiled through `test/sdkcheck.sh`; ini replacement
+and legacy-entry cleanup are host-tested in `test/unit.c` › `test_autorun`).
+Source: Lodestar independence audit, 2026-11-26.
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,

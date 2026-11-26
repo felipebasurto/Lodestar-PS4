@@ -2,6 +2,14 @@
 
 PS4Mount PS4 is a PS4-only port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (PS5); its versions start again at 0.1.0. The history of the original is in its project and in this repository's git history.
 
+## 2.0.1
+
+**Agent protocol consistency and AutoRun safety.** The embedded panel, browser extension and download relay now use the canonical `X-Lodestar` / `X-Lodestar-Password` headers; the legacy `X-PS4Mount` names remain accepted for older clients. `GET /api/agent` and `GET /api/status` are documented in the user and agent workflows. AutoRun no longer selects a legacy `ps4mount-ps4` file as its launch target: legacy entries are removed or replaced, but only a `lodestar-ps4` artifact can be enabled, so an old installation cannot silently downgrade the boot payload.
+
+**Español**
+
+**Consistencia del protocolo de agentes y seguridad de AutoRun.** El panel integrado, la extensión y el relay de descargas usan ahora las cabeceras canónicas `X-Lodestar` / `X-Lodestar-Password`; los nombres legacy `X-PS4Mount` se siguen aceptando para clientes antiguos. `GET /api/agent` y `GET /api/status` quedan documentados en las guías de usuario y de agentes. AutoRun ya no elige un archivo legacy `ps4mount-ps4` como objetivo: esas entradas se quitan o se sustituyen, pero solo se puede activar un artefacto `lodestar-ps4`, evitando que una instalación antigua degrade silenciosamente el payload que arranca la consola.
+
 ## 2.0.0
 
 **Lodestar: the project becomes independent.** PS4Mount PS4 is renamed **Lodestar** and is published as [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4). It is not presented as a fork anymore: it started as a PS4 port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (for the PS5) and keeps, as the GPL requires, the attribution to gasb07/PS4Mount as the origin project, its copyright notices and the GPL-3.0-or-later license.
