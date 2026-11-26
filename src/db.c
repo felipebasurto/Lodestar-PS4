@@ -30,7 +30,7 @@ static const title_row_t **g_index;
 static int g_ntitles, g_cap, g_next_cap, g_index_cap, g_index_valid;
 static time_t g_read_at;
 static int g_read_ok, g_read_valid;
-/* the panel thread and the NAS/mount threads all ask: one reader at a time */
+/* the panel thread and the scan ask: one reader at a time */
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
 
 static int title_index_cmp(const void *a, const void *b) {

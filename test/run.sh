@@ -133,10 +133,6 @@ bash test/logcheck_test.sh
 echo "== drive audit (tools/driveaudit.py)"
 python3 -I test/driveaudit_test.py
 
-echo "== Google Drive backups"
-$CC $FLAGS $BRF -DDRIVE_TEST_HOOKS -o "$B/drive_test" test/drive_test.c src/drive.c src/https.c src/json.c src/lang.c src/build.c src/mem.c src/crypto.c "$BR/libbearssl.a" -lpthread
-"$B/drive_test"
-
 echo "== downloads from links"
 $CC $FLAGS $BRF $LAF -Itest -o "$B/links_test" test/links_test.c src/links.c src/rar5dec.c src/https.c src/json.c src/lang.c src/build.c src/mem.c \
     src/crypto.c src/check.c src/pkg.c src/la_alloc.c "$BR/libbearssl.a" "$LA/libarchive.a" -lpthread

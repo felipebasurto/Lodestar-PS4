@@ -43,7 +43,7 @@ Emulator/shared-folder mounts are unproven until the target application itself r
 Check: read. Source: PR #11 PS4SX2 evidence; psdevwiki mount table.
 
 ### P4N-6: firmware support is a capability matrix
-SDK offsets, `sceAppInstUtil` exports, registration behavior, fusefs/NAS support, loader process context and
+SDK offsets, `sceAppInstUtil` exports, registration behavior, loader process context and
 GoldHEN integration are independent capabilities. Absence degrades one feature; it does not stop unrelated
 features. Unsupported registration fails closed.
 Check: read. Source: ps4-payload-sdk; local firmware tests.
@@ -89,7 +89,7 @@ Check: read. Source: user request 2026-11-25.
 Every pkg transfer writes a temporary file, validates header/category/size as soon as possible, completes
 close/write validation, and renames only after success. Partial state is either resumable or collected by a
 logged retention rule; active transfers are never cleaned.
-Check: test (existing upload/drive/links integration tests). Source: existing transfer design and rewrite.
+Check: test (existing upload/links integration tests). Source: existing transfer design and rewrite.
 
 ### P4N-11: library scale is explicit
 The payload supports up to 768 titles and 64 scan folders per drive, bounded by fixed memory. When input
@@ -126,7 +126,7 @@ Check: test (security/data loss). Test: `test/unit.c` › `test_mountplan`. Sour
 Within one `scan_root` pass, a title's package-file fingerprint is computed once and reused
 when the same title is kept mounted. The fingerprint includes app/update marker state and
 every visible add-on, so recomputing it a few lines later is pure repeated `stat` work,
-especially costly on NAS libraries. A file mutation observed after classification belongs
+especially costly on large USB libraries. A file mutation observed after classification belongs
 to the next scan epoch; it does not make the current pass half-old and half-new. Persistent
 cache lookup semantics and invalidation outside the pass are unchanged.
 Check: read (the scan loop is system-facing and compiled through `test/sdkcheck.sh`; the
@@ -163,6 +163,17 @@ the panel reports that no Lodestar payload file is available and asks for the cu
 Check: read (the file selection is console-facing and compiled through `test/sdkcheck.sh`; ini replacement
 and legacy-entry cleanup are host-tested in `test/unit.c` › `test_autorun`).
 Source: Lodestar independence audit, 2026-11-26.
+
+### P4N-20: routine scans yield to gameplay
+The routine scan period is 10 seconds while no PS4 title has a sandbox application mount. While any
+title is running, the routine period is 120 seconds, because every routine pass revalidates USB package
+metadata that competes with game streaming on mechanical drives. This cadence affects only routine
+scheduling after a completed scan epoch: manual scans, hard scans and transfer-completion scans still
+become due immediately through the scan-request boundary. A scan already in progress is not interrupted,
+and the next cadence is decided from the sandbox mount table at the end of that epoch.
+Check: test (real hardware performance regression and scan timing/ordering). Test: `test/unit.c` ›
+`test_scanreq`; the sandbox-mount integration is compiled through `test/sdkcheck.sh`.
+Source: Lodestar background-load audit during CUSA23827 gameplay, 2026-11-26.
 
 ## Toshiba reference profile (not a compatibility requirement)
 

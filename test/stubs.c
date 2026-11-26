@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "drive.h"
 #include "links.h"
 #include "stubs.h"
 #include "web.h"
@@ -49,12 +48,6 @@ int app_restore(const char *tids, char *msg, size_t cap) { return record("restor
 int app_restored_forget(char *msg, size_t cap) { return record("forget", NULL, msg, cap); }
 void app_config_json(buf_t *out) { buf_printf(out, "{\"batch\":true}"); }
 int app_config_set(const char *body, char *msg, size_t cap) { return record("config", body, msg, cap); }
-int app_nas_reload(char *msg, size_t cap) { return record("nas_reload", NULL, msg, cap); }
-void app_nas_scan_json(buf_t *out) { buf_printf(out, "{\"hosts\":[{\"ip\":\"192.168.0.19\",\"name\":\"PC\",\"smb\":true,\"nfs\":false}]}"); }
-void app_nas_shares_json(const char *body, buf_t *out) {
-    record("nas_shares", body, NULL, 0);
-    buf_printf(out, "{\"ok\":true,\"auth\":false,\"message\":\"\",\"shares\":[\"games\"]}");
-}
 int app_icon(const char *tid, buf_t *out) {
     char m[8];
     record("icon", tid, m, sizeof(m));
@@ -84,25 +77,6 @@ int app_upload(int fd, const char *query, const void *pre, size_t pre_len, uint6
 void app_uploads_json(buf_t *out) { buf_printf(out, "{\"state\":\"idle\"}"); }
 void app_dests_json(buf_t *out) { buf_printf(out, "{\"dests\":[]}"); }
 void app_storage_json(buf_t *out) { buf_printf(out, "{\"free\":1,\"total\":2,\"games\":0,\"items\":[]}"); }
-
-void drive_status_json(buf_t *out) { buf_printf(out, "{\"configured\":true}"); }
-int drive_connect(char *msg, size_t n) { return record("drive_connect", NULL, msg, n); }
-int drive_disconnect(char *msg, size_t n) { return record("drive_disconnect", NULL, msg, n); }
-int drive_upload(const char *tid, char *msg, size_t n) { return record("drive_upload", tid, msg, n); }
-int drive_download(const char *tid, const char *dest, char *msg, size_t n) {
-    char arg[64];
-    snprintf(arg, sizeof(arg), "%s %s", tid, dest);
-    return record("drive_download", arg, msg, n);
-}
-int drive_trash(const char *tid, char *msg, size_t n) { return record("drive_trash", tid, msg, n); }
-int drive_refresh(char *msg, size_t n) { return record("drive_refresh", NULL, msg, n); }
-int drive_cancel(char *msg, size_t n) { return record("drive_cancel", NULL, msg, n); }
-int drive_set_client(const char *id, const char *secret, char *msg, size_t n) {
-    char arg[512];
-    snprintf(arg, sizeof(arg), "%s|%s", id, secret);
-    return record("drive_client", arg, msg, n);
-}
-int drive_forget_client(char *msg, size_t n) { return record("drive_forget_client", NULL, msg, n); }
 
 void links_status_json(buf_t *out) { buf_printf(out, "{\"configured\":true,\"jobs\":[]}"); }
 int links_add(const char *text, const char *dest, const char *password, char *msg, size_t n) {

@@ -1364,6 +1364,9 @@ static void test_emu(void) {
  * scheduling, and manual requests are consumed exactly once unless the scan never ran. */
 static void test_scanreq(void) {
     printf("scan requests: cross-thread intent ordering\n");
+    CHECK(scanreq_period(0) == SCANREQ_IDLE_SECONDS);
+    CHECK(scanreq_period(1) == SCANREQ_GAMEPLAY_SECONDS);
+    CHECK(SCANREQ_IDLE_SECONDS == 10 && SCANREQ_GAMEPLAY_SECONDS == 120); /* P4N-20 */
     scanreq_t q;
     scanreq_init(&q);
     CHECK(scanreq_due(&q, 0)); /* the first scan is due at start */

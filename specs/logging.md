@@ -45,13 +45,7 @@ Check: test (keep bar 6: the report people act on). Test: `test/logcheck_test.sh
 It changes no file and uses no network.
 Check: read. Source: AI-WORKFLOW.md rule 8 (nothing private leaves the console's owner).
 
-### LOG-7: no Google credential is ever written to the log
-Temporary sign-in codes can be shown on the console and in the active Drive sign-in screen. They are
-excluded from the log and the panel's notification history.
-Check: test for Drive's notification routing (`test/drive_test.c`), read for the console notification.
-Source: AI-WORKFLOW.md rule 8.
-
-### LOG-8: repeated kernel lines are compressed, not multiplied
+### LOG-7: repeated kernel lines are compressed, not multiplied
 The first relevant kernel line is copied exactly. Exact repeats inside a one-minute window are counted and
 summarized once; different lines are never suppressed. `STATE_DIR/klog_all` remains the full diagnostic mode.
 Check: test (keep bar 3: time/ordering; upstream regression). Test: `test/klogdup_test.c`. Source: upstream v0.8.0 issue #42.

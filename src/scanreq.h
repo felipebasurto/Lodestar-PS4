@@ -59,3 +59,10 @@ static inline void scanreq_finish(scanreq_t *q, unsigned seq, time_t now, int pe
     if (q->seq == seq)
         q->next = now + period;
 }
+
+#define SCANREQ_IDLE_SECONDS 10
+#define SCANREQ_GAMEPLAY_SECONDS 120
+
+static inline int scanreq_period(int any_title_running) {
+    return any_title_running ? SCANREQ_GAMEPLAY_SECONDS : SCANREQ_IDLE_SECONDS;
+}

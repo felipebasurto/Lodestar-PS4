@@ -74,8 +74,7 @@ body:after{content:"";position:fixed;z-index:-1;pointer-events:none;left:-140px;
 .library-heading{display:flex;align-items:center;gap:10px;margin:0 0 20px;font-size:15px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .library-heading:before{content:"";width:14px;height:14px;flex:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 6l5.6 20.4L58 32l-20.4 5.6L32 58l-5.6-20.4L6 32l20.4-5.6z' fill='%2322d3ee'/%3E%3C/svg%3E") center/contain no-repeat}
 .library-heading:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line-strong),transparent)}
-.shelf{display:grid;grid-template-columns:minmax(0,1.14fr) minmax(240px,1fr);gap:36px;align-items:start}
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:20px 14px;align-items:start}
 .card{min-width:0}
 .card .art{display:block;width:100%;padding:0;text-align:left;background:transparent;border:0;border-radius:12px;box-shadow:none}
 .card .art[aria-pressed=true] .cover{border-color:var(--focus);box-shadow:0 0 0 2px var(--focus),0 8px 24px rgba(34,211,238,.18)}
@@ -85,31 +84,23 @@ body:after{content:"";position:fixed;z-index:-1;pointer-events:none;left:-140px;
 @media (hover:hover) and (pointer:fine){.card .art:hover .cover{transform:translateY(-2px);border-color:rgba(150,185,225,.4);box-shadow:0 8px 22px rgba(0,0,0,.5)}}
 .badge{display:flex;align-items:center;gap:6px;font-size:12px;color:#b8cee8}
 .b-restart,.b-pending{color:#ffd88f}
-.card .b-drive{top:6px;right:6px;border-radius:4px}
 .info{display:block;padding:9px 2px 4px;min-height:48px}
 .badge{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .name{display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
-.inspector{position:sticky;top:92px;min-width:0;background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:14px 16px 20px;box-shadow:0 20px 44px rgba(0,0,0,.4),inset 0 1px 0 rgba(190,220,255,.06)}
-.shelf-art{aspect-ratio:16/9;border-radius:10px;background:#081226 center/cover no-repeat;border:1px solid rgba(150,185,225,.14)}
-.inspector-body{padding:18px 2px 4px}
-.inspector h3{margin:6px 0;font-size:clamp(26px,3vw,42px);line-height:1.08;letter-spacing:-.035em;overflow-wrap:anywhere}
-.inspector .actions{margin-top:13px}
-.inspector .meta{margin:5px 0 0}
 .tv main{padding:30px 4% 48px}
 .tv header{padding-left:4%;padding-right:4%}
 .tv button,.tv input,.tv select{min-height:41px}
 .tv button{font-size:16px}
 .tv button:focus,.tv input:focus,.tv select:focus,.tv textarea:focus,.tv [tabindex]:focus{outline:3px solid var(--focus);outline-offset:3px}
-.tv .grid{gap:18px}
 .tv .name{font-size:18px}.tv .badge{font-size:14px}
 .tv .meta{font-size:14px}
 .tv .library-heading{font-size:17px}
+.tv .grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:24px 18px}
 .tv .card .art:focus .cover{transform:scale(1.03)}
-@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.inspector{position:static}}
 @media(max-width:720px){.tagline{display:none}}
-@media(max-width:620px){.toolbar-more{position:static}.toolbar-menu{right:14px;top:calc(100% - 3px)}main{padding:20px 14px}.shelf{display:block}.inspector{display:none}.library-heading{font-size:14px}header{position:relative;padding:12px 14px}.top{flex-wrap:wrap}}
+@media(max-width:620px){.toolbar-more{position:static}.toolbar-menu{right:14px;top:calc(100% - 3px)}main{padding:20px 14px}.library-heading{font-size:14px}header{position:relative;padding:12px 14px}.top{flex-wrap:wrap}}
 .empty{color:var(--muted);text-align:center;padding:48px 0}
 .warn{color:#ffd88f;font-size:13px;background:rgba(240,162,39,.1);border:1px solid rgba(240,162,39,.45);border-radius:8px;padding:8px 12px;margin-top:4px}
 dialog{background:linear-gradient(180deg,var(--panel-2),var(--panel));color:var(--fg);border:1px solid var(--line-strong);border-radius:16px;box-shadow:0 28px 70px rgba(0,0,0,.55),inset 0 1px 0 rgba(190,220,255,.07);max-width:95vw;max-width:min(900px,95vw);width:900px;padding:22px;transform-origin:center;opacity:1;transform:none;transition:opacity 180ms var(--ease-out),transform 200ms var(--ease-out)}
@@ -130,13 +121,8 @@ form.settings .row{display:flex;gap:8px;justify-content:flex-end}
 form.settings fieldset{border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;background:rgba(5,11,24,.45)}
 form.settings legend{font-weight:600;padding:0 8px;color:var(--focus);font-size:12.5px;letter-spacing:.09em;text-transform:uppercase}
 form.settings input.num{width:6em}
-form.settings .nasgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
-@media(max-width:560px){form.settings .nasgrid{grid-template-columns:1fr}}
-form.settings .naslist{display:flex;flex-wrap:wrap;gap:8px}
-form.settings .naslist:empty{display:none}
-form.settings .naslist button.on{border-color:var(--focus);box-shadow:0 0 0 1px rgba(34,211,238,.3)}
-form.settings details.nashelp p{margin:8px 0;font-size:13px;color:var(--muted)}
-form.settings details.nashelp summary{cursor:pointer}
+form.settings details p{margin:8px 0;font-size:13px;color:var(--muted)}
+form.settings details summary{cursor:pointer}
 .picker{width:100%;border-collapse:collapse;font-size:14px}
 .picker th,.picker td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
 .picker td.c,.picker th.c{width:36px;text-align:center}
@@ -154,22 +140,15 @@ form.settings details.nashelp summary{cursor:pointer}
 .bad{color:#ff9e9e;font-size:13px;background:rgba(224,85,85,.12);border:1px solid rgba(224,85,85,.45);border-radius:8px;padding:8px 12px;margin-top:8px}
 progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
 .sendbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
-#d-dest,.sendbar select{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
+.sendbar select{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
 button.small{padding:4px 12px;font-size:13px}
-.gd{display:inline-flex;align-items:center;gap:6px}
-.gd svg{width:16px;height:16px}
-#drivebar,#linkbar,#actbar{display:none;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:12px 20px;background:rgba(10,20,36,.96);border-bottom:1px solid var(--line);box-shadow:inset 3px 0 0 var(--accent-hover);font-size:14px}
-#drivebar progress,#linkbar progress{width:220px;margin:0}
+#linkbar,#actbar{display:none;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:12px 20px;background:rgba(10,20,36,.96);border-bottom:1px solid var(--line);box-shadow:inset 3px 0 0 var(--accent-hover);font-size:14px}
+#linkbar progress{width:220px;margin:0}
 #act-prog{width:160px;margin:0;flex:none}
-#drivebar .db-main,#linkbar .db-main,#actbar .db-main{font-weight:600}
-#drivebar .db-sub,#linkbar .db-sub,#actbar .db-sub{color:var(--muted);font-size:13px;flex-basis:100%}
+#linkbar .db-main,#actbar .db-main{font-weight:600}
+#linkbar .db-sub,#actbar .db-sub{color:var(--muted);font-size:13px;flex-basis:100%}
 #l-text{width:100%;min-height:140px;white-space:pre;overflow-wrap:normal;overflow-x:auto}
 #l-dest{background:var(--bg-deep);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
-.code{font:600 30px/1.2 ui-monospace,Consolas,monospace;letter-spacing:3px;background:var(--bg-deep);border:1px solid var(--focus);border-radius:12px;padding:12px 18px;display:inline-block;margin:8px 0;user-select:all;box-shadow:0 0 18px rgba(34,211,238,.14)}
-.drive-acct{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin-bottom:12px}
-.quota{height:8px;background:var(--bg-deep);border-radius:999px;overflow:hidden;width:220px;border:1px solid var(--line)}
-.quota div{height:100%;background:linear-gradient(90deg,var(--accent),var(--focus))}
-.b-drive{position:absolute;right:12px;top:12px;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:600;background:#0b5d74;border:1px solid rgba(140,220,240,.35)}
 #toast{position:fixed;right:20px;bottom:20px;background:var(--panel-2);border:1px solid var(--line-strong);border-left:4px solid var(--focus);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:12px 16px;display:none;max-width:420px;opacity:1;transform:none;transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
 @starting-style{#toast{opacity:0;transform:translateY(8px)}}
 .notifpop{position:absolute;top:calc(100% + 8px);right:20px;z-index:6;width:340px;max-width:calc(100vw - 40px);max-height:60vh;overflow:auto;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.45);padding:8px;transform-origin:top right;opacity:1;transform:none;transition:opacity 150ms var(--ease-out),transform 150ms var(--ease-out)}
@@ -184,7 +163,7 @@ button.small{padding:4px 12px;font-size:13px}
 .ntime{flex:none;color:var(--muted);font-size:12px}
 .nempty{color:var(--muted);text-align:center;padding:24px 8px;font-size:13px}
 .ncount{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:999px;background:#0b5d74;color:#fff;font-size:11px;font-weight:600;line-height:18px;text-align:center}
-@media (prefers-contrast:more){:root{--muted:#c2d3ea;--line:#33538a;--line-strong:#4a70a8}.cover,.shelf-art{border-color:#4a70a8}}
+@media (prefers-contrast:more){:root{--muted:#c2d3ea;--line:#33538a;--line-strong:#4a70a8}.cover{border-color:#4a70a8}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-property:opacity,background-color,border-color,color!important}button:active:not(:disabled){transform:none!important}.tv .card .art:focus .cover{transform:none!important}#toast{transform:none!important}.notifpop{transform:none!important}dialog[open]{transform:none!important}}
 /* last: over any display rule (form.settings is flex), also where !important or
  * specificity are not applied */
@@ -218,11 +197,9 @@ button.small{padding:4px 12px;font-size:13px}
         <button id="settingsbtn">Settings</button>
         <button id="removebtn">Remove several</button>
         <button id="linkbtn" hidden>Download links</button>
-        <button id="backupbtn" hidden>Back up to Drive</button>
         <button id="logbtn">Log</button>
         <button id="notifbtn">Notifications<span id="notif-count" class="ncount" hidden></span></button>
         <button id="stop" class="danger">Stop</button>
-        <button id="drivebtn" class="small gd" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#0f9d58" d="M7.7 3h8.6l5.4 9.3-4.3 7.5z" opacity=".9"/><path fill="#fbbc04" d="M2.3 12.3 7.7 3l4.3 7.4-5.4 9.4z"/><path fill="#4285f4" d="M6.6 19.8 12 10.4h9.7l-4.3 9.4z"/></svg><span id="drivelabel">Connect Google Drive</span></button>
         <div class="storage" id="storage" hidden></div>
         <small class="meta" id="ver"></small>
       </div>
@@ -230,8 +207,6 @@ button.small{padding:4px 12px;font-size:13px}
   </div>
   <div id="notifpop" class="notifpop" hidden><div id="notif-list"></div></div>
 </header>
-<div id="drivebar"><span class="db-main" id="db-text"></span><progress id="db-prog" max="1" value="0"></progress><button class="small" id="db-cancel">Cancel</button>
-  <span class="db-sub" id="db-sub"></span></div>
 <div id="linkbar"><span class="db-main" id="lb-text"></span><progress id="lb-prog" max="1" value="0"></progress><button class="small" id="lb-cancel">Cancel</button>
   <span class="db-sub" id="lb-sub"></span></div>
 <div id="actbar"><span class="db-main" id="ab-text"></span><progress id="act-prog" max="1" value="0" hidden></progress><span class="db-sub" id="ab-sub"></span></div>
@@ -242,13 +217,10 @@ button.small{padding:4px 12px;font-size:13px}
   </div>
   <div class="warn" id="setupnote" hidden>First start: check the settings (which folders, games per group, add-ons) and press Save in Settings. While this page is open no game is added; closed for 2 minutes without saving, the default settings are used.</div>
   <h2 class="library-heading">Library</h2>
-  <div class="shelf">
-    <div class="grid" id="grid"></div>
-    <aside id="inspector" class="inspector" hidden></aside>
-  </div>
+  <div class="grid" id="grid"></div>
   <p class="empty" id="no-matches" hidden>No matching games</p>
   <div class="empty" id="empty" hidden>
-    <p id="empty-t">No PS4 games found. Put the .pkg files (game, update and add-ons) on a USB drive or a NAS share, then Scan for games or send them from this page.</p>
+    <p id="empty-t">No PS4 games found. Put the .pkg files (game, update and add-ons) on a USB drive, then Scan for games or send them from this page.</p>
     <div class="bar" id="empty-btns" style="justify-content:center" hidden>
       <button id="empty-send" hidden>Send games</button>
       <button id="empty-links" hidden>Download links</button>
@@ -294,8 +266,8 @@ button.small{padding:4px 12px;font-size:13px}
     </label>
     <label class="check"><input type="checkbox" id="s-internal"> Also use pkgs in the console's /data/PS4Mount</label>
     <span class="hint">Pkgs sent to the console's storage are added from there, with no install to wait for. They still take internal space.</span>
-    <details class="nashelp"><summary>Where the games are</summary>
-      <p>Nothing is installed: each game plays straight from its .pkg files on a USB drive, a NAS share, or the console's
+    <details><summary>Where the games are</summary>
+      <p>Nothing is installed: each game plays straight from its .pkg files on a USB drive or the console's
         /data/PS4Mount when the internal-storage option is on. Lodestar only adds it to the home screen; the pkgs are never
         copied for it.</p>
       <p>Add-ons come from the drive too: external mode mounts their packages from the source drive, console storage installs them on the
@@ -307,47 +279,6 @@ button.small{padding:4px 12px;font-size:13px}
     <span class="hint" id="st-free"></span>
     <div id="st-rows"></div>
     <span class="hint">Read only: this list measures, it deletes nothing. Lodestar cleans its own temporary files by itself and writes each one to the log.</span>
-  </fieldset>
-  <fieldset id="nasbox"><legend>NAS (NFS or SMB)</legend>
-    <span class="hint" id="nas-unsupported" hidden>Not available on this firmware: there is no FUSE patch for it.</span>
-    <span class="warn" id="nas-experimental" hidden>Experimental on this firmware: its FUSE patch is itemzflow's and was not tried with Lodestar (it was on 13.52 and 6.72). If the console freezes when the share is mounted, restart it and turn the NAS off.</span>
-    <label class="check"><input type="checkbox" id="s-nas"> Use a network share (read only)</label>
-    <span class="hint" style="margin-top:-8px">Firmware 5.05 to 13.52, and only with pkgs used where they are: the share
-      is never renamed or moved. It needs a wired console or a good Wi-Fi: games read at the speed of the network.</span>
-    <div class="row" style="justify-content:flex-start;flex-wrap:wrap">
-      <button type="button" id="nas-find">Find servers on the network</button>
-      <button type="button" id="nas-list">List the server's shares</button>
-    </div>
-    <span class="hint" id="nas-msg"></span>
-    <div class="naslist" id="nas-hosts"></div>
-    <div class="naslist" id="nas-shares"></div>
-    <details class="nashelp"><summary>How to share a folder from a computer or a NAS</summary>
-      <p><b>Windows:</b> right-click the folder, Properties, Sharing, Advanced Sharing, tick "Share this folder". Then fill in User and
-        Password here with your Windows account. If the console does not find the PC, set its network as Private.</p>
-      <p><b>macOS:</b> System Settings, General, Sharing: turn on File Sharing and add the folder. In Options, turn on SMB sharing
-        for your user, and use that user and password here.</p>
-      <p><b>Linux:</b> share the folder with Samba (read only, guest allowed) or NFS (/etc/exports), and let the console's address
-        through the firewall.</p>
-      <p><b>NAS box</b> (Synology, QNAP, a router with USB): turn on SMB file sharing in its settings and give the shared folder read
-        access.</p>
-      <p>A cable is much faster than Wi-Fi. With no switch or free router port, a cable straight from the computer to the console
-        works too: share the computer's internet connection on that cable.</p>
-    </details>
-    <div class="nasgrid">
-      <label>Protocol
-        <select id="s-nas-proto"><option value="nfs">NFS</option><option value="smb">SMB</option></select>
-      </label>
-      <label>Server <input type="text" id="s-nas-server" spellcheck="false" autocapitalize="off" placeholder="192.168.0.19"></label>
-      <label>Export (NFS) or share (SMB) <input type="text" id="s-nas-share" spellcheck="false" autocapitalize="off" placeholder="/volume1/games"></label>
-      <label>Folder inside it <input type="text" id="s-nas-sub" spellcheck="false" autocapitalize="off" placeholder="/"></label>
-      <label>Port <input type="text" class="num" id="s-nas-port" inputmode="numeric" pattern="[0-9]*" placeholder="auto"></label>
-      <label id="nas-userl">User (SMB) <input type="text" id="s-nas-user" spellcheck="false" autocapitalize="off" placeholder="guest"></label>
-      <label id="nas-passl">Password (SMB) <input type="password" id="s-nas-pass" autocomplete="new-password" placeholder="saved"></label>
-      <label>Look for new games on it
-        <select id="s-nas-rescan"><option value="1">Every minute</option><option value="10">Every 10 minutes</option><option value="60">Every hour</option><option value="0">Only with Scan for games</option></select>
-      </label>
-    </div>
-    <span class="hint" id="nas-status"></span>
   </fieldset>
   <fieldset><legend>Restore original files</legend>
     <span class="hint">Takes games off the console and puts their pkgs (game, update and add-ons) back where they were, with the
@@ -398,42 +329,6 @@ button.small{padding:4px 12px;font-size:13px}
 <h3 id="g-name"></h3><dl class="facts" id="g-facts"></dl>
 <div class="actions" id="g-actions" style="padding:0"></div>
 <form method="dialog" style="display:flex;justify-content:flex-end;margin-top:10px"><button>Close</button></form></dialog>
-<dialog id="drivedlg"><h3>Google Drive</h3>
-<div id="d-off">
-  <p class="hint" style="color:var(--muted)">Copies of your games in your own Google Drive: back up the library, send a game, and
-    download it back to any drive of the console. Lodestar can only see the files it puts in Drive (folder PS4Mount), nothing
-    else of your Drive.</p>
-  <form class="settings" id="d-setup" hidden>
-    <div class="note">First, your own Google client (once). Lodestar comes with none: yours stays on this console only.</div>
-    <ol class="meta" style="margin:0;padding-left:20px;line-height:1.6">
-      <li>Open <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a>, create a project and enable the Google Drive API.</li>
-      <li>In Google Auth Platform (OAuth consent screen): audience External, and add your Google email in Audience → Test users (the app stays in Testing).</li>
-      <li>In Clients (Credentials), create an OAuth client of type TVs and Limited Input devices, and copy its client ID and secret here.</li>
-    </ol>
-    <label>Client ID<input type="text" id="d-cid" spellcheck="false" autocomplete="off" autofocus placeholder="123456789-abc.apps.googleusercontent.com"></label>
-    <label>Client secret<input type="password" id="d-csecret" spellcheck="false" autocomplete="off"></label>
-    <div class="row"><button type="submit" class="primary" id="d-csave">Save</button></div>
-  </form>
-  <div class="meta" id="d-client" hidden><span id="d-client-id"></span> <button type="button" class="small" id="d-cchange">Change</button></div>
-  <div id="d-code" hidden>
-    <div>On your phone or computer, open <a id="d-url" target="_blank" rel="noopener"></a> and type this code:</div>
-    <div class="code" id="d-usercode"></div>
-    <div class="hint" style="color:var(--muted)" id="d-wait">Waiting for you to allow it in your Google account…</div>
-  </div>
-  <div class="bad" id="d-err" hidden></div>
-  <div class="row" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-    <button type="button" id="d-close1">Close</button><button type="button" class="primary" id="d-connect" hidden>Connect</button></div>
-</div>
-<div id="d-on" hidden>
-  <div class="drive-acct"><div><b id="d-email"></b><div class="meta" id="d-quota-t"></div></div><div class="quota"><div id="d-quota"></div></div></div>
-  <div class="bar" style="margin-bottom:10px"><button type="button" class="primary" id="d-backup">Back up the library</button>
-    <button type="button" id="d-refresh">Refresh</button><button type="button" class="danger" id="d-disconnect">Disconnect</button></div>
-  <div class="bad" id="d-listerr" hidden></div>
-  <div class="note" id="d-result" hidden></div>
-  <label class="meta">Download to <select id="d-dest"></select></label>
-  <div class="pickwrap"><table class="picker"><thead><tr><th>Game</th><th>In Drive</th><th></th></tr></thead><tbody id="d-rows"></tbody></table></div>
-  <div class="row" style="display:flex;justify-content:flex-end"><button type="button" id="d-close2">Close</button></div>
-</div></dialog>
 <dialog id="linkdlg"><h3>Download links</h3>
 <form class="settings" id="l-form">
   <div class="hint" style="color:var(--muted);font-size:13px">The console downloads them itself (you can close this page): a pkg, a ZIP
@@ -501,29 +396,18 @@ function actions(g, page) {
   if (page && g.state !== 'internal' && g.state !== 'offline' && !g.in_place) /* the pkgs of an absent drive cannot move */
     act += '<button data-a="restore" data-t="' + g.title_id + '">' + t('Restore original files') + '</button>' +
       '<div class="meta" style="flex-basis:100%">' + t('Takes the game off the console and puts its pkgs back where they were, with the names they had. Nothing is deleted.') + '</div>';
-  if (page && drive.connected && g.state !== 'internal' && g.state !== 'offline')
-    act += driveState(g.title_id) ? '<button disabled>' + esc(driveState(g.title_id)) + '</button>' :
-      '<button class="gd" data-d="upload" data-t="' + g.title_id + '">' + (driveGame(g.title_id) ? t('Send to Drive again') : t('Send to Drive')) + '</button>';
   if (busy[g.title_id]) act = '<button disabled>' + t('Please wait…') + '</button>';
   return act;
 }
 function byName(a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : a.name.toLowerCase() > b.name.toLowerCase() ? 1 : 0; }
-var shelfSelection = '', shelfGrid = '', shelfDetails = '', shelfStates = '', shelfPlatforms = '';
+var shelfSelection = '', shelfGrid = '', shelfStates = '', shelfPlatforms = '';
+/* The cover that has the focus (or was last opened): the grid's only selection mark,
+ * the details live in the dialog a cover opens. */
 function selectCover(tid) {
   shelfSelection = tid;
   var covers = $('grid').querySelectorAll('[data-g]');
   for (var i = 0; i < covers.length; i++)
     covers[i].setAttribute('aria-pressed', String(covers[i].getAttribute('data-g') === tid));
-  var g = gameBy(tid), panel = $('inspector'), view = '';
-  panel.hidden = !g;
-  if (g) {
-    view = '<div class="shelf-art" style="background-image:url(/pic/' + tid + '),url(/icon/' + tid + ')"></div>' +
-      '<div class="inspector-body"><h3>' + esc(g.name) + '</h3>' +
-      (g.update_issue ? '<p class="warn">' + esc(g.update_issue) + '</p>' : '') +
-      '<div class="actions"><button class="primary" data-details>' + t('Details') + '</button>' +
-      (g.state === 'removed' ? actions(g) : '') + '</div></div>';
-  }
-  if (view !== shelfDetails) { panel.innerHTML = view; shelfDetails = view; }
 }
 function render() {
   var visible = [];
@@ -538,9 +422,7 @@ function render() {
     shown++;
     visible.push(g.title_id);
     html += '<div class="card"><button type="button" class="art" data-g="' + g.title_id +
-      '"><span class="cover" style="background-image:url(/icon/' + g.title_id + ')">' +
-      (driveGame(g.title_id) ? '<span class="b-drive" title="' + esc(t('In Google Drive')) + '">Drive</span>' : '') +
-      '</span><span class="info"><span class="name">' + esc(g.name) + '</span>' +
+      '"><span class="cover" style="background-image:url(/icon/' + g.title_id + ')"></span><span class="info"><span class="name">' + esc(g.name) + '</span>' +
       (g.state !== 'ready' ? '<span class="badge b-' + esc(g.state) + '">' + esc(label(g.state)) + '</span>' : '') +
       '</span></button></div>';
   });
@@ -587,11 +469,10 @@ function showGame(tid) {
     [t('Version'), g.has_patch ? t('v{0} (game v{1} with its update)', g.version, g.game_version || '?') : g.version ? 'v' + g.version : t('unknown')],
     [t('Add-ons'), g.dlc ? String(g.dlc) : t('none')], [t('Needs firmware'), g.system_ver || t('unknown')], [t('Size'), gb(g.size)],
     [t('On'), (g.storage || '') + ' · ' + g.source]];
-  var dg = driveGame(tid);
-  if (drive.connected) f.push(['Google Drive', driveState(tid) || (dg ? t('in Drive ({0})', mb(dg.size)) : t('not in Drive'))]);
   $('g-facts').innerHTML = f.map(function (x) { return '<dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd>'; }).join('') +
     (g.state === 'restart' ? '<dt></dt><dd class="warn">' + t('Added. Restart the console once to play it.') + '</dd>' : '') +
-    (g.state === 'offline' ? '<dt></dt><dd class="warn">' + esc(t('On {0}, which is not connected. Connect it to play.', g.storage)) + '</dd>' : '');
+    (g.state === 'offline' ? '<dt></dt><dd class="warn">' + esc(t('On {0}, which is not connected. Connect it to play.', g.storage)) + '</dd>' : '') +
+    (g.update_issue ? '<dt></dt><dd class="warn">' + esc(g.update_issue) + '</dd>' : '');
   $('g-actions').innerHTML = actions(g, true);
   $('gamedlg').showModal();
 }
@@ -782,15 +663,7 @@ function load() {
 
 function onAction(e) {
   var art = e.target.closest('[data-g]');
-  if (art) {
-    var selected = art.getAttribute('data-g'), wasSelected = selected === shelfSelection;
-    selectCover(selected);
-    if (wasSelected || window.matchMedia && window.matchMedia('(max-width:620px)').matches) showGame(selected);
-    return;
-  }
-  if (e.target.closest('[data-details]')) { showGame(shelfSelection); return; }
-  var d = e.target.closest('button[data-d]');
-  if (d) { driveAct('upload', 'title_id=' + d.getAttribute('data-t')); return; }
+  if (art) { var tid0 = art.getAttribute('data-g'); selectCover(tid0); showGame(tid0); return; }
   var b = e.target.closest('button[data-a]');
   if (!b) return;
   if ($('gamedlg').open) $('gamedlg').close();
@@ -817,7 +690,6 @@ $('panel-tools').addEventListener('click', function (e) {
   }
 });
 $('grid').addEventListener('click', onAction);
-$('inspector').addEventListener('click', onAction);
 $('g-actions').addEventListener('click', onAction);
 $('q').addEventListener('input', render);
 $('rescan').onclick = function () { api('/api/rescan', 'POST').then(function (j) { toast(j.message); setTimeout(load, 3000); }); };
@@ -838,27 +710,6 @@ $('settingsbtn').onclick = function () {
     $('autorun-hint').textContent = c.autorun_ok ?
       t('Payload found: {0}. Enable Settings > GoldHEN > PayLoader > Enable AutoRun. Hold L1 at boot to skip AutoRun.', c.autorun_path) :
       t('Payload file not found. Copy lodestar-ps4.bin to /data/payloads/ or /data/GoldHEN/payloads/ to enable AutoRun.');
-    var nasOk = !!c.nas_supported;
-    $('s-nas').checked = !!c.nas;
-    $('s-nas').disabled = !nasOk;
-    $('s-nas-proto').value = c.nas_proto === 'smb' ? 'smb' : 'nfs';
-    $('s-nas-server').value = c.nas_server || '';
-    $('s-nas-share').value = c.nas_share || '';
-    $('s-nas-sub').value = c.nas_sub || '';
-    $('s-nas-port').value = c.nas_port ? c.nas_port : '';
-    $('s-nas-rescan').value = String(c.nas_rescan);
-    if ($('s-nas-rescan').value !== String(c.nas_rescan)) $('s-nas-rescan').value = '1';
-    $('s-nas-user').value = c.nas_user || '';
-    $('s-nas-pass').value = '';
-    $('s-nas-pass').placeholder = c.nas_has_pass ? t('saved') : '';
-    $('nas-unsupported').hidden = nasOk;
-    $('nas-experimental').hidden = !nasOk || c.nas_tested;
-    $('nas-find').disabled = $('nas-list').disabled = !nasOk;
-    $('nas-msg').textContent = '';
-    $('nas-hosts').innerHTML = $('nas-shares').innerHTML = '';
-    $('nas-status').textContent = (c.nas_status || '') +
-      (c.nas_reload ? ' ' + t('Turn on BinLoader (port 9090) in GoldHEN to use the share.') : '');
-    nasFields();
     $('s-lang').value = c.lang || 'auto';
     $('s-size').disabled = !c.batch;
     maxRestore = c.max_restore_batch || 10;
@@ -873,92 +724,6 @@ $('s-batch').onchange = function () { $('s-size').disabled = !this.checked; };
 /* Big add-ons are installed only in console-storage mode: the switch shows only there. */
 function dlcFields() { $('s-dlcbig-row').hidden = $('s-dlc-mode').value !== 'internal'; }
 $('s-dlc-mode').onchange = dlcFields;
-/* The NAS fields only make sense with the box on (and SMB's account only for SMB). */
-function nasFields() {
-  var on = $('s-nas').checked && !$('s-nas').disabled;
-  var smb = $('s-nas-proto').value === 'smb';
-  $('s-nas-proto').disabled = !on;
-  $('s-nas-server').disabled = !on;
-  $('s-nas-share').disabled = !on;
-  $('s-nas-sub').disabled = !on;
-  $('s-nas-port').disabled = !on;
-  $('s-nas-rescan').disabled = !on;
-  $('s-nas-user').disabled = !on || !smb;
-  $('s-nas-pass').disabled = !on || !smb;
-}
-$('s-nas').onchange = nasFields;
-$('s-nas-proto').onchange = nasFields;
-/* Finding a server: the console tries every address of its network, the panel lists what
- * answered, then what the chosen one shares. Picking one fills in the fields below. */
-function nasPost(path, body) {
-  return fetch(path, {method: body === undefined ? 'GET' : 'POST', cache: 'no-store', body: body,
-    headers: {'X-Lodestar': '1', 'Content-Type': 'application/x-www-form-urlencoded'}})
-    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
-}
-function nasPick(list, btn) {
-  var all = $(list).querySelectorAll('button');
-  for (var i = 0; i < all.length; i++) all[i].className = all[i] === btn ? 'on' : '';
-}
-$('nas-find').onclick = function () {
-  var b = this;
-  b.disabled = true;
-  $('nas-msg').textContent = t('Looking for servers on the console\'s network...');
-  $('nas-hosts').innerHTML = '';
-  $('nas-shares').innerHTML = '';
-  nasPost('/api/nas/scan').then(function (j) {
-    var html = '';
-    j.hosts.forEach(function (h) {
-      ['smb', 'nfs'].forEach(function (p) {
-        if (h[p]) html += '<button type="button" data-ip="' + esc(h.ip) + '" data-proto="' + p + '">' +
-          esc((h.name ? h.name + ' (' + h.ip + ')' : h.ip) + ' · ' + p.toUpperCase()) + '</button>';
-      });
-    });
-    $('nas-hosts').innerHTML = html;
-    $('nas-msg').textContent = html ? t('Choose a server:') :
-      t('No server found. Check that the computer or NAS is on, on the same network as the console, shares a folder, and that its firewall allows file sharing.');
-  }).catch(function (e) { $('nas-msg').textContent = t('Error: {0}', e.message); })
-    .then(function () { b.disabled = false; });
-};
-$('nas-hosts').onclick = function (e) {
-  var b = e.target.closest('button');
-  if (!b) return;
-  nasPick('nas-hosts', b);
-  $('s-nas').checked = true;
-  $('s-nas-proto').value = b.getAttribute('data-proto');
-  $('s-nas-server').value = b.getAttribute('data-ip');
-  $('s-nas-port').value = '';
-  nasFields();
-  nasShares();
-};
-$('nas-list').onclick = function () { nasShares(); };
-function nasShares() {
-  var server = $('s-nas-server').value.trim();
-  if (!server) { $('nas-msg').textContent = t('Find a server first, or type its address in Server.'); return; }
-  var smb = $('s-nas-proto').value === 'smb';
-  $('nas-shares').innerHTML = '';
-  $('nas-msg').textContent = t('Asking {0} what it shares...', server);
-  nasPost('/api/nas/shares', 'proto=' + $('s-nas-proto').value + '&server=' + encodeURIComponent(server) +
-    '&port=' + encodeURIComponent($('s-nas-port').value) + '&user=' + encodeURIComponent(smb ? $('s-nas-user').value.trim() : '') +
-    '&pass=' + encodeURIComponent(smb ? $('s-nas-pass').value : '')).then(function (j) {
-    if (!j.ok) {
-      $('nas-msg').textContent = j.message + (j.auth ? ' ' + t('Fill in User and Password, then press "List the server\'s shares".') : '');
-      if (j.auth) $('s-nas-user').focus();
-      return;
-    }
-    $('nas-shares').innerHTML = j.shares.map(function (n) {
-      return '<button type="button" data-share="' + esc(n) + '">' + esc(n) + '</button>';
-    }).join('');
-    $('nas-msg').textContent = j.shares.length ? t('Choose the shared folder with your games:') : t('This server shares no folders.');
-  }).catch(function (e) { $('nas-msg').textContent = t('Error: {0}', e.message); });
-}
-$('nas-shares').onclick = function (e) {
-  var b = e.target.closest('button');
-  if (!b) return;
-  nasPick('nas-shares', b);
-  $('s-nas-share').value = b.getAttribute('data-share');
-  $('s-nas-sub').value = '';
-  $('nas-msg').textContent = t('Ready: press Save to use it.');
-};
 $('s-cancel').onclick = function () { $('setdlg').close(); };
 /* Number fields: type=number opens the numeric keyboard on the console browser (inputmode alone does
  * not), inputmode on phones; digits only, capped at max. */
@@ -1086,15 +851,7 @@ $('setform').onsubmit = function (e) {
   var dlcMode = $('s-dlc-mode').value;
   var body = 'batch=' + ($('s-batch').checked ? 1 : 0) + '&batch_size=' + encodeURIComponent($('s-size').value) +
     '&dlc_mode=' + dlcMode + '&dlc=' + (dlcMode !== 'off' ? 1 : 0) + '&dlc_big=' + ($('s-dlcbig').checked ? 1 : 0) +
-    '&internal=' + ($('s-internal').checked ? 1 : 0) + '&organize=' + ($('s-organize').checked ? 1 : 0) + '&klog=' + ($('s-klog').checked ? 1 : 0) + '&autorun=' + ($('s-autorun').checked ? 1 : 0) + '&restore_batch=' + $('s-rsize').value + '&lang=' + $('s-lang').value + '&paths=' + encodeURIComponent($('s-paths').value) +
-    '&nas=' + ($('s-nas').checked ? 1 : 0) + '&nas_proto=' + $('s-nas-proto').value +
-    '&nas_port=' + encodeURIComponent($('s-nas-port').value) +
-    '&nas_rescan=' + $('s-nas-rescan').value +
-    '&nas_server=' + encodeURIComponent($('s-nas-server').value.trim()) +
-    '&nas_share=' + encodeURIComponent($('s-nas-share').value.trim()) +
-    '&nas_sub=' + encodeURIComponent($('s-nas-sub').value.trim()) +
-    '&nas_user=' + encodeURIComponent($('s-nas-user').value.trim()) +
-    '&nas_pass=' + encodeURIComponent($('s-nas-pass').value);
+    '&internal=' + ($('s-internal').checked ? 1 : 0) + '&organize=' + ($('s-organize').checked ? 1 : 0) + '&klog=' + ($('s-klog').checked ? 1 : 0) + '&autorun=' + ($('s-autorun').checked ? 1 : 0) + '&restore_batch=' + $('s-rsize').value + '&lang=' + $('s-lang').value + '&paths=' + encodeURIComponent($('s-paths').value);
   fetch('/api/config', {method: 'POST', cache: 'no-store', headers: {'X-Lodestar': '1', 'Content-Type': 'application/x-www-form-urlencoded'}, body: body})
     .then(function (r) { return r.json(); })
     .then(function (j) { toast(j.message || j.error); if (j.ok) { $('setdlg').close(); load(); } })
@@ -1250,172 +1007,24 @@ bindShelfNavigation($('grid'), tv, selectCover, function () {
   }
 });
 
-/* --- Google Drive --- */
-var drive = {}, driveBusyBefore = false;
 /* "2.7 MB/s": a decimal below 10, where a whole MB would round 2.66 up to 3 */
 function rate(bps) { var m = bps / 1048576; return (m < 10 ? m.toFixed(1) : Math.round(m)) + ' MB/s'; }
-/* What the Drive thread is doing with tid now ('' when nothing): shown on its page */
-function driveState(tid) {
-  var job = drive.job || {}, q = job.queued || [];
-  if (job.busy && job.title_id === tid && (job.op === 'upload' || job.op === 'download')) {
-    var all = job.game_total || job.total, pct = all ? Math.floor(100 * (job.game_total ? job.game_done : job.done) / all) : 0;
-    return job.op === 'upload' ? t('uploading to Drive ({0}%)', pct) : t('downloading from Drive ({0}%)', pct);
-  }
-  for (var i = 0; i < q.length; i++)
-    if (q[i].title_id === tid && (q[i].op === 'upload' || q[i].op === 'download'))
-      return q[i].op === 'upload' ? t('waiting to go to Drive') : t('waiting to come from Drive');
-  return '';
-}
-function driveGame(tid) { var l = drive.games || []; for (var i = 0; i < l.length; i++) if (l[i].title_id === tid) return l[i]; return null; }
-/* Drive actions send the panel's header: a download writes files, an upload sends them out. */
-function driveAct(action, query) {
-  return fetch('/api/drive/' + action + (query ? '?' + query : ''), {method: 'POST', cache: 'no-store', headers: {'X-Lodestar': '1'}})
-    .then(function (r) { return r.json(); })
-    .then(function (j) { toast(j.message || j.error); setTimeout(loadDrive, 500); return j; })
-    .catch(function (err) { toast(t('Error: {0}', err.message)); });
-}
-var opText = {
-  upload: function (n) { return t('Uploading {0} to Drive', n); },
-  download: function (n) { return t('Downloading {0} from Drive', n); },
-  trash: function (n) { return t('Moving {0} to the Drive trash', n); }};
-function renderDrive() {
-  var d = drive, job = d.job || {};
-  $('drivebtn').hidden = !d.configured;
-  $('drivelabel').textContent = d.connected ? 'Google Drive' : t('Connect Google Drive');
-  $('backupbtn').hidden = !d.connected;
-  var login = d.login || {}, queued = job.queued || [];
-  /* a job that waits for a new code after Google ended the access */
-  var waitLogin = !job.busy && login.active && queued.length > 0;
-  var bar = (job.busy && job.op !== 'list' && job.op !== 'login') || waitLogin;
-  $('drivebar').style.display = bar ? 'flex' : 'none';
-  if (bar) {
-    var all = job.game_total || job.total || 0, done = job.game_total ? job.game_done : job.done;
-    var pct = all ? Math.floor(100 * done / all) : 0, main, sub = [];
-    if (waitLogin) {
-      main = t('Google Drive asks to connect again: open {0} and type {1}', login.url, login.code);
-      sub.push(t('The transfer goes on once you do'));
-    } else {
-      main = (opText[job.op] ? opText[job.op](job.name || job.title_id) : job.op);
-      if (all) main += ' · ' + pct + '% · ' + t('{0} of {1}', mb(done), mb(all));
-      if (job.phase === 'retrying') main += ' · ' + t('connection lost, trying again in {0} s', job.retry_in);
-      else if (job.phase === 'checking') main += ' · ' + (job.op === 'upload' ? t('reading again what Drive already has…') : t('reading again what already arrived…'));
-      else if (job.speed > 0 && all) main += ' · ' + rate(job.speed) + ' · ' + t('{0} left', left((all - done) / job.speed));
-      else if (all) main += ' · ' + t('measuring the speed…');
-      if (job.file) sub.push(job.file + (job.files > 1 ? ' (' + job.file_index + '/' + job.files + ')' : ''));
-      if (job.elapsed) sub.push(t('running for {0}', left(job.elapsed, true)));
-    }
-    if (queued.length) sub.push(t('{0} more waiting', queued.length));
-    $('db-text').textContent = main;
-    $('db-sub').textContent = sub.join(' · ');
-    $('db-prog').max = all || 1;
-    $('db-prog').value = done || 0;
-    $('db-prog').hidden = waitLogin;
-    $('db-cancel').hidden = waitLogin;
-  }
-  if (!$('drivedlg').open) return;
-  $('d-off').hidden = !!d.connected;
-  $('d-on').hidden = !d.connected;
-  var login = d.login || {};
-  var setup = !d.client || renderDrive.editing;
-  $('d-setup').hidden = !setup;
-  $('d-client').hidden = setup || !d.client;
-  $('d-client-id').textContent = t('Your Google client: {0}', d.client_id || '');
-  $('d-connect').hidden = setup;
-  $('d-code').hidden = !login.active;
-  $('d-connect').disabled = !!login.active;
-  if (login.active) {
-    $('d-usercode').textContent = login.code;
-    $('d-url').textContent = login.url;
-    $('d-url').href = login.url;
-  }
-  $('d-err').hidden = !login.error;
-  $('d-err').textContent = login.error || '';
-  if (!d.connected) return;
-  $('d-email').textContent = d.email || '';
-  var lim = d.quota_limit, used = d.quota_used;
-  $('d-quota-t').textContent = lim > 0 ? t('{0} of {1} used', mb(used), mb(lim)) : (used >= 0 ? t('{0} used', mb(used)) : '');
-  $('d-quota').style.width = lim > 0 ? Math.min(100, 100 * used / lim) + '%' : '0';
-  $('d-listerr').hidden = !d.list_error;
-  $('d-listerr').textContent = d.list_error || '';
-  $('d-result').hidden = !job.result || job.busy;
-  $('d-result').textContent = job.result || '';
-  $('d-result').className = job.ok ? 'note' : 'bad';
-  var rows = (d.games || []).slice().sort(byName).map(function (r) {
-    var here = gameBy(r.title_id), extra = [];
-    if (r.update) extra.push(t('update'));
-    if (r.addons) extra.push(r.addons === 1 ? t('1 add-on') : t('{0} add-ons', r.addons));
-    return '<tr><td>' + esc(r.name || r.title_id) + '<div class="meta">' + r.title_id + (here ? ' · ' + esc(t('on the console')) : '') + '</div></td>' +
-      '<td>' + mb(r.size) + (extra.length ? '<div class="meta">' + esc(t('game')) + ', ' + esc(extra.join(', ')) + '</div>' : '') + '</td>' +
-      '<td style="white-space:nowrap">' + (here ? '' : '<button class="small primary" data-dl="' + r.title_id + '">' + t('Download') + '</button> ') +
-      '<button class="small danger" data-tr="' + r.title_id + '">' + t('Delete from Drive') + '</button></td></tr>';
-  }).join('');
-  $('d-rows').innerHTML = rows || '<tr><td colspan="3" class="meta">' + (d.listed ? t('Nothing in Google Drive yet: use Back up the library, or Send to Drive on a game\'s page.') : t('Reading Google Drive')) + '</td></tr>';
-}
 /* "~25 min", "~1 h 40 min" (exact: no ~, for time already spent) */
 function left(seconds, exact) {
   var m = Math.round(seconds / 60), p = exact ? '' : '~';
   if (m < 1) return exact ? t('less than a minute') : t('less than a minute');
   return m < 60 ? p + m + ' min' : p + Math.floor(m / 60) + ' h ' + (m % 60) + ' min';
 }
-function loadDrive() {
-  return api('/api/drive').then(function (j) {
-    drive = j;
-    var busyNow = !!(j.job && j.job.busy);
-    if (driveBusyBefore && !busyNow) load(); /* a download is in the library soon */
-    driveBusyBefore = busyNow;
-    var inDrive = (j.games || []).map(function (g) { return g.title_id; }).join();
-    if (inDrive !== loadDrive.seen) { loadDrive.seen = inDrive; render(); } /* the cards' Drive marks */
-    renderDrive();
-  }).catch(function () { /* an older Lodestar: no Drive */ });
-}
-/* The drives Drive downloads and links can go to, in both selects. */
+/* The drives downloads from links can go to. */
 function loadDests() {
   api('/api/dests').then(function (j) {
-    ['d-dest', 'l-dest'].forEach(function (id) {
-      var cur = $(id).value;
-      $(id).innerHTML = (j.dests || []).map(function (x) {
-        return '<option value="' + esc(x.id) + '">' + esc(x.label) + ' (' + esc(x.folder) + ', ' + esc(t('{0} free', mb(x.free))) + ')</option>';
-      }).join('') || '<option value="">' + t('No drive connected') + '</option>';
-      if (cur) $(id).value = cur;
-    });
+    var el = $('l-dest'), cur = el.value;
+    el.innerHTML = (j.dests || []).map(function (x) {
+      return '<option value="' + esc(x.id) + '">' + esc(x.label) + ' (' + esc(x.folder) + ', ' + esc(t('{0} free', mb(x.free))) + ')</option>';
+    }).join('') || '<option value="">' + t('No drive connected') + '</option>';
+    if (cur) el.value = cur;
   });
 }
-$('drivebtn').onclick = function () { $('drivedlg').showModal(); renderDrive(); loadDests(); loadDrive(); };
-$('d-close1').onclick = $('d-close2').onclick = function () { $('drivedlg').close(); };
-$('d-connect').onclick = function () { driveAct('connect'); };
-$('d-cchange').onclick = function () { renderDrive.editing = true; $('d-cid').value = drive.client_id || ''; $('d-csecret').value = ''; renderDrive(); };
-/* the user's client goes in the body, never in the address (nor in the browser's history) */
-$('d-setup').onsubmit = function (e) {
-  e.preventDefault();
-  var body = 'client_id=' + encodeURIComponent($('d-cid').value.trim()) + '&client_secret=' + encodeURIComponent($('d-csecret').value.trim());
-  fetch('/api/drive/client', {method: 'POST', cache: 'no-store', body: body,
-      headers: {'X-Lodestar': '1', 'Content-Type': 'application/x-www-form-urlencoded'}})
-    .then(function (r) { return r.json(); })
-    .then(function (j) {
-      toast(j.message || j.error);
-      if (j.ok) { renderDrive.editing = false; $('d-csecret').value = ''; loadDrive(); }
-    })
-    .catch(function (err) { toast(t('Error: {0}', err.message)); });
-};
-$('d-refresh').onclick = function () { driveAct('refresh'); loadDests(); };
-$('d-disconnect').onclick = function () {
-  if (confirm(t('Disconnect Google Drive? The copies stay in your Drive; Lodestar forgets the account.'))) driveAct('disconnect');
-};
-$('backupbtn').onclick = $('d-backup').onclick = function () {
-  if (confirm(t('Back up the whole library to Google Drive? Games already there are skipped. The console must stay on (not in rest mode) until it ends.'))) driveAct('upload');
-};
-$('db-cancel').onclick = function () { if (confirm(t('Stop the Drive transfer? An upload goes on from where it was the next time.'))) driveAct('cancel'); };
-$('d-rows').onclick = function (e) {
-  var dl = e.target.closest('button[data-dl]'), tr = e.target.closest('button[data-tr]');
-  if (dl) {
-    if (!$('d-dest').value) { toast(t('No drive connected')); return; }
-    driveAct('download', 'title_id=' + dl.getAttribute('data-dl') + '&dest=' + encodeURIComponent($('d-dest').value));
-  }
-  if (tr && confirm(t('Move {0} to the Drive trash? The pkgs on the console stay.', tr.getAttribute('data-tr')))) driveAct('trash', 'title_id=' + tr.getAttribute('data-tr'));
-};
-poll(2000, loadDrive, function () { return $('drivedlg').open || (drive.job && drive.job.busy) || (drive.login && drive.login.active); });
-poll(15000, loadDrive, function () { return !$('drivedlg').open && !(drive.job && drive.job.busy); });
-loadDrive();
 
 /* --- downloads from links --- */
 var links = {}, linksBusyBefore = false;

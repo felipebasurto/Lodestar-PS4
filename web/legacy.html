@@ -34,10 +34,7 @@ textarea{width:100%;min-height:90px;font-family:monospace}
 .summary span{display:inline-block;padding:4px 0;margin:0 12px 0 0;color:#a9bcd9;font-size:13px}
 body:before{content:"";position:fixed;z-index:-1;pointer-events:none;top:150px;right:-145px;width:520px;height:520px;border:1px solid rgba(34,211,238,.15);border-radius:28%;-webkit-transform:rotate(-32deg);transform:rotate(-32deg);outline:1px solid rgba(34,211,238,.06);outline-offset:24px}
 .library-heading{font-size:24px;letter-spacing:-.03em}
-.shelf{display:table;width:100%;table-layout:fixed}
-.shelf-games,.inspector{display:table-cell;vertical-align:top}
-.shelf-games{width:55%;padding-right:32px}
-.card{display:inline-block;vertical-align:top;width:32%;margin:0 1% 10px 0}
+.card{display:inline-block;vertical-align:top;width:18%;margin:0 1% 10px 0}
 .art{display:block;width:100%;padding:0;margin:0;text-align:left;background:transparent;border:0;border-radius:4px}
 .art[aria-pressed=true] .cover{box-shadow:0 0 0 2px #22d3ee}.art:focus .cover{box-shadow:none}
 .cover,.shelf-art{display:block;background:#081226 center/cover no-repeat}
@@ -48,15 +45,14 @@ body:before{content:"";position:fixed;z-index:-1;pointer-events:none;top:150px;r
 .badge{display:block;color:#a9bcd9;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .b-restart,.b-pending{color:#ffd88f}
 .shelf-art{padding-top:56.25%;border-radius:4px}
-.inspector-body{padding:20px 0 24px}
-.inspector h3{font-size:32px;line-height:1.14;margin:6px 0;word-wrap:break-word}
-.inspector p{margin:6px 0}
+#g-name{font-size:26px;line-height:1.2;margin:12px 0 4px;word-wrap:break-word}
+#v-game p{margin:6px 0}
 .actions{margin-top:13px}
 .tv button,.tv select{min-height:42px}
 .tv .name{font-size:16px}.tv .badge{font-size:13px}
 .tv :focus{outline:3px solid #22d3ee;outline-offset:3px}
-@media(max-width:850px){.card{width:48%}.shelf-games{width:61%}}
-@media(max-width:580px){.shelf,.shelf-games,.inspector{display:block;width:100%}.shelf-games{padding:0}.inspector{margin-top:8px}}
+@media(max-width:850px){.card{width:31%}}
+@media(max-width:580px){.card{width:48%}}
 .warn{color:#ffd88f;font-size:13px;background:rgba(240,162,39,.12);border:1px solid rgba(240,162,39,.45);border-radius:8px;padding:6px 8px;margin-top:4px}
 #restart-banner{border-bottom:1px solid #4a6286;color:#ffd88f;padding:0 0 12px;margin:0 0 24px}
 #restart-banner .rb-main{font-weight:600}
@@ -102,12 +98,17 @@ pre{white-space:pre-wrap;font-size:12px;background:#02060f;padding:12px;border-r
     <span class="db-sub" id="ab-sub"></span>
   </div>
   <h2 class="library-heading">Library</h2>
-  <div class="shelf">
-    <div class="shelf-games" id="grid"></div>
-    <aside id="inspector" class="inspector" hidden></aside>
-  </div>
+  <div id="grid"></div>
   <div class="summary" id="summary"></div>
   <p class="meta" id="empty" style="display:none">No PS4 games found. Put the .pkg files (game, update and add-ons) in the PS4Mount folder of a USB drive.</p>
+</div>
+
+<div class="view" id="v-game">
+  <div class="shelf-art" id="g-art"></div>
+  <h2 id="g-name"></h2>
+  <div id="g-info"></div>
+  <div class="actions" id="g-actions"></div>
+  <button id="g-back">Back</button>
 </div>
 
 <div class="view" id="v-settings">
@@ -193,7 +194,7 @@ function api(path, method, body, done) {
 var currentView = 'v-games';
 function show(view) {
   currentView = view;
-  var v = ['v-games', 'v-settings', 'v-pick', 'v-log'];
+  var v = ['v-games', 'v-game', 'v-settings', 'v-pick', 'v-log'];
   for (var i = 0; i < v.length; i++) $(v[i]).className = 'view' + (v[i] === view ? ' on' : '');
   window.scrollTo(0, 0);
   if (tv) {
@@ -204,36 +205,40 @@ function show(view) {
 function addons(g) { return g.dlc ? (g.dlc === 1 ? t('1 add-on') : t('{0} add-ons', g.dlc)) : t('no add-ons'); }
 function movedBack(g) { return t('Game{0}{1}', g.has_patch ? t(', update') : '', g.dlc ? t(' and {0}', addons(g)) : ''); }
 
-var shelfSelection = '', shelfGrid = '', shelfDetails = '';
+var shelfSelection = '', shelfGrid = '', gameView = '', gameViewHtml = '';
+/* The cover that has the focus (or was last opened): the grid's only selection mark,
+ * the details live on the game page a cover opens. */
 function selectCover(tid) {
-  var sameGame = tid === shelfSelection;
   shelfSelection = tid;
-  var covers = $('grid').querySelectorAll('[data-g]'), g, i, act = '', view = '';
-  for (i = 0; i < covers.length; i++) covers[i].setAttribute('aria-pressed', String(covers[i].getAttribute('data-g') === tid));
+  var covers = $('grid').querySelectorAll('[data-g]');
+  for (var i = 0; i < covers.length; i++) covers[i].setAttribute('aria-pressed', String(covers[i].getAttribute('data-g') === tid));
+}
+/* The game's page: art, what it is and where its pkgs are, and its actions. */
+function fillGame(tid) {
+  var g = null, i, act = '';
   for (i = 0; i < games.length; i++) if (games[i].title_id === tid) { g = games[i]; break; }
-  var pane = $('inspector');
-  pane.hidden = !g;
-  if (g) {
-    if (g.state === 'removed') act = '<button class="primary" data-a="mount" data-t="' + tid + '">' + t('Add to library') + '</button>';
-    else if (g.state === 'ready' || g.state === 'restart') act = '<button class="danger" data-a="unmount" data-t="' + tid + '">' + t('Remove from library') + '</button>';
-    else if (g.state === 'running') act = '<button disabled>' + t('Close the game to remove it') + '</button>';
-    if (busy[tid]) act = '<button disabled>' + t('Please wait...') + '</button>';
-    view = '<div class="shelf-art" style="background-image:url(/pic/' + tid + '),url(/icon/' + tid + ')"></div>' +
-      '<div class="inspector-body"><h3>' + esc(g.name) + '</h3>' +
-      '<button class="primary" data-details aria-controls="legacy-game-details" aria-expanded="false">' + t('Details') + '</button>' +
-      '<div id="legacy-game-details" hidden><p class="meta">' + esc(tid) + (g.version ? ' · v' + esc(g.version) : '') + (g.has_patch ? t(' (with update)') : '') +
-      (g.dlc ? ' · ' + esc(addons(g)) : '') + (g.size ? ' · ' + gb(g.size) : '') + '</p>' +
-      '<p class="meta">' + esc(g.source || '') + (g.mount ? ' · ' + esc(t('mounted {0}', g.mount)) : '') + '</p>' +
-      (g.state === 'offline' ? '<p class="warn">' + esc(t('On {0}, which is not connected. Connect it to play.', g.storage)) + '</p>' : '') +
-      (g.update_issue ? '<p class="warn">' + esc(g.update_issue) + '</p>' : '') +
-      (act ? '<div class="actions">' + act + '</div>' : '') + '</div></div>';
+  if (!g) return false;
+  $('g-art').style.backgroundImage = 'url(/pic/' + tid + '),url(/icon/' + tid + ')';
+  $('g-name').textContent = g.name;
+  if (g.state === 'removed') act = '<button class="primary" data-a="mount" data-t="' + tid + '">' + t('Add to library') + '</button>';
+  else if (g.state === 'ready' || g.state === 'restart') act = '<button class="danger" data-a="unmount" data-t="' + tid + '">' + t('Remove from library') + '</button>';
+  else if (g.state === 'running') act = '<button disabled>' + t('Close the game to remove it') + '</button>';
+  if (busy[tid]) act = '<button disabled>' + t('Please wait...') + '</button>';
+  var info = (g.state !== 'ready' ? '<p class="badge b-' + esc(g.state) + '">' + esc(label(g.state)) + '</p>' : '') +
+    '<p class="meta">' + esc(tid) + (g.version ? ' · v' + esc(g.version) : '') + (g.has_patch ? t(' (with update)') : '') +
+    (g.dlc ? ' · ' + esc(addons(g)) : '') + (g.size ? ' · ' + gb(g.size) : '') + '</p>' +
+    '<p class="meta">' + esc(g.source || '') + (g.mount ? ' · ' + esc(t('mounted {0}', g.mount)) : '') + '</p>' +
+    (g.state === 'offline' ? '<p class="warn">' + esc(t('On {0}, which is not connected. Connect it to play.', g.storage)) + '</p>' : '') +
+    (g.update_issue ? '<p class="warn">' + esc(g.update_issue) + '</p>' : '');
+  if (info + '\n' + act !== gameViewHtml) {
+    $('g-info').innerHTML = info;
+    $('g-actions').innerHTML = act;
+    gameViewHtml = info + '\n' + act;
   }
-  if (view !== shelfDetails) {
-    var details = $('legacy-game-details'), open = sameGame && details && !details.hidden;
-    pane.innerHTML = view;
-    shelfDetails = view;
-    if (open && view) showGameDetails(true);
-  }
+  return true;
+}
+function showGame(tid) {
+  if (fillGame(tid)) { gameView = tid; show('v-game'); }
 }
 function render() {
   var html = '', counts = {}, i, g, selected = '', focus = document.activeElement.getAttribute('data-g');
@@ -249,6 +254,9 @@ function render() {
   }
   if (html !== shelfGrid) { $('grid').innerHTML = html; shelfGrid = html; }
   selectCover(selected || (games.length ? games[0].title_id : ''));
+  if (gameView) {
+    if (!fillGame(gameView)) { gameView = ''; gameViewHtml = ''; if (currentView === 'v-game') show('v-games'); }
+  }
   if (focus && document.activeElement === document.body && shelfSelection) {
     var replacement = $('grid').querySelector('[data-g="' + shelfSelection + '"]');
     if (replacement) replacement.focus();
@@ -329,19 +337,14 @@ $('grid').onclick = function (e) {
   var cover = e.target || e.srcElement;
   while (cover && cover !== this && !cover.getAttribute('data-g')) cover = cover.parentNode;
   if (cover && cover !== this) {
-    var tid = cover.getAttribute('data-g'), selected = shelfSelection === tid;
+    var tid = cover.getAttribute('data-g');
     selectCover(tid);
-    if (selected) showGameDetails(true);
-    if (window.matchMedia && window.matchMedia('(max-width:580px)').matches) $('inspector').scrollIntoView();
+    showGame(tid);
   }
 };
-function showGameDetails(open) {
-  $('legacy-game-details').hidden = !open;
-  $('inspector').querySelector('[data-details]').setAttribute('aria-expanded', String(open));
-}
-$('inspector').onclick = function (e) {
+$('g-back').onclick = function () { show('v-games'); };
+$('g-actions').onclick = function (e) {
   var b = e.target || e.srcElement;
-  if (b && b.hasAttribute('data-details')) { showGameDetails($('legacy-game-details').hidden); return; }
   if (!b || !b.getAttribute || !b.getAttribute('data-a')) return;
   var tid = b.getAttribute('data-t'), a = b.getAttribute('data-a');
   if (a === 'unmount' && !confirm(t('Remove {0} from the library? Its pkgs stay where they are (deleting it on the console deletes them).', tid))) return;
@@ -521,10 +524,7 @@ bindShelfNavigation($('grid'), tv, selectCover, function () {
   if (currentView === 'v-pick') show('v-settings');
   else if (currentView !== 'v-games') show('v-games');
   else if (!$('legacy-tools').hidden) { showTools(false); $('legacy-manage').focus(); }
-  else if ($('legacy-game-details') && !$('legacy-game-details').hidden) {
-    showGameDetails(false);
-    $('inspector').querySelector('[data-details]').focus();
-  } else api('/api/app/close', 'POST');
+  else api('/api/app/close', 'POST');
 });
 </script>
 </body>

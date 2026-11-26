@@ -41,7 +41,7 @@ A cache miss may open the bounded pkg set of one title while holding the cache m
 intentional ownership, not an oversight: the scan owner and panel workers need the same evidence,
 so the first consumer that reaches a miss performs the read every consumer would otherwise have
 to perform, and later consumers hit the same entry. Moving that read outside the mutex without a
-singleflight design would duplicate expensive USB/NAS reads between the scan owner and the two
+singleflight design would duplicate expensive USB reads between the scan owner and the two
 bounded panel workers. A future singleflight design must preserve invalidation ordering (a hard
 scan must not be overwritten by an older in-flight fill), LRU/eviction ownership, add-on pool
 lifetime, and load/save boundaries before it can replace this serialization. The mutex boundary

@@ -51,12 +51,9 @@ for f in src/*.c; do
     # -Werror: a warning on the console build is a mistake here too. The flags are
     # build.sh's, with the target and headers of a FreeBSD 9.3 console.
     if ! "$CLANG" -fsyntax-only -std=gnu11 -Wall -Wextra -Werror \
-        -DFUSE_USE_VERSION=26 -D_FILE_OFFSET_BITS=64 -DNETFS_ID='"check"' \
         -target x86_64-unknown-freebsd9.3 -nostdinc \
         -isystem "$SDK/include/freebsd-9.3" -isystem "$SDK/include" \
-        -Isrc -I"$B/gen" -Ithird_party/sqlite -Ithird_party/bearssl/inc -Ithird_party/libarchive \
-        -Ithird_party/libfuse/include -Ithird_party/libnfs/include -Ithird_party/libnfs/mount \
-        -Ithird_party/libsmb2/include "$f"; then
+        -Isrc -I"$B/gen" -Ithird_party/sqlite -Ithird_party/bearssl/inc -Ithird_party/libarchive "$f"; then
         echo "sdkcheck: FAILED $f"
         fail=1
     fi

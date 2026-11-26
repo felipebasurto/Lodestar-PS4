@@ -17,8 +17,6 @@ var LANGS = {
     'Library': 'Biblioteca',
     'Manage': 'Gestionar',
     'Search and filter': 'Buscar y filtrar',
-    'More': 'Más',
-    'Details': 'Detalles',
     'No matching games': 'Ningún juego coincide',
     'Back': 'Volver',
     'Save': 'Guardar',
@@ -26,8 +24,8 @@ var LANGS = {
     'Close': 'Cerrar',
     'No PS4 games found. Put the .pkg files (game, update and add-ons) in the PS4Mount folder of a USB drive.':
       'No hay juegos de PS4. Pon los .pkg (juego, actualización y DLC) en la carpeta PS4Mount de un USB.',
-    'No PS4 games found. Put the .pkg files (game, update and add-ons) on a USB drive or a NAS share, then Scan for games or send them from this page.':
-      'No hay juegos de PS4. Pon los .pkg (juego, actualización y DLC) en un USB o un recurso de red, y pulsa Buscar juegos o envíalos desde esta página.',
+    'No PS4 games found. Put the .pkg files (game, update and add-ons) on a USB drive, then Scan for games or send them from this page.':
+      'No hay juegos de PS4. Pon los .pkg (juego, actualización y DLC) en un USB y pulsa Buscar juegos o envíalos desde esta página.',
     'Adding games': 'Añadir juegos',
     'Folders to search for pkgs (one per line, relative to each drive)':
       'Carpetas donde buscar pkgs (una por línea, dentro de cada unidad)',
@@ -56,25 +54,9 @@ var LANGS = {
     'External mode mounts add-on packages from the source drive. Console storage installs add-ons up to 256 MB each, or any size with the big-add-ons option. Off disables add-ons managed by Lodestar.':
       'El modo externo monta los paquetes de DLC desde la unidad de origen. El modo interno instala DLC de hasta 256 MB cada uno, o de cualquier tamaño con la opción de DLC grandes. Apagado desactiva los DLC gestionados por Lodestar.',
     'System and GoldHEN': 'Sistema y GoldHEN',
-    'Off (the default): the .pkg files are used where they are, anywhere on the drive, grouped by their title ID. They are not renamed or moved; the games Lodestar organized before go back to where they were.':
-      'Apagado (por defecto): los .pkg se usan donde están, en cualquier parte de la unidad, agrupados por su título. No se renombran ni se mueven; los juegos que Lodestar organizó antes vuelven a su sitio.',
     "Read the console's log (game start and stop)": 'Leer el log de la consola (inicio y fin de juego)',
     "On by default. Turn it off to leave the log to another payload: AnyPad needs it to tell its virtual pad apart, and only one payload can read it. Games in play are then noticed a few seconds later, from their mount.":
       'Activado por defecto. Desactivalo para dejarle el log a otro payload: AnyPad lo necesita para distinguir su pad virtual, y solo un payload puede leerlo. Los juegos en marcha se notan unos segundos más tarde, por su montaje.',
-    'NAS (NFS or SMB)': 'NAS (NFS o SMB)',
-    'Not available on this firmware: there is no FUSE patch for it.': 'No disponible en este firmware: no hay parche de FUSE para él.',
-    "Experimental on this firmware: its FUSE patch is itemzflow's and was not tried with Lodestar (it was on 13.52 and 6.72). If the console freezes when the share is mounted, restart it and turn the NAS off.":
-      'Experimental en este firmware: su parche de FUSE es el de itemzflow y no se ha probado con Lodestar (sí en 13.52 y 6.72). Si la consola se cuelga al montar el recurso, reiníciala y apaga el NAS.',
-    'Use a network share (read only)': 'Usar un recurso de red (solo lectura)',
-    'Firmware 5.05 to 13.52, and only with pkgs used where they are: the share is never renamed or moved. It needs a wired console or a good Wi-Fi: games read at the speed of the network.':
-      'Firmware 5.05 a 13.52, y solo con los pkgs usados donde están: el recurso nunca se renombra ni se mueve. Hace falta la consola por cable o un buen Wi-Fi: los juegos leen a la velocidad de la red.',
-    'Protocol': 'Protocolo',
-    'Server': 'Servidor',
-    'Export (NFS) or share (SMB)': 'Exportación (NFS) o recurso (SMB)',
-    'Folder inside it': 'Carpeta dentro',
-    'Port': 'Puerto',
-    'User (SMB)': 'Usuario (SMB)',
-    'Password (SMB)': 'Contraseña (SMB)',
     'Remove several': 'Quitar varios',
     'Remove games from the library': 'Quitar juegos de la biblioteca',
     "The chosen games leave the console's home screen. Their pkgs stay where they are: nothing is deleted, and Add to library brings each one back.":
@@ -87,57 +69,6 @@ var LANGS = {
     'Removing {0} of {1}…': 'Quitando {0} de {1}…',
     'First start: check the settings (which folders, games per group, add-ons) and press Save in Settings. While this page is open no game is added; closed for 2 minutes without saving, the default settings are used.':
       'Primera vez: revisa los ajustes (qué carpetas, juegos por grupo, DLC) y pulsa Guardar en Ajustes. Mientras esta página esté abierta no se añade ningún juego; si se cierra 2 minutos sin guardar, se usan los ajustes por defecto.',
-    'Look for new games on it': 'Buscar juegos nuevos en él',
-    'Every minute': 'Cada minuto',
-    'Every 10 minutes': 'Cada 10 minutos',
-    'Every hour': 'Cada hora',
-    'Only with Scan for games': 'Solo con Buscar juegos',
-    'saved': 'guardada',
-    "Find servers on the network":
-      "Buscar servidores en la red",
-    "List the server's shares":
-      "Ver los recursos del servidor",
-    "How to share a folder from a computer or a NAS":
-      "Cómo compartir una carpeta desde un ordenador o un NAS",
-    "Windows:":
-      "Windows:",
-    "right-click the folder, Properties, Sharing, Advanced Sharing, tick \"Share this folder\". Then fill in User and Password here with your Windows account. If the console does not find the PC, set its network as Private.":
-      "clic derecho en la carpeta, Propiedades, Compartir, Uso compartido avanzado, marca «Compartir esta carpeta». Luego pon aquí en Usuario y Contraseña tu cuenta de Windows. Si la consola no encuentra el PC, pon su red como Privada.",
-    "macOS:":
-      "macOS:",
-    "System Settings, General, Sharing: turn on File Sharing and add the folder. In Options, turn on SMB sharing for your user, and use that user and password here.":
-      "Ajustes del Sistema, General, Compartir: activa Compartir archivos y añade la carpeta. En Opciones, activa compartir por SMB para tu usuario, y usa aquí ese usuario y contraseña.",
-    "Linux:":
-      "Linux:",
-    "share the folder with Samba (read only, guest allowed) or NFS (/etc/exports), and let the console's address through the firewall.":
-      "comparte la carpeta con Samba (solo lectura, invitado permitido) o NFS (/etc/exports), y deja pasar la dirección de la consola en el cortafuegos.",
-    "NAS box":
-      "Caja NAS",
-    "(Synology, QNAP, a router with USB): turn on SMB file sharing in its settings and give the shared folder read access.":
-      "(Synology, QNAP, un router con USB): activa compartir archivos por SMB en sus ajustes y da permiso de lectura a la carpeta compartida.",
-    "A cable is much faster than Wi-Fi. With no switch or free router port, a cable straight from the computer to the console works too: share the computer's internet connection on that cable.":
-      "Un cable es mucho más rápido que el Wi-Fi. Si no tienes switch ni un puerto libre en el router, también sirve un cable directo del ordenador a la consola: comparte la conexión a internet del ordenador por ese cable.",
-    "Looking for servers on the console's network...":
-      "Buscando servidores en la red de la consola...",
-    "Choose a server:":
-      "Elige un servidor:",
-    "No server found. Check that the computer or NAS is on, on the same network as the console, shares a folder, and that its firewall allows file sharing.":
-      "No se encontró ningún servidor. Comprueba que el ordenador o el NAS esté encendido, en la misma red que la consola, que comparta una carpeta y que su cortafuegos permita compartir archivos.",
-    "Find a server first, or type its address in Server.":
-      "Busca primero un servidor, o escribe su dirección en Servidor.",
-    "Asking {0} what it shares...":
-      "Preguntando a {0} qué comparte...",
-    "Fill in User and Password, then press \"List the server's shares\".":
-      "Rellena Usuario y Contraseña y pulsa «Ver los recursos del servidor».",
-    "Choose the shared folder with your games:":
-      "Elige la carpeta compartida con tus juegos:",
-    "This server shares no folders.":
-      "Este servidor no comparte ninguna carpeta.",
-    "Ready: press Save to use it.":
-      "Listo: pulsa Guardar para usarlo.",
-    'Turn on BinLoader (port 9090) in GoldHEN to use the share.':
-      'Enciende BinLoader (puerto 9090) en GoldHEN para usar el recurso.',
-    'guest': 'invitado',
     'Language': 'Idioma',
     'Restore original files': 'Restaurar archivos originales',
     'Takes games off the console and puts their pkgs (game, update and add-ons) back where they were, with the names they had. Nothing is deleted. The open game is closed first.':
@@ -169,74 +100,14 @@ var LANGS = {
     'Send to': 'Enviar a',
     'Cancel transfer': 'Cancelar el envío',
     'Send': 'Enviar',
-    /* Google Drive */
-    'uploading to Drive ({0}%)': 'subiendo a Drive ({0} %)',
-    'downloading from Drive ({0}%)': 'descargando de Drive ({0} %)',
-    'waiting to go to Drive': 'en cola para subir a Drive',
-    'waiting to come from Drive': 'en cola para bajar de Drive',
-    'reading again what already arrived…': 'releyendo lo que ya llegó…',
-    'reading again what Drive already has…': 'releyendo lo que Drive ya tiene…',
-    'Google Drive asks to connect again: open {0} and type {1}': 'Google Drive pide conectar de nuevo: abre {0} y escribe {1}',
-    'The transfer goes on once you do': 'La transferencia sigue en cuanto lo hagas',
     '{0} of {1}': '{0} de {1}',
     'connection lost, trying again in {0} s': 'se cortó la conexión, reintento en {0} s',
-    'checking the file…': 'comprobando el archivo…',
     '{0} left': 'quedan {0}',
     'measuring the speed…': 'midiendo la velocidad…',
     'running for {0}': 'lleva {0}',
     'less than a minute': 'menos de un minuto',
-    'First, your own Google client (once). Lodestar comes with none: yours stays on this console only.':
-      'Primero, tu propio cliente de Google (una sola vez). Lodestar no trae ninguno: el tuyo se queda solo en esta consola.',
-    'Open': 'Abre',
-    ', create a project and enable the Google Drive API.': ', crea un proyecto y activa la Google Drive API.',
-    'In Google Auth Platform (OAuth consent screen): audience External, and add your Google email in Audience → Test users (the app stays in Testing).':
-      'En Google Auth Platform (pantalla de consentimiento OAuth): público Externo, y añade tu correo de Google en Público → Usuarios de prueba (la app se queda en Prueba).',
-    'In Clients (Credentials), create an OAuth client of type TVs and Limited Input devices, and copy its client ID and secret here.':
-      'En Clientes (Credenciales), crea un cliente OAuth de tipo TV y dispositivos de entrada limitada, y copia aquí su ID de cliente y su secreto.',
-    'Client ID': 'ID de cliente',
-    'Client secret': 'Secreto del cliente',
-    'Change': 'Cambiar',
-    'Your Google client: {0}': 'Tu cliente de Google: {0}',
-    'Google Drive': 'Google Drive',
-    'console.cloud.google.com': 'console.cloud.google.com',
-    'Back up to Drive': 'Copia en Drive',
-    'Connect Google Drive': 'Conectar Google Drive',
-    'Copies of your games in your own Google Drive: back up the library, send a game, and download it back to any drive of the console. Lodestar can only see the files it puts in Drive (folder PS4Mount), nothing else of your Drive.':
-      'Copias de tus juegos en tu propio Google Drive: haz una copia de la biblioteca, envía un juego y descárgalo después a cualquier unidad de la consola. Lodestar solo puede ver los archivos que él pone en Drive (carpeta PS4Mount), nada más de tu Drive.',
-    'On your phone or computer, open': 'En el móvil o el ordenador, abre',
-    'and type this code:': 'y escribe este código:',
-    'Waiting for you to allow it in your Google account…': 'Esperando a que lo permitas en tu cuenta de Google…',
-    'Connect': 'Conectar',
-    'Back up the library': 'Copiar la biblioteca',
-    'Refresh': 'Actualizar',
-    'Disconnect': 'Desconectar',
-    'Download to': 'Descargar en',
-    'In Drive': 'En Drive',
-    'Send to Drive': 'Enviar a Drive',
-    'Send to Drive again': 'Enviar a Drive de nuevo',
-    'In Google Drive': 'En Google Drive',
-    'in Drive ({0})': 'en Drive ({0})',
-    'not in Drive': 'no está en Drive',
-    'Uploading {0} to Drive': 'Subiendo {0} a Drive',
-    'Downloading {0} from Drive': 'Descargando {0} de Drive',
-    'Moving {0} to the Drive trash': 'Moviendo {0} a la papelera de Drive',
-    'Reading Google Drive': 'Leyendo Google Drive',
-    'Asking Google for a code': 'Pidiendo un código a Google',
     '{0} more waiting': '{0} más en espera',
-    '{0} of {1} used': '{0} de {1} usados',
-    '{0} used': '{0} usados',
-    'on the console': 'en la consola',
     'Download': 'Descargar',
-    'Delete from Drive': 'Borrar de Drive',
-    "Nothing in Google Drive yet: use Back up the library, or Send to Drive on a game's page.":
-      'Aún no hay nada en Google Drive: usa Copiar la biblioteca, o Enviar a Drive en la ficha de un juego.',
-    'Disconnect Google Drive? The copies stay in your Drive; Lodestar forgets the account.':
-      '¿Desconectar Google Drive? Las copias se quedan en tu Drive; Lodestar olvida la cuenta.',
-    'Back up the whole library to Google Drive? Games already there are skipped. The console must stay on (not in rest mode) until it ends.':
-      '¿Copiar toda la biblioteca a Google Drive? Los juegos que ya están se saltan. La consola debe seguir encendida (no en reposo) hasta que termine.',
-    'Stop the Drive transfer? An upload goes on from where it was the next time.':
-      '¿Detener la transferencia de Drive? Una subida sigue desde donde iba la próxima vez.',
-    'Move {0} to the Drive trash? The pkgs on the console stay.': '¿Mover {0} a la papelera de Drive? Los pkgs de la consola se quedan.',
     /* states */
     'Ready': 'Listo',
     'Restart to play': 'Reinicia para jugar',
@@ -259,11 +130,9 @@ var LANGS = {
     'Pkgs in the internal library': 'Pkgs de la biblioteca interna',
     "{0} free of {1} on the console's drive": '{0} libres de {1} en el disco de la consola',
     'Could not read the storage': 'No se pudo leer el almacenamiento',
-    'Nothing is installed: the game plays straight from its .pkg files.':
-      'No está instalado: el juego se juega directamente desde sus .pkg.',
     'Where the games are': 'Dónde están los juegos',
-    'Nothing is installed: each game plays straight from its .pkg files on a USB drive, a NAS share, or the console\'s /data/PS4Mount when the internal-storage option is on. Lodestar only adds it to the home screen; the pkgs are never copied for it.':
-      'No se instala nada: cada juego se juega directamente desde sus .pkg en un USB, un recurso de red o el /data/PS4Mount de la consola cuando la opción de memoria interna está activada. Lodestar solo lo añade a la pantalla de inicio; los pkgs nunca se copian para ello.',
+    'Nothing is installed: each game plays straight from its .pkg files on a USB drive or the console\'s /data/PS4Mount when the internal-storage option is on. Lodestar only adds it to the home screen; the pkgs are never copied for it.':
+      'No se instala nada: cada juego se juega directamente desde sus .pkg en un USB o el /data/PS4Mount de la consola cuando la opción de memoria interna está activada. Lodestar solo lo añade a la pantalla de inicio; los pkgs nunca se copian para ello.',
     'Add-ons come from the drive too: external mode mounts their packages from the source drive, console storage installs them on the console (up to 256 MB each, or any size with the big-add-ons option), off disables add-ons managed by Lodestar. Removing a game from the library, or restoring its files, never deletes a .pkg.':
       'Los DLC también vienen de la unidad: el modo externo monta los paquetes desde la unidad de origen, la memoria de la consola los instala en la consola (hasta 256 MB cada uno, o cualquier tamaño con la opción de DLC grandes) y apagado desactiva los DLC gestionados por Lodestar. Quitar un juego de la biblioteca, o devolver sus archivos, nunca borra un .pkg.',
     'Start with the console (GoldHEN AutoRun)': 'Arrancar con la consola (AutoRun de GoldHEN)',
@@ -375,7 +244,6 @@ var LANGS = {
     '{0} games need a one-time console restart to start: {1}':
       '{0} juegos necesitan un reinicio único de la consola para empezar: {1}',
     ' +{0} more': ' +{0} más',
-    'The PS4 loads new game tasks at boot.': 'La PS4 carga las tareas de juego nuevas al arrancar.',
     'Show games': 'Mostrar juegos',
     'Show all': 'Mostrar todos',
     'Warning': 'Aviso',

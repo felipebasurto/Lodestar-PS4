@@ -1,7 +1,6 @@
-/* The roots any other web server chains to, for downloads from links: the Mozilla CA list
- * (NSS 3.131, 121 roots, as Arch Linux's ca-certificates-mozilla ships it), made with
- * BearSSL's tool: brssl ta /etc/ssl/certs/ca-certificates.crt, with PUB_ before its names.
- * Google Drive keeps to google_ca.h. */
+/* The roots web servers chain to, for downloads from links and the panel app: the Mozilla
+ * CA list (NSS 3.131, 121 roots, as Arch Linux's ca-certificates-mozilla ships it), made with
+ * BearSSL's tool: brssl ta /etc/ssl/certs/ca-certificates.crt, with PUB_ before its names. */
 
 static const unsigned char PUB_TA0_DN[] = {
 	0x30, 0x42, 0x31, 0x12, 0x30, 0x10, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0C,

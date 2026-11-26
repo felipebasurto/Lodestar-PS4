@@ -21,7 +21,7 @@ A chat in a web browser cannot reach your console: the assistant must be an agen
 5. **The payload runs inside a borrowed system process.** Never call `exit()` (it ends that process). Its libc heap is about 3 MB in all: anything large (pkg entries, artwork, request bodies, lists of add-ons) comes from `mem_alloc` (mmap), never `malloc`.
 6. **Only your own console, your own network and pkgs of games you own.** Never scan or connect to other people's devices. Never ask for, share or link pkgs.
 7. **The panel has no password.** Anyone on the network can use it while Lodestar runs. Stop it when you are done.
-8. **Google credentials never leave the console.** Lodestar ships no OAuth client: each user's client ID and secret live only in `/data/ps4mount/drive_client.txt`, their access in `drive.txt`. Never commit them, paste them in an issue or a log, or send them anywhere; the panel never returns the secret.
+8. **Cloud storage is out of scope.** Lodestar has no Google Drive or NAS integration and no cloud credentials. Never add token, OAuth, SMB or NFS client code back without changing the product spec first.
 
 ## 3. Connecting
 
@@ -44,16 +44,12 @@ Lodestar shows a notification with the panel's address (port 8770). The API, wit
 | `POST /api/upload?dest=<id>&name=<file>` | Send a whole pkg (the body) to `dest` (`usb0`… or `internal`) |
 | `POST /api/stop` | Stop Lodestar |
 | `GET /api/dests` | The drives a pkg can go to, with their free space |
-| `GET /api/drive` | Google Drive: `client`, `connected`, `email`, quota, `login` (code shown), `job` (op, phase, `game_done`/`game_total`, `speed`, `queued`), `games` in Drive |
-| `POST /api/drive/client` | Body `client_id=…&client_secret=…`: the user's OAuth client (`forget_client` removes it) |
-| `POST /api/drive/connect`, `disconnect`, `refresh`, `cancel` | Sign in with a code, revoke, read Drive again, stop the transfer and empty the queue |
-| `POST /api/drive/upload[?title_id=]`, `download?title_id=&dest=`, `trash?title_id=` | Upload a game (none: the library), download one to `dest`, move one to Drive's trash |
 | `GET /api/links` | Downloads from links: `jobs` (name, files, state queued/running/failed, error), `job` (phase probing/receiving/extracting/retrying, `done`/`total`, `speed`, `file`, `pkg`), `result` |
 | `POST /api/links/add?dest=` | Body: the links, one a line (`link | name` names one); the volumes of a RAR become one download. An archive's password in the header `X-Lodestar-Password` (percent-encoded) |
 | Port 8771 (or the next free one: `relay_port` in `GET /api/links`): `POST /claim`, `/put?job=&vol=&block=`, `/drop?...` | A helper (the browser extension, `extension/relay.js`) takes a block to fetch, delivers it whole, or gives it back; header `X-Lodestar: 1` (`X-PS4Mount: 1` remains a legacy alias) |
 | `POST /api/links/cancel?id=`, `retry?id=` | Stop or drop a download (its files deleted), try a failed one again (with `X-Lodestar-Password`: with that password; `jobs[].locked` says it failed for want of one) |
 
-Files on the console (FTP): `/data/ps4mount/log.txt`, `config.txt`, `<TID>.src` (where each game comes from), `<TID>.removed`, `<TID>.restart`; an empty `/data/ps4mount/stop` stops Lodestar; `drive_client.txt`, `drive.txt` (Google: never share them), `drive_queue.txt` and `drive_upload.txt` (unfinished transfers, resumed at load), `<scan folder>/.ps4mount-drive/<id>.dl` (a download in progress); `links_queue.txt`, `passwords.txt` (archive passwords that worked, tried on the next ones) and `<scan folder>/.ps4mount-links/<n>/` (downloads from links: `vNNN.dl` parts, `out/` the pkgs extracted so far); an empty `/data/ps4mount/klog_all` copies the whole kernel log into Lodestar's log, which is how the system's side of every problem in this project was found. The kernel log server (port 3232) takes one reader: Lodestar is that reader while it runs.
+Files on the console (FTP): `/data/ps4mount/log.txt`, `config.txt`, `<TID>.src` (where each game comes from), `<TID>.removed`, `<TID>.restart`; an empty `/data/ps4mount/stop` stops Lodestar; `links_queue.txt`, `passwords.txt` (archive passwords that worked, tried on the next ones) and `<scan folder>/.ps4mount-links/<n>/` (downloads from links: `vNNN.dl` parts, `out/` the pkgs extracted so far); an empty `/data/ps4mount/klog_all` copies the whole kernel log into Lodestar's log, which is how the system's side of every problem in this project was found. The kernel log server (port 3232) takes one reader: Lodestar is that reader while it runs.
 
 GoldHEN's FTP reports the size of files over 4 GB modulo 4 GiB; the console itself sees the real size.
 
@@ -70,16 +66,13 @@ GoldHEN's FTP reports the size of files over 4 GB modulo 4 GiB; the console itse
 | `[delete] delete screen open …`, `<TID> deleted on the console`, `… deleted (N bytes)` | A delete on the console and the files it removed |
 | `[upload] receiving …`, `received`, `the transfer stopped after …` | A pkg sent from the panel |
 | klog `invalid content_url`, `0x80990019`, `APP_VER disagree` | BGFT refused the task's path, has no task (restart needed), or the update's version differs from the registered one |
-| `[drive] CUSAxxxxx: uploading …`, `downloading …`, `… está en Google Drive (… en …)` | A Drive transfer and its end; `block N: … opening it again` is a download connection that stalled |
-| `[drive] the access ended (invalid_grant)` | Google ended the sign-in (apps in testing): a new code goes to the screen and the job waits for it |
-| `[drive] N transfer(s) left by the last run` | The saved queue was resumed at load |
 | `[links] <name>: downloading <link> …`, `extracting …`, `<name> se descargó: …` | A download from links, the pkgs coming out of it, its end; `the server limits connections`, `the link gave a new address` are servers answering 429/503 and links that expired |
 
 `python3 tools/logcheck.py log.txt` applies this table to a copy of the log and explains what it finds in plain words (Spanish by default, `--lang en`); a file Lodestar deleted on its own shows as a `[clean]` line.
 
 ## 5. How Lodestar is organised
 
-`src/main.c` (scan, registration, mounts, BGFT game tasks, klog events, deletes, panel actions), `src/install.c` (BGFT installs, for add-ons), `src/check.c` (what a pkg is and whether this console can use it), `src/upload.c` (pkgs sent from the panel), `src/pkg.c` (pkg reader), `src/build.c` (install files, BGFT task records), `src/db.c` (read-only lookups in `app.db`), `src/drive.c` (Google Drive: sign-in, uploads, downloads, the queue), `src/links.c` (downloads from links: grouping RAR volumes, ranged downloads, extraction with libarchive while they arrive), `src/https.c` (HTTPS with BearSSL: Google's roots in `src/google_ca.h` for Drive, Mozilla's in `src/public_roots.h` for links; kept connections), `src/la_alloc.c` (libarchive's and zlib's memory: large blocks on mapped pages), `src/json.c` (reading Google's answers), `src/lang.c` (languages), `src/mem.c` (mapped buffers), `src/web.c` with `web/index.html`, `web/legacy.html` (the PS4's browser: ES5, no `<dialog>`) and `web/lang.js` (the panel's translations).
+`src/main.c` (scan, registration, mounts, BGFT game tasks, klog events, deletes, panel actions), `src/install.c` (BGFT installs, for add-ons), `src/check.c` (what a pkg is and whether this console can use it), `src/upload.c` (pkgs sent from the panel), `src/pkg.c` (pkg reader), `src/build.c` (install files, BGFT task records), `src/db.c` (read-only lookups in `app.db`), `src/links.c` (downloads from links: grouping RAR volumes, ranged downloads, extraction with libarchive while they arrive), `src/https.c` (HTTPS with BearSSL and Mozilla's roots in `src/public_roots.h`; kept connections), `src/la_alloc.c` (libarchive's and zlib's memory: large blocks on mapped pages), `src/json.c` (small JSON answers), `src/lang.c` (languages), `src/mem.c` (mapped buffers), `src/web.c` with `web/index.html`, `web/legacy.html` (the PS4's browser: ES5, no `<dialog>`) and `web/lang.js` (the panel's translations).
 
 Facts that cost time to learn:
 
@@ -91,7 +84,7 @@ Facts that cost time to learn:
 - Add-ons are listed from `addcont.db`, which only an install fills: Lodestar installs add-ons up to 256 MB with BGFT (`sceBgftServiceIntDownloadRegisterTaskByStorageEx`). The content type byte cannot tell a small add-on from one with data.
 - GoldHEN runs payloads in ScePartyDaemon, or SceSpZeroConf when that one is gone. A service another payload left open there (BGFT) answers `0x80990001`: close it and open it again.
 - The payload resolves names with libSceNet's resolver (there is no `resolv.conf`); BearSSL's AES-NI and PCLMUL code runs at >1 GB/s on the console, so TLS is never the bottleneck.
-- One TCP connection of the console gets about 1.2-1.6 MB/s from the internet whatever the line; several add up to a ceiling of about 15 MB/s (12 connections). Downloads therefore use 12 kept connections in 8 MB blocks; uploads (Drive takes a file as one stream) use 32 MB chunks on one kept connection, which fills a home upload line.
+- One TCP connection of the console gets about 1.2-1.6 MB/s from the internet whatever the line; several add up to a ceiling of about 15 MB/s (12 connections). Downloads therefore use 12 kept connections in 8 MB blocks.
 - exFAT has no sparse files: writing a block far into a file makes the console fill the gap with zeros first. Download blocks are kept in memory and written in order.
 - `sceSystemServicePowerTick()` every few seconds keeps the console out of rest mode while a transfer runs.
 - libarchive (only its RAR, RAR5 and ZIP readers, `third_party/libarchive` with our `config.h`) is built with `-fno-short-wchar`: the PlayStation target makes `L""` 16-bit, the SDK's FreeBSD libc has a 32-bit `wchar_t`. Its memory goes through `src/la_alloc.h`: a RAR5 window is tens of MB and the libc heap of the process a payload runs in is a few MB. It reads volumes through callbacks, without seeking, so an archive is extracted from the part files while they grow. It cannot decrypt RARs.

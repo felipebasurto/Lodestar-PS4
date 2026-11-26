@@ -30,7 +30,7 @@ Check: test through `test/http_test.c` and `test/upload_test.c`; read for owners
 Source: existing upload behavior, made explicit.
 
 ### WEBAPI-4: scan requests are ordered intents, not shared flags
-Upload, Drive and links threads may ask for a scan, and the panel may ask for a fresh manual
+Upload and links threads may ask for a scan, and the panel may ask for a fresh manual
 scan. Those requests cross the owner boundary through one synchronized scan-request machine.
 A request that arrives while a scan is running must not be overwritten by that scan's normal
 end-of-scan scheduling; it causes another scan. A manual request is consumed by one scan epoch
@@ -44,14 +44,14 @@ Check: test for the ordering machine (`test/unit.c` › `test_scanreq`); read fo
 `main.c`. Source: existing cross-thread `app_rescan()` callers, made explicit.
 
 ### WEBAPI-5: transfer threads see configuration through narrow synchronized accessors
-The main loop may save settings while Drive, links or upload completion threads are active.
+The main loop may save settings while links or upload completion threads are active.
 Those threads must not read `config_t` or the active language through shared words directly:
 configuration fields reachable from their host callbacks pass through small mutex-protected
 accessors, whole-config publication happens under the same mutex, and the active language is
 published/loaded atomically. Main-loop-only users may keep reading the owner state directly.
 Check: test for the language boundary (`test/unit.c` › `test_lang`); read for the narrow
 configuration accessors and for no direct `g_cfg` use in transfer-thread callback paths.
-Source: existing Drive/links host callback audit.
+Source: existing transfer-thread host callback audit.
 
 ### WEBAPI-6: bounded network workers never execute owner routes
 At most two persistent network workers parse accepted connections. The accept queue is
@@ -70,25 +70,15 @@ an immutable catalog epoch snapshot published only when a catalog epoch is compl
 worker never takes the catalog lock that a scan may hold while pumping events.
 
 Only routes whose state is static or internally synchronized may complete in a worker in
-this first matrix: the two HTML pages, `/api/agent`, `/api/status`, `/api/log`, Drive status/actions, links
+this first matrix: the two HTML pages, `/api/agent`, `/api/status`, `/api/log`, links
 status/actions, `/api/upload`, `/api/uploads`, `/api/rescan`, `/api/dests`, `/api/storage`,
-GET `/api/games`, icons/pics, GET `/api/config`, POST `/api/check`, `/api/nas/scan`, `/api/nas/shares` and `/api/nas/reload`. `/api/agent` is static. `/api/status` copies only
-atomics, mutex-protected snapshots and web queue counters; it never enters the catalog or
-title-cache locks and never enumerates the library. `/api/rescan` is worker-safe only because its cache/marker invalidation
-is part of the synchronized scan intent consumed later by the owner epoch. `/api/nas/reload`
-keeps its synchronous BinLoader answer but is serialized with the automatic reload attempt;
-the owner uses a non-blocking trylock and skips its retry while a worker holds that reload,
-so protecting the shared payload-posting path cannot block the main loop.
-The two NAS probe routes may connect to other machines but do not use the mounted backend:
-scan uses fresh sockets, share listing creates its own backend context, their output arrays
-are local, and the saved-login fallback is copied through the configuration mutex. SMB context
-creation/destruction is serialized across the whole process because libsmb2 keeps a global
-active-context list; ordinary operations then use per-context state. The probes may therefore
-wait in workers rather than in the owner. GET `/api/config` reads a whole-config snapshot
-copied under the configuration mutex and a NAS status snapshot copied under a small snapshot
-mutex; that status copy never starts an adopted-mount control conversation. `/api/stop` is
-also worker-safe: it publishes only a one-way atomic stop intent, so the request is not
-stranded behind a long scan. `/api/storage` copies only the managed-game identities it
+GET `/api/games`, icons/pics, GET `/api/config` and POST `/api/check`. `/api/agent` is static.
+`/api/status` copies only atomics, mutex-protected snapshots and web queue counters; it never
+enters the catalog or title-cache locks and never enumerates the library. `/api/rescan` is
+worker-safe only because its cache/marker invalidation is part of the synchronized scan intent
+consumed later by the owner epoch. GET `/api/config` reads a whole-config snapshot copied under
+the configuration mutex. `/api/stop` is also worker-safe: it publishes only a one-way atomic
+stop intent, so the request is not stranded behind a long scan. `/api/storage` copies only the managed-game identities it
 needs under a short mutex, then measures filesystem trees outside that mutex through a
 bounded iterative traversal. Mounts, restore,
 configuration changes and `/api/app/close` remain owner routes because they read or mutate library/mount/configuration
@@ -133,17 +123,10 @@ its socket directly. Shutdown interrupts active connection reads/writes with `sh
 joins the bounded workers, and closes/drains queued fds without executing partially owned
 requests or transmitting partial queued responses.
 
-NAS probe output buffers are per-call; concurrent probes may run, bounded by the worker
-count. Drive and links status may be produced concurrently. Their mutating actions are serialized
-at the web boundary, preserving the single-panel-caller ordering those subsystems had before
-workers; their internal queue state remains protected by their own mutexes, and queue-count
-snapshots used for admission are read under those mutexes. A Drive library enumeration can
-ask whether the NAS is active while a scan or FUSE client is changing that state. The answer
-is an atomically published scalar mirror updated where the owned state changes; readers never
-wait for network I/O or the FUSE lock. The adopted-mount refresh clock is claimed with
-compare-and-swap so overlapping owner refreshes cannot pile control queries onto the mount.
-Workers never start that control conversation as a side effect of reading `nas_active`; only
-the main-loop owner calls the explicit refresh entry point.
+Links status may be produced concurrently. Its mutating actions are serialized at the web
+boundary, preserving the single-panel-caller ordering the subsystem had before workers; its
+internal queue state remains protected by its own mutexes, and queue-count snapshots used for
+admission are read under those mutexes.
 Check: test through `test/http_test.c` (owner execution ordering, worker-only route
 completion without owner pumping, owner response writer handoff and pre-read check bodies)
 and `test/sdkcheck.sh`; read for shutdown ownership.
@@ -151,11 +134,11 @@ Source: panel/API architecture audit and WEBAPI-2 implementation design.
 
 ### WEBAPI-7: the agent manifest and status endpoints are read-only additive contracts
 The product version exposed through the existing API (`version` in responses such as
-`GET /api/games`) is `Lodestar 2.0.2`. The internal state and log paths remain under
+`GET /api/games`) is `Lodestar 3.0.0`. The internal state and log paths remain under
 `/data/ps4mount` for compatibility; this rule does not migrate console state.
 
 `GET /api/agent` returns a machine-readable JSON manifest with `product` (`Lodestar`),
-`version` (`Lodestar 2.0.2`), `api_version` (`1`), the panel scheme/port, the write-header
+`version` (`Lodestar 3.0.0`), `api_version` (`1`), the panel scheme/port, the write-header
 model (including that the server checks for the custom header's presence), an endpoint list
 in which every entry has `method`, `path`, `mutating` and `summary`, and safety rails.
 In that list `mutating` means intentionally starting or changing application/system state or
@@ -178,7 +161,7 @@ Source: Lodestar agent control-plane design.
 
 ### WEBAPI-8: `X-Lodestar` is the canonical write header and `X-PS4Mount` its legacy alias
 Requests that write files or otherwise change state keep the existing threat model: POSTs
-(and the network-probing NAS scan) must carry the panel header and come from an allowed
+must carry the panel header and come from an allowed
 local/non-public IPv4 peer. `X-Lodestar: 1` is accepted everywhere the panel header is
 required. `X-PS4Mount: 1` remains accepted as a legacy alias for existing panels, extensions
 and scripts. Archive passwords may be sent as `X-Lodestar-Password`; the legacy
@@ -195,3 +178,13 @@ Source: Lodestar compatibility contract.
 Clients that only read `log` must keep working. Byte ranges are not part of this contract.
 Check: test through `test/http_test.c`; read for bounded file reading.
 Source: Lodestar agent observability contract.
+
+### WEBAPI-10: cloud backup and network-share endpoints are removed, not hidden
+Lodestar is scoped to USB/external hard drives and the console's own optional package folder.
+Google Drive backup and NAS/SMB/NFS sharing are out of scope. Routes beginning `/api/drive` or
+`/api/nas` must not exist in the manifest or dispatcher; they receive the same fixed 404 as any
+unknown route. Their saved credentials, OAuth client, network-share password, transfer queue,
+FUSE mount and third-party SMB/NFS client code are not part of the product.
+Check: test through `test/http_test.c` (removed routes are 404 and absent from `/api/agent`);
+read for build and source inventory.
+Source: user direction (2026-11-26): laser-focus the repository on USB hard drives.

@@ -18,7 +18,6 @@ const CFG = { batch: true, batch_size: 5, dlc: true, dlc_mode: 'external', dlc_b
   restore_batch: 5, max_restore_batch: 10, paths: ['/'], organize: false };
 let REPLY_LANG; // the language the console reports (undefined: none, English)
 let GAMES_VERSION = 'Lodestar test';
-let DRIVE = { configured: false }; // GET /api/drive (an object: the tests change it)
 let LINKS = { configured: false }; // GET /api/links
 let DRIVES = [{ label: 'usb0', free: 120.5 * 1073741824, total: 500 * 1073741824 }]; // GET /api/games drives
 let NOTICES = []; // GET /api/games notices
@@ -26,7 +25,6 @@ let ACTIVITY = { busy: false, phase: '', drive: '', title: '', title_id: '', don
 const STORAGE = { free: 2.5e10, total: 8e10, games: 2, items: [{ id: 'install', bytes: 3e8 }, { id: 'log', bytes: 2097152 }, { id: 'appmeta', bytes: 5e5 }] }; // GET /api/storage
 const DESTS = { dests: [{ id: 'usb0', label: 'usb0', folder: '/mnt/usb0/PS4Mount', free: 5e11, fits: true }] };
 function reply(url) {
-  if (url === '/api/drive') return DRIVE;
   if (url === '/api/links') return LINKS;
   if (url === '/api/dests') return DESTS;
   if (url === '/api/storage') return STORAGE;
@@ -140,19 +138,18 @@ function tKeys(file) {
   ok(d.getElementById('mc-ver').textContent === 'Lodestar test' && d.getElementById('mc-dot').className === 'dot ok', 'the header status pill follows the version the console reports');
   ok(d.querySelectorAll('.card').length === 6, 'six game cards');
   ok(d.querySelector('.card .name').textContent === 'Civ VII', 'cards sorted by name');
-  { const c = d.querySelector('[data-g="CUSA34284"]'), pane = d.getElementById('inspector');
+  { const c = d.querySelector('[data-g="CUSA34284"]');
     const writes = reqs.filter(r => r.method === 'POST').length;
     c.click();
     ok(c.querySelector('.badge').textContent === 'Restart to play' && c.getAttribute('aria-pressed') === 'true' &&
-      pane.textContent.includes('Moving Out 2') && !pane.textContent.includes('Restart the console once'),
-      'a cover selects the game without repeating the restart warning');
-    ok(!pane.querySelector('[data-a]') && !pane.textContent.includes('/mnt/'), 'package maintenance and paths stay in details');
-    c.focus(); await w.load();
+      d.getElementById('gamedlg').hasAttribute('open') && d.getElementById('g-name').textContent === 'Moving Out 2',
+      'a cover opens the game page');
+    ok(d.getElementById('g-facts').textContent.includes('Restart the console once'), 'the restart note is on the game page');
+    c.focus(); d.getElementById('gamedlg').close(); await w.load();
     ok(d.activeElement === c && c.getAttribute('aria-pressed') === 'true' && reqs.filter(r => r.method === 'POST').length === writes,
       'refresh keeps the selected cover and focus without writing to the console'); }
-  { const c = d.querySelector('[data-g="CUSA00069"]'), pane = d.getElementById('inspector');
+  { const c = d.querySelector('[data-g="CUSA00069"]');
     c.click();
-    pane.querySelector('[data-details]').click();
     ok(c.querySelector('.badge').textContent === 'Drive not connected' && d.getElementById('g-facts').textContent.includes('On usb1, which is not connected'), 'a game of a drive that is away says so');
     ok(!d.getElementById('g-actions').querySelector('[data-a]'), 'an offline game has no maintenance actions');
     d.getElementById('gamedlg').close(); }
@@ -160,8 +157,8 @@ function tKeys(file) {
   ok(d.querySelectorAll('.card').length === 1, 'the state chips filter the cards');
   d.querySelector('.summary span[data-f=""]').click();
   ok(d.querySelectorAll('.card').length === 6, 'all games again');
-  d.querySelector('#inspector [data-details]').click(); await tick();
-  ok(d.getElementById('gamedlg').hasAttribute('open') && d.getElementById('g-name').textContent === 'Moving Out 2', 'the inspector opens the full game details');
+  d.querySelector('[data-g="CUSA34284"]').click(); await tick();
+  ok(d.getElementById('gamedlg').hasAttribute('open') && d.getElementById('g-name').textContent === 'Moving Out 2', 'a cover opens the full game details');
   ok(d.getElementById('g-hero').style.backgroundImage.includes('/pic/CUSA34284'), 'with its background art');
   { const t = d.getElementById('g-facts').textContent;
     ok(t.includes('EP4064-CUSA34284_00-MOVINGOUT2000000') && t.includes('game v01.00 with its update') && t.includes('9.00'), 'details: content id, versions, firmware'); }
@@ -331,111 +328,6 @@ function tKeys(file) {
     GAMES_VERSION = old;
     ok(reloaded || q.nav.length > 0, 'another version: the page reloads');
   }
-
-  // --- Google Drive
-  ok(d.getElementById('drivebtn').hidden, 'no Drive button when this build has no Drive');
-  DRIVE = { configured: true, client: false, client_id: '', connected: false, login: { active: false, error: '' }, job: { busy: false, queued: [] }, games: [] };
-  p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
-  await tick(); await tick();
-  ok(!d.getElementById('drivebtn').hidden && d.getElementById('drivelabel').textContent === 'Connect Google Drive', 'the corner button: Connect Google Drive');
-  ok(d.getElementById('backupbtn').hidden, 'no backup button before connecting');
-  d.getElementById('drivebtn').click(); await tick();
-  ok(d.getElementById('drivedlg').open && !d.getElementById('d-setup').hidden && d.getElementById('d-connect').hidden, 'no client yet: the steps to make one, no Connect');
-  ok(d.querySelector('#d-setup a').href === 'https://console.cloud.google.com/', 'with the link to Google Cloud');
-  ok(d.getElementById('d-csecret').type === 'password', 'the secret is typed hidden');
-  reqs.length = 0;
-  d.getElementById('d-cid').value = ' 123-abc.apps.googleusercontent.com ';
-  d.getElementById('d-csecret').value = 'GOCSPX-a+b';
-  d.getElementById('d-setup').dispatchEvent(new w.Event('submit', { cancelable: true })); await tick();
-  const cl = reqs.find((r) => r.url === '/api/drive/client');
-  ok(cl && cl.method === 'POST' && cl.headers['X-Lodestar'] === '1' &&
-    cl.body === 'client_id=123-abc.apps.googleusercontent.com&client_secret=GOCSPX-a%2Bb', 'the client goes in the body, with the panel header');
-  ok(!reqs.some((r) => /GOCSPX/.test(r.url)), 'never in an address');
-  DRIVE = Object.assign({}, DRIVE, { client: true, client_id: '123-abc.apps.googleusercontent.com' });
-  w.loadDrive(); await tick();
-  ok(d.getElementById('d-setup').hidden && !d.getElementById('d-connect').hidden && d.getElementById('d-client-id').textContent.includes('123-abc'), 'with a client: Connect, and which client');
-  ok(w.getComputedStyle(d.getElementById('d-setup')).display === 'none', 'and the form is really out of sight (a display rule does not win over hidden)');
-  d.getElementById('d-cchange').click();
-  ok(!d.getElementById('d-setup').hidden && d.getElementById('d-cid').value === '123-abc.apps.googleusercontent.com' && d.getElementById('d-csecret').value === '', 'Change: the form again, the secret not shown');
-  w.renderDrive.editing = false; w.renderDrive();
-  reqs.length = 0;
-  d.getElementById('d-connect').click(); await tick();
-  const conn = reqs.find((r) => r.url === '/api/drive/connect');
-  ok(conn && conn.method === 'POST' && conn.headers['X-Lodestar'] === '1', 'Connect posts with the panel header');
-  DRIVE = Object.assign({}, DRIVE, { login: { active: true, code: 'ABCD-EFGH', url: 'https://www.google.com/device', expires: 1700, error: '' } });
-  w.loadDrive(); await tick();
-  ok(d.getElementById('d-usercode').textContent === 'ABCD-EFGH' && d.getElementById('d-url').href === 'https://www.google.com/device', 'the code and the address to type it in');
-  ok(!d.getElementById('d-code').hidden && d.getElementById('d-connect').disabled, 'waiting for the account: Connect is off');
-  DRIVE = { configured: true, client: true, client_id: '123-abc.apps.googleusercontent.com', connected: true, email: 'someone@example.com', quota_limit: 16e9, quota_used: 4e9, login: { active: false, error: '' },
-    job: { busy: false, queued: [], result: '', ok: true }, listed: true, list_error: '',
-    games: [{ title_id: 'CUSA00791', name: 'N++', size: 4e9, files: 2, update: true, addons: 0 },
-      { title_id: 'CUSA99999', name: 'Only In Drive', size: 3e9, files: 1, update: false, addons: 2 }] };
-  w.loadDrive(); await tick(); await tick();
-  ok(!d.getElementById('d-on').hidden && d.getElementById('d-email').textContent === 'someone@example.com', 'connected: the account');
-  ok(d.getElementById('d-quota').style.width === '25%', 'and its space used');
-  ok(!d.getElementById('backupbtn').hidden && d.getElementById('drivelabel').textContent === 'Google Drive', 'connected: a backup button appears');
-  let drows = d.querySelectorAll('#d-rows tr');
-  ok(drows.length === 2 && drows[0].textContent.includes('N++') && drows[0].textContent.includes('on the console'), 'the games in Drive, the ones on the console marked');
-  ok(!drows[0].querySelector('[data-dl]') && drows[1].querySelector('[data-dl]'), 'Download only for a game not on the console');
-  ok(drows[1].textContent.includes('2 add-ons'), 'with its add-ons');
-  ok(d.querySelector('.art[data-g="CUSA00791"] .b-drive') && !d.querySelector('.art[data-g="CUSA41712"] .b-drive'), 'cards of games in Drive say so');
-  w.loadDests(); await tick();
-  reqs.length = 0;
-  drows[1].querySelector('[data-dl]').click(); await tick();
-  const dl = reqs.find((r) => r.url.indexOf('/api/drive/download') === 0);
-  ok(dl && dl.url === '/api/drive/download?title_id=CUSA99999&dest=usb0' && dl.headers['X-Lodestar'] === '1', 'Download goes to the chosen drive');
-  reqs.length = 0; w.__confirm = false;
-  drows[1].querySelector('[data-tr]').click(); await tick();
-  ok(!reqs.some((r) => r.url.indexOf('/api/drive/trash') === 0), 'Delete from Drive asks first (and a no stops it)');
-  w.__confirm = true;
-  drows[1].querySelector('[data-tr]').click(); await tick();
-  ok(reqs.some((r) => r.url === '/api/drive/trash?title_id=CUSA99999'), 'then moves it to the Drive trash');
-  reqs.length = 0;
-  d.getElementById('backupbtn').click(); await tick();
-  ok(reqs.some((r) => r.url === '/api/drive/upload' && r.method === 'POST'), 'Back up to Drive: the whole library');
-  d.getElementById('drivedlg').close();
-  w.showGame('CUSA41712');
-  const up = d.querySelector('#g-actions [data-d="upload"]');
-  ok(up && up.textContent === 'Send to Drive', 'the game page offers Send to Drive');
-  ok(d.getElementById('g-facts').textContent.includes('not in Drive'), 'and says it is not in Drive');
-  reqs.length = 0;
-  up.click(); await tick();
-  ok(reqs.some((r) => r.url === '/api/drive/upload?title_id=CUSA41712' && r.headers['X-Lodestar'] === '1'), 'Send to Drive uploads that game');
-  w.showGame('CUSA00791');
-  ok(d.querySelector('#g-actions [data-d="upload"]').textContent === 'Send to Drive again' && d.getElementById('g-facts').textContent.includes('in Drive (3.7 GB)'), 'a game already there: Send to Drive again');
-  w.showGame('CUSA00190');
-  ok(!d.querySelector('#g-actions [data-d="upload"]'), 'not for a game installed the normal way');
-  d.getElementById('gamedlg').close();
-  DRIVE = Object.assign({}, DRIVE, { job: { busy: true, op: 'upload', title_id: 'CUSA41712', name: 'Soulstice', file: 'game.pkg', file_index: 1, files: 2, done: 5e8, total: 1e9,
-    game_done: 5e8, game_total: 2e9, speed: 2.8e6, elapsed: 600, phase: 'sending', retry_in: 0, queued: [{ op: 'upload', title_id: 'CUSA00791' }] } });
-  w.loadDrive(); await tick();
-  let dbt = d.getElementById('db-text').textContent, dbs = d.getElementById('db-sub').textContent;
-  ok(d.getElementById('drivebar').style.display === 'flex' && dbt.includes('Uploading Soulstice to Drive') && dbt.includes('25%') && dbt.includes('of 1.9 GB'), 'the whole game in progress, under the header: ' + dbt);
-  ok(dbt.includes('2.7 MB/s') && dbt.includes('~9 min left'), 'with its speed (a decimal below 10 MB/s) and the time left: ' + dbt);
-  w.showGame('CUSA41712');
-  ok(d.getElementById('g-facts').textContent.includes('uploading to Drive (25%)') && d.querySelector('#g-actions button[disabled]') &&
-    !d.querySelector('#g-actions [data-d="upload"]'), 'the page of the game being uploaded says so, no second Send to Drive');
-  w.showGame('CUSA00791');
-  ok(d.getElementById('g-facts').textContent.includes('waiting to go to Drive'), 'a queued game says it waits');
-  d.getElementById('gamedlg').close();
-  ok(dbs.includes('game.pkg (1/2)') && dbs.includes('running for 10 min') && dbs.includes('1 more waiting'), 'the file, the time so far and the queue: ' + dbs);
-  DRIVE.job = Object.assign({}, DRIVE.job, { phase: 'retrying', retry_in: 8 });
-  w.loadDrive(); await tick();
-  ok(d.getElementById('db-text').textContent.includes('trying again in 8 s'), 'a lost connection says when it tries again');
-  DRIVE.job = Object.assign({}, DRIVE.job, { phase: 'sending', speed: 0 });
-  w.loadDrive(); await tick();
-  ok(d.getElementById('db-text').textContent.includes('measuring the speed'), 'no time left before the speed is known');
-  DRIVE = Object.assign({}, DRIVE, { login: { active: true, code: 'WXYZ-1234', url: 'https://www.google.com/device', error: '' },
-    job: { busy: false, queued: [{ op: 'upload', title_id: 'CUSA41712' }] } });
-  w.loadDrive(); await tick();
-  dbt = d.getElementById('db-text').textContent;
-  ok(d.getElementById('drivebar').style.display === 'flex' && dbt.includes('WXYZ-1234') && dbt.includes('google.com/device'), 'an ended access: the new code where everyone looks');
-  DRIVE = Object.assign({}, DRIVE, { login: { active: false }, job: { busy: true, op: 'upload', title_id: 'CUSA41712', name: 'Soulstice', game_done: 1, game_total: 2, total: 2, done: 1, speed: 1, phase: 'sending', queued: [] } });
-  w.loadDrive(); await tick();
-  reqs.length = 0;
-  d.getElementById('db-cancel').click(); await tick();
-  ok(reqs.some((r) => r.url === '/api/drive/cancel'), 'and it can be cancelled');
-  DRIVE = { configured: false };
 
   // --- downloads from links
   ok(d.getElementById('linkbtn').hidden, 'no Download links button when this build has none');
@@ -640,14 +532,11 @@ function tKeys(file) {
   ok(d.getElementById('rescan').textContent === 'Buscar juegos' && d.getElementById('settingsbtn').textContent === 'Ajustes', 'fixed texts in Spanish');
   ok(d.querySelector('.tagline').textContent === 'control de la biblioteca externa de juegos para PlayStation 4', 'the tagline in Spanish');
   ok(d.getElementById('q').placeholder === 'Buscar juego o CUSA', 'placeholders in Spanish');
-  { const pane = d.getElementById('inspector');
-    const c = d.querySelector('[data-g="CUSA34284"]'); c.click();
-    ok(c.querySelector('.badge').textContent === 'Reinicia para jugar' && pane.querySelector('[data-details]').textContent === 'Detalles', 'states and details in Spanish');
-    pane.querySelector('[data-details]').click();
+  { const c = d.querySelector('[data-g="CUSA34284"]'); c.click();
+    ok(c.querySelector('.badge').textContent === 'Reinicia para jugar', 'states in Spanish');
     ok(d.querySelector('#g-actions [data-a="unmount"]').textContent === 'Quitar de la biblioteca', 'buttons in Spanish');
     d.getElementById('gamedlg').close();
     d.querySelector('[data-g="CUSA00069"]').click();
-    pane.querySelector('[data-details]').click();
     ok(d.getElementById('g-facts').textContent.includes('En usb1, que no está conectado'), 'a value inside a translated text');
     d.getElementById('gamedlg').close(); }
   ok(d.getElementById('summary').textContent.includes('6 juego(s)'), 'the summary in Spanish');
@@ -724,7 +613,7 @@ function tKeys(file) {
   const key = (keyName, keyCode) => d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', {key: keyName, keyCode, bubbles: true, cancelable: true}));
   key('ArrowRight', 39);
   ok(d.activeElement === covers[1] && covers[1].getAttribute('aria-pressed') === 'true' && reqs.length === 0, 'PS4 arrows move focus and select the neighboring game without a request');
-  d.querySelector('#inspector [data-details]').click();
+  w.showGame('CUSA34284');
   key('Escape', 27);
   ok(!d.getElementById('gamedlg').hasAttribute('open') && !reqs.length, 'PS4 back closes details before exiting');
   d.querySelector('#library-filters summary').click();
@@ -772,13 +661,11 @@ function tKeys(file) {
   d.getElementById('nav-log').click(); await tick();
   ok(d.getElementById('v-log').className.includes('on') && d.getElementById('log').textContent === 'a\nb', 'legacy log page');
   d.getElementById('l-back').click();
-  d.querySelector('[data-g="CUSA00190"]').click();
   d.querySelector('[data-g="CUSA00791"]').click();
-  ok(d.getElementById('legacy-game-details').hidden, 'legacy shelf hides package details until requested');
-  d.querySelector('#inspector [data-details]').click();
-  ok(!d.getElementById('legacy-game-details').hidden, 'legacy details reveal package actions');
-  reqs.length = 0; d.querySelector('#inspector [data-a="unmount"][data-t="CUSA00791"]').click(); await tick();
-  ok(reqs[0].url === '/api/unmount?title_id=CUSA00791' && reqs[0].method === 'POST', 'legacy card action posts');
+  ok(d.getElementById('v-game').className.includes('on') && d.getElementById('g-name').textContent === 'N++',
+    'legacy a cover opens the game page');
+  reqs.length = 0; d.querySelector('#g-actions [data-a="unmount"][data-t="CUSA00791"]').click(); await tick();
+  ok(reqs[0].url === '/api/unmount?title_id=CUSA00791' && reqs[0].method === 'POST', 'legacy game action posts');
   ok(d.getElementById('restart-banner').style.display === 'block' && d.getElementById('restart-banner').textContent.includes('Moving Out 2'),
     'legacy shows the restart banner');
   ACTIVITY = { busy: true, phase: 'scanning', drive: 'usb0', done: 1, total: 4, title: '', title_id: '', group: 0, groups: 0, dlc_pending: [] };

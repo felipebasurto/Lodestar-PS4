@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 gasb07
- * HTTPS client for Google Drive and downloads from links: TLS with BearSSL (the same code
- * on the console and in the host tests). Drive trusts only Google's roots; a link, the
- * public ones (Mozilla's list). Plain http:// is for links that use it and the tests. */
+ * HTTPS client for downloads from links and the panel app: TLS with BearSSL (the same
+ * code on the console and in the host tests), trusting the public roots (Mozilla's list).
+ * Plain http:// is for links that use it and the tests. */
 #pragma once
 
 #include <stddef.h>
@@ -29,7 +29,6 @@ typedef struct {
     int *cancel;              /* atomically set from another thread: the request stops (may be NULL) */
     int stall;                /* seconds without a byte before the request gives up (0: 60) */
     http_keep_t *keep;        /* NULL: a connection of its own, closed after the answer */
-    int any_server;           /* a certificate from the public roots will do (links), not only Google's */
 } http_req_t;
 
 #define HTTP_BODY_MAX (1u << 20)

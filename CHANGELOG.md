@@ -2,6 +2,14 @@
 
 PS4Mount PS4 is a PS4-only port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (PS5); its versions start again at 0.1.0. The history of the original is in its project and in this repository's git history.
 
+## 3.0.0
+
+**USB-focused Lodestar.** Google Drive backup and NAS/SMB/NFS support are removed completely: their panel UI, API routes, OAuth/client state, FUSE client, SMB/NFS libraries, transfer queue, documentation, screenshots and tests are gone. Lodestar now concentrates on USB/external drives and local storage. The web library becomes a dense artwork grid: game details and actions open on demand instead of a permanent large inspector consuming half the screen.
+
+**Español**
+
+**Lodestar centrado en USB.** Se eliminan por completo las copias en Google Drive y la compatibilidad NAS/SMB/NFS: desaparecen su interfaz, rutas de API, estado de OAuth/cliente, cliente FUSE, bibliotecas SMB/NFS, cola de transferencias, documentación, capturas y pruebas. Lodestar se centra ahora en discos USB/externos y almacenamiento local. La biblioteca web pasa a ser una parrilla densa de carátulas: la ficha y las acciones de cada juego se abren bajo demanda en vez de ocupar media pantalla permanentemente.
+
 ## 2.0.2
 
 **Public identity polish.** The README's main panel captures now show the Lodestar interface instead of the pre-rebrand panel; stale console, extension and upload captures are no longer presented as current UI. Google Cloud setup captures are explicitly marked as legacy examples because existing PS4Mount OAuth clients remain valid. User-facing errors, the log explainer, the extension identity and outbound HTTP requests now say Lodestar. Runtime compatibility names such as `/data/ps4mount`, USB `PS4Mount` folders and accepted legacy headers are unchanged.

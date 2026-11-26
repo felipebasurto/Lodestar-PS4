@@ -2,7 +2,7 @@
  * Copyright (C) 2026 gasb07
  * Downloads from links (see links.h). Each file of a download comes in blocks, several
  * connections at a time, written in order into a hidden part file (exFAT fills a gap with
- * zeros first, which made out-of-order writes slow; see drive.c). An archive is read by
+ * zeros first, which made out-of-order writes slow). An archive is read by
  * libarchive from those part files as they grow, and its pkgs are written beside them;
  * once all are whole they go to a folder of the scan folder in one rename. */
 #include "links.h"
@@ -413,7 +413,6 @@ static int get(char *url, size_t un, const char *range, http_sink_t sink, void *
         q.cancel = &g_rt.stop;
         q.stall = stall;
         q.keep = keep;
-        q.any_server = 1;
         int rc = http_request(&q, r, err, n);
         if (rc || r->status < 300 || r->status >= 400 || !r->location[0])
             return rc;

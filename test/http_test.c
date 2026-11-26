@@ -184,15 +184,15 @@ int main(void) {
     printf("agent observability\n");
     r = ask("GET /api/agent HTTP/1.1\r\n\r\n");
     CHECK(status(r, "200") && strstr(r, "application/json"));
-    CHECK(strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.2\"") &&
+    CHECK(strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 3.0.0\"") &&
           strstr(r, "\"api_version\":1"));
     CHECK(strstr(r, "\"panel\":{\"scheme\":\"http\",\"port\":8770}") != NULL);
-    CHECK(strstr(r, "\"header\":\"X-Lodestar\"") && strstr(r, "\"legacy_aliases\":[\"X-PS4Mount\"]") &&
-          strstr(r, "\"additional_get_paths\":[\"/api/nas/scan\"]"));
+    CHECK(strstr(r, "\"header\":\"X-Lodestar\"") && strstr(r, "\"legacy_aliases\":[\"X-PS4Mount\"]"));
     CHECK(strstr(r, "\"safety_rails\"") && strstr(r, "\"system_databases_read_only\":true") &&
           strstr(r, "\"system_delete_never_reaches_pkg\":true"));
+    CHECK(!strstr(r, "/api/drive") && !strstr(r, "/api/nas")); /* removed: USB drives only */
     int endpoints = occurrences(r, "\"method\"");
-    CHECK(endpoints >= 30 && endpoints == occurrences(r, "\"path\"") && endpoints == occurrences(r, "\"mutating\"") &&
+    CHECK(endpoints >= 20 && endpoints == occurrences(r, "\"path\"") && endpoints == occurrences(r, "\"mutating\"") &&
           endpoints == occurrences(r, "\"summary\""));
     CHECK(strstr(r, "{\"method\":\"GET\",\"path\":\"/api/status\",\"mutating\":false") != NULL);
     CHECK(strstr(r, "\"path\":\"/api/upload\",\"mutating\":true") != NULL);
@@ -200,7 +200,7 @@ int main(void) {
     CHECK(status(r, "404"));
 
     r = ask("GET /api/status HTTP/1.1\r\n\r\n");
-    CHECK(status(r, "200") && strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 2.0.2\""));
+    CHECK(status(r, "200") && strstr(r, "\"product\":\"Lodestar\"") && strstr(r, "\"version\":\"Lodestar 3.0.0\""));
     CHECK(strstr(r, "\"setup\":false") && strstr(r, "\"activity\":{\"busy\":false") && strstr(r, "\"notices\":[]"));
     CHECK(strstr(r, "\"queues\":{\"web_owner_pending\":0,\"web_write_pending\":0,\"web_write_active\":0}") != NULL);
     CHECK(strstr(r, "\"endpoints\":{\"agent\":\"/api/agent\",\"status\":\"/api/status\"") != NULL);
@@ -233,8 +233,7 @@ int main(void) {
     printf("every POST needs the panel's header\n");
     /* a page of another site can POST a form but cannot send the header (CORS preflight) */
     const char *posts[] = {"/api/mount?title_id=CUSA00001", "/api/unmount?title_id=CUSA00001", "/api/rescan",
-                           "/api/restore", "/api/restored/forget", "/api/config", "/api/nas/reload",
-                           "/api/nas/shares", "/api/app/close", "/api/stop", NULL};
+                           "/api/restore", "/api/restored/forget", "/api/config", "/api/app/close", "/api/stop", NULL};
     for (int i = 0; posts[i]; i++) {
         int before = g_stub_calls;
         r = post(posts[i], "x=1");
@@ -248,12 +247,24 @@ int main(void) {
     CHECK(status(r, "403") && g_stub_calls == before);
     r = ask("POST /api/rescan HTTP/1.1\r\nX-Lodestar: 1\r\nContent-Length: 0\r\n\r\n");
     CHECK(status(r, "200") && !strcmp(g_stub_call, "rescan-hard"));
-    r = ask("GET /api/nas/scan HTTP/1.1\r\n\r\n");
-    CHECK(status(r, "403"));
-    r = ask("GET /api/nas/scan HTTP/1.1\r\nX-PS4Mount: 1\r\n\r\n");
-    CHECK(status(r, "200") && strstr(r, "192.168.0.19"));
-    r = ask("GET /api/nas/scan HTTP/1.1\r\nx-lodestar: 1\r\n\r\n");
-    CHECK(status(r, "200") && strstr(r, "192.168.0.19"));
+    /* the NAS and Google Drive endpoints are gone: every one answers 404 */
+    const char *gone_get[] = {"/api/nas/scan", "/api/nas/shares", "/api/nas/reload", "/api/drive", NULL};
+    for (int i = 0; gone_get[i]; i++) {
+        char req[128];
+        snprintf(req, sizeof(req), "GET %s HTTP/1.1\r\n\r\n", gone_get[i]);
+        int before = g_stub_calls;
+        r = ask(req);
+        CHECK(status(r, "404") && g_stub_calls == before);
+    }
+    const char *gone_post[] = {"/api/nas/scan", "/api/nas/shares", "/api/nas/reload",
+                               "/api/drive/connect", "/api/drive/client", NULL};
+    for (int i = 0; gone_post[i]; i++) {
+        char req[160];
+        snprintf(req, sizeof(req), "POST %s HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 0\r\n\r\n", gone_post[i]);
+        int before = g_stub_calls;
+        r = ask(req);
+        CHECK(status(r, "404") && g_stub_calls == before);
+    }
 
     printf("title ids\n");
     r = postw("/api/mount?title_id=CUSA00791", "");
@@ -335,51 +346,6 @@ int main(void) {
     CHECK(status(r, "404"));
     r = ask("GET /api/uploads HTTP/1.1\r\n\r\n");
     CHECK(status(r, "200") && strstr(r, "\"state\""));
-
-    printf("Google Drive\n");
-    r = ask("GET /api/drive HTTP/1.1\r\n\r\n");
-    CHECK(status(r, "200") && strstr(r, "\"configured\""));
-    /* every action needs the panel's header: a download writes files, an upload sends them out */
-    before = g_stub_calls;
-    r = post("/api/drive/upload", "");
-    CHECK(status(r, "403") && g_stub_calls == before);
-    r = ask("GET /api/drive/upload HTTP/1.1\r\nX-PS4Mount: 1\r\n\r\n");
-    CHECK(status(r, "404") && g_stub_calls == before); /* not on GET */
-#define DRIVE_POST(p) ask("POST " p " HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 0\r\n\r\n")
-    r = DRIVE_POST("/api/drive/connect");
-    CHECK(status(r, "200") && !strcmp(g_stub_call, "drive_connect"));
-    r = DRIVE_POST("/api/drive/upload");
-    CHECK(status(r, "200") && !strcmp(g_stub_call, "drive_upload") && !strcmp(g_stub_arg, "(null)")); /* all */
-    r = DRIVE_POST("/api/drive/upload?title_id=CUSA00001");
-    CHECK(!strcmp(g_stub_arg, "CUSA00001"));
-    before = g_stub_calls;
-    r = DRIVE_POST("/api/drive/upload?title_id=../etc");
-    CHECK(status(r, "400") && g_stub_calls == before); /* a bad id is not "all games" */
-    r = DRIVE_POST("/api/drive/download?title_id=CUSA00001&dest=usb0");
-    CHECK(status(r, "200") && !strcmp(g_stub_call, "drive_download") && !strcmp(g_stub_arg, "CUSA00001 usb0"));
-    before = g_stub_calls;
-    r = DRIVE_POST("/api/drive/download?title_id=CUSA00001&dest=../x");
-    CHECK(status(r, "400") && g_stub_calls == before);
-    r = DRIVE_POST("/api/drive/download?title_id=CUSA00001");
-    CHECK(status(r, "400") && g_stub_calls == before);
-    r = DRIVE_POST("/api/drive/trash?title_id=CUSA00001");
-    CHECK(!strcmp(g_stub_call, "drive_trash") && !strcmp(g_stub_arg, "CUSA00001"));
-    DRIVE_POST("/api/drive/refresh");
-    CHECK(!strcmp(g_stub_call, "drive_refresh"));
-    DRIVE_POST("/api/drive/cancel");
-    CHECK(!strcmp(g_stub_call, "drive_cancel"));
-    DRIVE_POST("/api/drive/disconnect");
-    CHECK(!strcmp(g_stub_call, "drive_disconnect"));
-    before = g_stub_calls;
-    r = DRIVE_POST("/api/drive/connectx");
-    CHECK(status(r, "404") && g_stub_calls == before);
-    r = ask("POST /api/drive/client HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 75\r\n\r\n"
-            "client_id=123-abc.apps.googleusercontent.com&client_secret=GOCSPX-a%2Bb_c+d");
-    CHECK(status(r, "200") && !strcmp(g_stub_call, "drive_client") &&
-          !strcmp(g_stub_arg, "123-abc.apps.googleusercontent.com|GOCSPX-a+b_c d"));
-    DRIVE_POST("/api/drive/forget_client");
-    CHECK(!strcmp(g_stub_call, "drive_forget_client"));
-#undef DRIVE_POST
 
     printf("downloads from links\n");
     r = ask("GET /api/links HTTP/1.1\r\n\r\n");
@@ -529,32 +495,32 @@ int main(void) {
 
         c = panel_conn();
         CHECK(c >= 0);
-        send_req_close_write(c, "GET /api/nas/scan HTTP/1.1\r\nX-PS4Mount: 1\r\n\r\n");
+        send_req_close_write(c, "GET /api/links HTTP/1.1\r\n\r\n");
         web_serve(ls);
         web_pool_idle_wait();
         CHECK(web_owner_pending() == 0);
         read_response_close(c, resp, sizeof(resp));
-        CHECK(status(resp, "200") && strstr(resp, "192.168.0.19"));
+        CHECK(status(resp, "200") && strstr(resp, "\"jobs\""));
 
         before = g_stub_calls;
         c = panel_conn();
         CHECK(c >= 0);
-        send_req_close_write(c, "POST /api/nas/shares HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 9\r\n\r\nproto=nfs");
+        send_req_close_write(c, "POST /api/links/cancel?id=7 HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 0\r\n\r\n");
         web_serve(ls);
         web_pool_idle_wait();
         CHECK(web_owner_pending() == 0);
-        CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "nas_shares"));
+        CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "links_cancel"));
         read_response_close(c, resp, sizeof(resp));
         CHECK(status(resp, "200"));
 
         before = g_stub_calls;
         c = panel_conn();
         CHECK(c >= 0);
-        send_req_close_write(c, "POST /api/drive/refresh HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 0\r\n\r\n");
+        send_req_close_write(c, "POST /api/links/retry?id=3 HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 0\r\n\r\n");
         web_serve(ls);
         web_pool_idle_wait();
         CHECK(web_owner_pending() == 0);
-        CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "drive_refresh"));
+        CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "links_retry"));
         read_response_close(c, resp, sizeof(resp));
         CHECK(status(resp, "200"));
 
@@ -583,11 +549,12 @@ int main(void) {
         before = g_stub_calls;
         c = panel_conn();
         CHECK(c >= 0);
-        send_req_close_write(c, "POST /api/nas/reload HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 0\r\n\r\n");
+        send_req_close_write(c, "POST /api/links/add?dest=usb0 HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 24\r\n\r\n"
+                                    "http://example.com/a.pkg");
         web_serve(ls);
         web_pool_idle_wait();
         CHECK(web_owner_pending() == 0);
-        CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "nas_reload"));
+        CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "links_add"));
         read_response_close(c, resp, sizeof(resp));
         CHECK(status(resp, "200"));
 

@@ -21,7 +21,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "drive.h"
 #include "links.h"
 #include "page_data.h"
 #include "lang.h"
@@ -241,23 +240,18 @@ typedef struct {
 int web_route_worker_safe(const char *path, int post) {
     if (!strncmp(path, "/api/", 5)) {
         if (!strcmp(path, "/api/agent") || !strcmp(path, "/api/status") || !strcmp(path, "/api/log") ||
-            !strcmp(path, "/api/drive") || !strcmp(path, "/api/links") ||
-            !strcmp(path, "/api/uploads") || !strcmp(path, "/api/dests") || !strcmp(path, "/api/storage") ||
-            !strcmp(path, "/api/nas/scan") ||
+            !strcmp(path, "/api/links") || !strcmp(path, "/api/uploads") || !strcmp(path, "/api/dests") ||
+            !strcmp(path, "/api/storage") ||
             (!post && (!strcmp(path, "/api/config") || !strcmp(path, "/api/games"))) ||
             (post && !strncmp(path, "/api/check", 10) && (path[10] == 0 || path[10] == '?')))
             return 1;
-        if (post && !strcmp(path, "/api/nas/shares"))
-            return 1;
-        if (post && (!strncmp(path, "/api/drive/", 11) || !strncmp(path, "/api/links/", 11)))
+        if (post && !strncmp(path, "/api/links/", 11))
             return 1;
         if (post && !strncmp(path, "/api/upload", 11) && (path[11] == 0 || path[11] == '?'))
             return 1;
         if (post && !strcmp(path, "/api/rescan"))
             return 1;
         if (post && !strcmp(path, "/api/stop"))
-            return 1;
-        if (post && !strcmp(path, "/api/nas/reload"))
             return 1;
         return 0;
     }
@@ -297,7 +291,6 @@ static int g_pool_active[WEB_POOL_THREADS];
 static unsigned g_pool_inflight;
 static int g_wake_r = -1, g_wake_w = -1;
 
-static pthread_mutex_t g_drive_action_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_links_action_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_owner_mu = PTHREAD_MUTEX_INITIALIZER;
 static web_owner_job_t *g_owner_head, *g_owner_tail;
@@ -311,8 +304,7 @@ typedef struct {
 
 /* The panel-port HTTP surface, in one static table so an agent can discover what exists
  * without inferring it from the HTML. mutating means intentionally starting or changing
- * application/system state or work; read-only probes can still require the write header
- * because they contact other machines. */
+ * application/system state or work. */
 static const agent_endpoint_t k_agent_endpoints[] = {
     {"GET", "/", "panel HTML", 0},
     {"GET", "/legacy", "legacy panel HTML", 0},
@@ -334,23 +326,10 @@ static const agent_endpoint_t k_agent_endpoints[] = {
     {"POST", "/api/restored/forget", "forget restored pkgs so a scan can adopt them again", 1},
     {"GET", "/icon/<title_id>", "game icon PNG", 0},
     {"GET", "/pic/<title_id>", "game background PNG", 0},
-    {"GET", "/api/drive", "Google Drive connection, job and library status", 0},
-    {"POST", "/api/drive/client", "store or remove the user OAuth client", 1},
-    {"POST", "/api/drive/connect", "start Google Drive sign-in", 1},
-    {"POST", "/api/drive/disconnect", "revoke Google Drive access", 1},
-    {"POST", "/api/drive/upload", "queue one game or the library for Drive upload", 1},
-    {"POST", "/api/drive/download", "queue a Drive game download", 1},
-    {"POST", "/api/drive/trash", "move a Drive game to trash", 1},
-    {"POST", "/api/drive/refresh", "refresh Drive state", 1},
-    {"POST", "/api/drive/cancel", "cancel the Drive transfer and empty its queue", 1},
-    {"POST", "/api/drive/forget_client", "remove the stored OAuth client", 1},
     {"GET", "/api/links", "link download jobs and progress", 0},
     {"POST", "/api/links/add", "queue downloads from pasted links", 1},
     {"POST", "/api/links/cancel", "cancel a link download and delete its partial files", 1},
     {"POST", "/api/links/retry", "retry a failed link download", 1},
-    {"GET", "/api/nas/scan", "probe the local network for NAS hosts; requires the write header", 0},
-    {"POST", "/api/nas/shares", "list shares on a chosen NAS host", 0},
-    {"POST", "/api/nas/reload", "ask BinLoader for a payload reload", 1},
     {"POST", "/api/app/close", "close the panel app", 1},
     {"POST", "/api/stop", "stop the payload", 1},
 };
@@ -362,8 +341,7 @@ static void send_agent_manifest(int fd) {
     buf_printf(&b, "\"panel\":{\"scheme\":\"http\",\"port\":%d},", WEB_PORT);
     buf_printf(&b, "\"write_auth\":{\"type\":\"local_network_header\",\"header\":\"X-Lodestar\",\"value\":\"1\","
                    "\"validation\":\"header presence\",\"legacy_aliases\":[\"X-PS4Mount\"],\"token\":false,"
-                   "\"methods\":[\"POST\"],\"additional_get_paths\":[\"/api/nas/scan\"],"
-                   "\"applies_to\":\"all POST requests and GET /api/nas/scan\","
+                   "\"methods\":[\"POST\"],\"applies_to\":\"all POST requests\","
                    "\"peer\":\"private, loopback, link-local or carrier-grade NAT IPv4\"},");
     buf_put(&b, "\"endpoints\":[", 13);
     for (size_t i = 0; i < sizeof(k_agent_endpoints) / sizeof(k_agent_endpoints[0]); i++) {
@@ -415,7 +393,7 @@ static void send_status(int fd) {
     static const char key_endpoints[] = ",\"endpoints\":{\"agent\":\"/api/agent\",\"status\":\"/api/status\","
                                         "\"games\":\"/api/games\",\"config\":\"/api/config\",\"log\":\"/api/log\","
                                         "\"uploads\":\"/api/uploads\",\"dests\":\"/api/dests\",\"storage\":\"/api/storage\","
-                                        "\"drive\":\"/api/drive\",\"links\":\"/api/links\"}";
+                                        "\"links\":\"/api/links\"}";
     buf_printf(&b, "{\"product\":\"%s\",\"version\":\"%s\",\"api_version\":%d,", LODESTAR_PRODUCT, LODESTAR_VERSION,
                LODESTAR_API_VERSION);
     web_status_state_fn state = status_state_provider();
@@ -843,49 +821,6 @@ static int form_field(const char *body, const char *key, char *out, size_t n) {
     return -1;
 }
 
-/* POST /api/drive/<action>[?title_id=..&dest=..]: the Drive thread does the work, the
- * panel follows it in GET /api/drive. The user's client comes in the body (client_id,
- * client_secret), never in the address. */
-static void drive_action(int fd, const char *path, const char *body) {
-    const char *a = path + 11;
-    size_t al = strcspn(a, "?");
-    char tid[10], dest[16], msg[512];
-    int has_tid = !title_param(path, tid), rc;
-#define IS(name) (al == sizeof(name) - 1 && !strncmp(a, name, al))
-    if (IS("client")) {
-        char id[256], secret[128];
-        form_field(body, "client_id", id, sizeof(id));
-        form_field(body, "client_secret", secret, sizeof(secret));
-        rc = drive_set_client(id, secret, msg, sizeof(msg));
-        memset(secret, 0, sizeof(secret));
-    } else if (IS("forget_client"))
-        rc = drive_forget_client(msg, sizeof(msg));
-    else if (IS("connect"))
-        rc = drive_connect(msg, sizeof(msg));
-    else if (IS("disconnect"))
-        rc = drive_disconnect(msg, sizeof(msg));
-    else if (IS("upload"))
-        rc = strstr(path, "title_id=") && !has_tid ? (snprintf(msg, sizeof(msg), "%s", TR("invalid title_id", "title_id no válido")), -1)
-                                                   : drive_upload(has_tid ? tid : NULL, msg, sizeof(msg));
-    else if (IS("download"))
-        rc = !has_tid || dest_param(path, dest, sizeof(dest))
-                 ? (snprintf(msg, sizeof(msg), "%s", TR("invalid title_id or dest", "title_id o dest no válidos")), -1)
-                 : drive_download(tid, dest, msg, sizeof(msg));
-    else if (IS("trash"))
-        rc = !has_tid ? (snprintf(msg, sizeof(msg), "%s", TR("invalid title_id", "title_id no válido")), -1)
-                      : drive_trash(tid, msg, sizeof(msg));
-    else if (IS("refresh"))
-        rc = drive_refresh(msg, sizeof(msg));
-    else if (IS("cancel"))
-        rc = drive_cancel(msg, sizeof(msg));
-    else {
-        reply(fd, "404 Not Found", "text/plain", "not found\n", 10);
-        return;
-    }
-#undef IS
-    json_msg(fd, !rc, msg);
-}
-
 /* The panel's X-Lodestar-Password header, or the legacy X-PS4Mount-Password alias
    (percent-encoded: any password is plain ASCII there, and none is ever in a path the log
    could show), decoded into out; "" without it. */
@@ -1035,9 +970,7 @@ static int web_read_request(int fd, web_req_t *r) {
         return 1;
     }
 
-    int form = post && (!strcmp(path, "/api/config") || !strncmp(path, "/api/restore", 12) ||
-                        !strcmp(path, "/api/drive/client") || !strncmp(path, "/api/drive/client?", 18) ||
-                        !strcmp(path, "/api/nas/shares"));
+    int form = post && (!strcmp(path, "/api/config") || !strncmp(path, "/api/restore", 12));
     if (form) {
         if (length >= (size_t)(req + sizeof(r->raw) - body))
             return -1;
@@ -1185,7 +1118,7 @@ static void web_dispatch(int fd, web_req_t *r, int slot) {
         }
     } else if (post && !strcmp(path, "/api/rescan")) {
         app_rescan_hard();
-        json_msg(fd, 1, TR("Looking for games on the drives and the share", "Buscando juegos en los discos y el NAS"));
+        json_msg(fd, 1, TR("Looking for games on the drives", "Buscando juegos en los discos"));
     } else if (post && !strncmp(path, "/api/restore", 12) && (path[12] == 0 || path[12] == '?')) {
         /* ?title_id=<one game>, body title_ids=<games, comma separated>, or neither for all */
         int rc;
@@ -1259,15 +1192,6 @@ static void web_dispatch(int fd, web_req_t *r, int slot) {
         app_dests_json(&b);
         reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
         buf_free(&b);
-    } else if (!strcmp(path, "/api/drive")) {
-        buf_t b = {0};
-        drive_status_json(&b);
-        reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
-        buf_free(&b);
-    } else if (post && !strncmp(path, "/api/drive/", 11)) {
-        pthread_mutex_lock(&g_drive_action_mu);
-        drive_action(fd, path, body);
-        pthread_mutex_unlock(&g_drive_action_mu);
     } else if (!strcmp(path, "/api/links")) {
         buf_t b = {0};
         links_status_json(&b);
@@ -1279,22 +1203,6 @@ static void web_dispatch(int fd, web_req_t *r, int slot) {
         pthread_mutex_unlock(&g_links_action_mu);
     } else if (!strcmp(path, "/api/log")) {
         send_log(fd);
-    } else if (!strcmp(path, "/api/nas/scan") && !may_write(fd, req)) {
-        /* it connects to other machines: the panel's own requests only */
-        reply(fd, "403 Forbidden", "text/plain", "forbidden\n", 10);
-    } else if (!strcmp(path, "/api/nas/scan")) {
-        buf_t b = {0};
-        app_nas_scan_json(&b);
-        reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
-        buf_free(&b);
-    } else if (post && !strcmp(path, "/api/nas/shares")) {
-        buf_t b = {0};
-        app_nas_shares_json(body, &b);
-        reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
-        buf_free(&b);
-    } else if (post && !strcmp(path, "/api/nas/reload")) {
-        int rc = app_nas_reload(msg, sizeof(msg));
-        json_msg(fd, !rc, msg);
     } else if (post && !strcmp(path, "/api/app/close")) {
         json_msg(fd, 1, "closing");
         app_panel_close();
