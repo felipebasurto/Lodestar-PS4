@@ -11,7 +11,7 @@ enum { PKG_KIND_OTHER, PKG_KIND_GAME, PKG_KIND_UPDATE, PKG_KIND_ADDON };
 typedef struct {
     int ok;               /* PS4Mount can add it */
     int kind;             /* PKG_KIND_* */
-    int fake;             /* signed with the public fake key */
+    int entry_key;        /* its encrypted entries can be read */
     char content_id[37], title_id[10];
     char title[128], app_ver[8], version[8];
     uint32_t system_ver;  /* SYSTEM_VER of param.sfo (0: absent) */

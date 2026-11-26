@@ -39,7 +39,7 @@ int pkg_check(const char *path, uint32_t fw, pkg_check_t *out) {
     snprintf(out->content_id, sizeof(out->content_id), "%s", pkg->content_id);
     snprintf(out->title_id, sizeof(out->title_id), "%s", pkg->title_id);
     out->pkg_size = pkg->pkg_size;
-    out->fake = pkg_fake_key(pkg);
+    out->entry_key = pkg_has_entry_key(pkg);
     size_t len;
     uint8_t *d = pkg_entry(pkg, 0x1000, &len);
     sfo_t *sfo = mem_alloc(sizeof(*sfo));
@@ -74,12 +74,12 @@ int pkg_check(const char *path, uint32_t fw, pkg_check_t *out) {
     else if (!is_game_id(out->title_id))
         snprintf(out->problem, sizeof(out->problem),
                  TR("%s is a system app, not a game", "%s es una app del sistema, no un juego"), out->title_id);
-    else if (out->kind == PKG_KIND_GAME && homebrew_small(out->title_id, out->pkg_size) && (out->installable = out->fake))
+    else if (out->kind == PKG_KIND_GAME && homebrew_small(out->title_id, out->pkg_size) && (out->installable = out->entry_key))
         snprintf(out->problem, sizeof(out->problem),
                  TR("%s is a homebrew app (under 1 GB): install it the usual way; homebrew ports, which are bigger, are played from the pkg",
                     "%s es una app homebrew (menos de 1 GB): instálala de la forma normal; los ports homebrew, más grandes, se juegan desde el pkg"),
                  out->title_id);
-    else if (!out->fake)
+    else if (!out->entry_key)
         snprintf(out->problem, sizeof(out->problem), "%s",
                  TR("unsupported PS4 package format", "formato de paquete de PS4 no compatible"));
     out->ok = !out->problem[0];

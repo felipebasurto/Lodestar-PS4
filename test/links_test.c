@@ -4,7 +4,7 @@
  * order, through redirects, both namings), a ZIP, a pkg (also from a server without
  * ranges, and named by the server), cuts, a server that limits connections, an address
  * that expires, a stop and a resume, little space, a cancel, and what must fail (a pkg
- * that is not fake, a web page, a password, no pkg inside, a missing file, missing parts).
+ * whose entry key cannot be unwrapped, a web page, a password, no pkg inside, a missing file, missing parts).
  * The archives are in test/data/links (made by test/data/links/make.sh).
  * Run with: bash test/run.sh
  *   links_test --make-pkgs <dir>   writes the pkgs the archives hold */
@@ -47,8 +47,8 @@ static int g_failed, g_checks;
 
 /* A pkg as make_pkg writes it, with pseudo-random bytes at at (len of them) so the archives
  * hold more than zeros. */
-static void write_pkg(const char *path, const char *cat, int fake, size_t size, size_t at, size_t len) {
-    make_pkg(path, GAME_CID, cat, 0x09008000, fake, size, size);
+static void write_pkg(const char *path, const char *cat, int entry_key, size_t size, size_t at, size_t len) {
+    make_pkg(path, GAME_CID, cat, 0x09008000, entry_key, size, size);
     FILE *f = fopen(path, "r+b");
     uint32_t x = 2463534242u ^ (uint32_t)size;
     fseek(f, (long)at, SEEK_SET);
@@ -622,7 +622,7 @@ int main(int argc, char **argv) {
     add_path("page.pkg", p);
     find_file("page.pkg")->html = 1;
     snprintf(p, sizeof(p), "%s/real.pkg", g_pkgs);
-    make_pkg(p, GAME_CID, "gd", 0x09008000, 0, 0x8000, 0x8000); /* not fake */
+    make_pkg(p, GAME_CID, "gd", 0x09008000, 0, 0x8000, 0x8000); /* no usable entry key */
     add_path("real.pkg", p);
     start_server();
 

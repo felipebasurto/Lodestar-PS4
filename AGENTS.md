@@ -31,7 +31,7 @@ without it a change to `main.c` is only compiled by CI. It does not run the payl
 - A bug-fix regression test must fail on the code before the fix. Break the behavior on purpose, run the
   test, see it fail on an assertion, revert.
 - Removing or moving code needs no test that it is gone.
-- No sleeps, retries or raised timeouts in tests. Await the operation or its signal, and fake the network
+- No sleeps, retries or raised timeouts in tests. Await the operation or its signal, and simulate the network
   so unexpected requests fail.
 - Behavior changes start in the spec: update the rule, then the code.
 - If code and spec disagree, stop and ask. Do not edit the spec to match the code.

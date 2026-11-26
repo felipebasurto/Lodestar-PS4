@@ -26,7 +26,7 @@ static inline int pkg_cat_is_game(const char *cat) {
     return cat && (!strcmp(cat, "gd") || !strcmp(cat, "gdO") || !strcmp(cat, "gdo"));
 }
 
-/* Official Sony title ID prefixes: PS4 (CUSA) and PS1/PS2/PSP Classics fPKGs. */
+/* Official Sony title ID prefixes: PS4 (CUSA) and PS1/PS2/PSP Classic packages. */
 static inline int is_sony_game_prefix(const char *tid) {
     static const char *const prefixes[] = {
         "CUSA",
@@ -78,8 +78,8 @@ typedef struct {
 /* Opens and parses a PS4 pkg. Returns 0 on success. */
 int pkg_open(pkg_t *pkg, const char *path);
 void pkg_close(pkg_t *pkg);
-/* 1 when the pkg uses the public fake key (unwraps it on first use). */
-int pkg_fake_key(pkg_t *pkg);
+/* 1 when the pkg's entry key can be unwrapped (the attempt is cached). */
+int pkg_has_entry_key(pkg_t *pkg);
 
 /* Reads (and decrypts when needed) an entry. Caller frees. NULL when missing. */
 uint8_t *pkg_entry(pkg_t *pkg, uint32_t id, size_t *len);

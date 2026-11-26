@@ -38,7 +38,7 @@ typedef struct {
     uint64_t size;
     uint64_t full_size;                   /* CAT_SHORT: the size the header gives */
     int64_t mtime;
-    int state;                            /* CAT_UNREAD, CAT_BAD (not a fake PS4 pkg), CAT_OK or CAT_SHORT */
+    int state;                            /* CAT_UNREAD, CAT_BAD (not a supported PS4 pkg), CAT_OK or CAT_SHORT */
     char category[4];                     /* gd game, gp update, ac add-on */
     char title_id[10], content_id[37], app_ver[8];
     union {

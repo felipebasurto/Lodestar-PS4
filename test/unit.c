@@ -54,7 +54,7 @@ static void hex(const char *s, uint8_t *out, size_t n) {
 }
 
 /* A pkg with only the fields the builders use. */
-static void fake_pkg(pkg_t *p, const char *content_id, uint64_t size) {
+static void test_pkg(pkg_t *p, const char *content_id, uint64_t size) {
     memset(p, 0, sizeof(*p));
     snprintf(p->content_id, sizeof(p->content_id), "%s", content_id);
     memcpy(p->title_id, content_id + 7, 9);
@@ -94,7 +94,7 @@ static void test_crypto(void) {
 static void test_app_json(void) {
     printf("app.json / ac.json\n");
     pkg_t p;
-    fake_pkg(&p, "UP0000-CUSA00001_00-TESTGAME00000000", 1234567);
+    test_pkg(&p, "UP0000-CUSA00001_00-TESTGAME00000000", 1234567);
     buf_t b = {0};
     build_app_json(&b, &p, "/mnt/usb0/ps4/CUSA00001/app.pkg");
     const char *want = "{\"numberOfSplitFiles\":1,\"originalFileSize\":1234567,\"packageDigest\":"
@@ -130,10 +130,10 @@ static void check_pbm(const pkg_t *p, int type) {
 static void test_pbm(void) {
     printf("app.pbm / patch.pbm / ac.pbm\n");
     pkg_t p;
-    fake_pkg(&p, "UP0000-CUSA00001_00-TESTGAME00000000", 82706432); /* whole blocks */
+    test_pkg(&p, "UP0000-CUSA00001_00-TESTGAME00000000", 82706432); /* whole blocks */
     check_pbm(&p, PBM_APP);
     check_pbm(&p, PBM_PATCH);
-    fake_pkg(&p, "UP0000-CUSA00001_00-TESTADDON0000001", 524288 + 100); /* partial last block */
+    test_pkg(&p, "UP0000-CUSA00001_00-TESTADDON0000001", 524288 + 100); /* partial last block */
     check_pbm(&p, PBM_ADDCONT);
     check_pbm(&p, PBM_LICENSE);
 }
@@ -167,7 +167,7 @@ static const rec_t *find(const rec_t *r, int n, uint32_t key) {
 static void test_ac_pdb(void) {
     printf("add-on PlayGo record\n");
     pkg_t p;
-    fake_pkg(&p, "UP0000-CUSA00001_00-TESTADDON0000001", 31129600);
+    test_pkg(&p, "UP0000-CUSA00001_00-TESTADDON0000001", 31129600);
     const char *url = "/mnt/usb0/ps4/CUSA00001/addcont/CUSA00001/TESTADDON0000001/ac.pkg";
     buf_t json = {0}, pdb = {0};
     build_app_json(&json, &p, url);
@@ -214,8 +214,8 @@ static int rec_is(const rec_t *r, int n, uint32_t key, const void *data, size_t 
 static void test_bgft_task(void) {
     printf("BGFT game task\n");
     pkg_t app, pat;
-    fake_pkg(&app, "UP0000-CUSA00001_00-TESTGAME00000000", 271384576);
-    fake_pkg(&pat, "UP0000-CUSA00001_00-TESTGAME00000000", 21430272);
+    test_pkg(&app, "UP0000-CUSA00001_00-TESTGAME00000000", 271384576);
+    test_pkg(&pat, "UP0000-CUSA00001_00-TESTGAME00000000", 21430272);
     const char *url = "/mnt/usb0/ps4/CUSA00001/app.pkg", *purl = "/mnt/usb0/ps4/CUSA00001/patch.pkg";
     buf_t json = {0}, pjson = {0};
     build_app_json(&json, &app, url);
@@ -442,7 +442,7 @@ static void test_check(void) {
     pkg_check_t c;
 
     make_pkg(p, cid, "gd", 0x09008000, 1, 0x100000, 0x100000);
-    CHECK(pkg_check(p, 0x13520001, &c) == 0 && c.ok && c.fake && c.kind == PKG_KIND_GAME && !c.problem[0]);
+    CHECK(pkg_check(p, 0x13520001, &c) == 0 && c.ok && c.entry_key && c.kind == PKG_KIND_GAME && !c.problem[0]);
     CHECK(!strcmp(c.content_id, cid) && !strcmp(c.title_id, "CUSA00001") && !strcmp(c.title, "Test Game"));
     CHECK(!strcmp(c.app_ver, "01.04") && !strcmp(c.version, "01.00") && c.system_ver == 0x09008000);
     CHECK(c.pkg_size == 0x100000);
@@ -462,8 +462,8 @@ static void test_check(void) {
     CHECK(pkg_check(p, 0, &c) == 0 && c.ok && !c.warning[0]);          /* no firmware check */
 
     make_pkg(p, cid, "gd", 0x09008000, 0, 0x4000, 0x4000);
-    CHECK(pkg_check(p, 0x13520001, &c) == 0 && !c.ok && !c.fake && strstr(c.problem, "unsupported PS4 package format"));
-    CHECK(!c.installable); /* not fake: nothing to offer */
+    CHECK(pkg_check(p, 0x13520001, &c) == 0 && !c.ok && !c.entry_key && strstr(c.problem, "unsupported PS4 package format"));
+    CHECK(!c.installable); /* no usable entry key: nothing to offer */
 
     /* homebrew ports and apps have title IDs of their own */
     make_pkg(p, "IV0000-SSBU00001_00-SSBURECOMPPS4000", "gd", 0, 1, 0x4000, 0x4000);
@@ -471,7 +471,7 @@ static void test_check(void) {
           strstr(c.problem, "SSBU00001") && c.installable); /* a few KB: an app, for the installer */
     CHECK(homebrew_small("SSBU00001", 600ull << 20) && !homebrew_small("SSBU00001", 5ull << 30) &&
           !homebrew_small("CUSA00001", 1 << 20)); /* a port is big; CUSA games are never held back */
-    /* PS1/PS2/PSP Classic fPKGs (Sony prefixes) under 1 GB are games, not small homebrew apps */
+    /* PS1/PS2/PSP Classic packages (Sony prefixes) under 1 GB are games, not small homebrew apps */
     CHECK(!homebrew_small("SLUS20071", 600ull << 20) && !homebrew_small("SCUS94163", 400ull << 20) &&
           !homebrew_small("ULUS10041", 300ull << 20) && !homebrew_small("NPUJ00001", 200ull << 20));
     CHECK(homebrew_small("PCSX20007", 50ull << 20)); /* emulator app: installable homebrew */
@@ -955,7 +955,7 @@ static void test_remove_admission(void) {
 static void test_bgft_info(void) {
     printf("BGFT game task parser\n");
     pkg_t app;
-    fake_pkg(&app, "UP0000-CUSA00001_00-TESTGAME00000000", 271384576);
+    test_pkg(&app, "UP0000-CUSA00001_00-TESTGAME00000000", 271384576);
     const char *url = "/mnt/usb0/ps4/CUSA00001/app.pkg";
     buf_t json = {0}, b = {0};
     build_app_json(&json, &app, url);
@@ -1036,9 +1036,9 @@ static void test_bgft_scan(void) {
         return;
     }
     pkg_t app, app2, app3;
-    fake_pkg(&app, "UP0000-CUSA00001_00-TESTGAME00000000", 271384576);
-    fake_pkg(&app2, "UP0000-CUSA00002_00-TESTGAME00000000", 271384576);
-    fake_pkg(&app3, "UP0000-CUSA00004_00-TESTGAME00000000", 271384576);
+    test_pkg(&app, "UP0000-CUSA00001_00-TESTGAME00000000", 271384576);
+    test_pkg(&app2, "UP0000-CUSA00002_00-TESTGAME00000000", 271384576);
+    test_pkg(&app3, "UP0000-CUSA00004_00-TESTGAME00000000", 271384576);
     const char *url = "/mnt/usb0/ps4/CUSA00001/app.pkg";
     buf_t json = {0}, one = {0}, two = {0}, three = {0};
     build_app_json(&json, &app, url);

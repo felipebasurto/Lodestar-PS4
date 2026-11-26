@@ -941,7 +941,7 @@ static void dlc_open(title_src_t *t, const config_t *cfg) {
                     pkg_close(&a->pkg);
                 continue;
             }
-            /* the fake key was checked when the pkg was moved here; checking it again on
+            /* the entry key was checked when the pkg was moved here; checking it again on
              * every scan would cost an RSA operation per add-on */
             if (!a->meta.has_category || strcmp(a->meta.category, "ac") || strcmp(a->pkg.title_id, e->d_name) ||
                 strcmp(a->pkg.content_id + 20, f->d_name)) {
@@ -1011,7 +1011,7 @@ static void dlc_open_catalog(title_src_t *t, const catalog_t *c, const cat_game_
             break;
         }
         snprintf(a->path, sizeof(a->path), "%s", p->path);
-        /* the catalog checked the category and the fake key when it first read the pkg;
+        /* the catalog checked the category and entry key when it first read the pkg;
          * checking the key again on every scan would cost an RSA operation per add-on */
         if (pkg_open(&a->pkg, a->path) || read_meta(&a->pkg, &a->meta)) {
             if (a->pkg.fd >= 0)
@@ -1057,7 +1057,7 @@ static void dlc_open_snapshot(title_src_t *t, const catsnap_t *snap, const catsn
             break;
         }
         snprintf(a->path, sizeof(a->path), "%s", path);
-        /* the catalog checked the category and the fake key when it first read the pkg;
+        /* the catalog checked the category and entry key when it first read the pkg;
          * checking the key again on every scan would cost an RSA operation per add-on */
         if (pkg_open(&a->pkg, a->path) || read_meta(&a->pkg, &a->meta)) {
             if (a->pkg.fd >= 0)
@@ -1651,7 +1651,7 @@ static int place_license(pkg_t *pkg) {
         return -1;
     }
     char rp[96], ip[96];
-    /* the PS4 names them free<CID>, the PS5 fake<CID> */
+    /* the PS4 names them free<CID> (the prefix differs on the PS5) */
     snprintf(rp, sizeof(rp), "/user/license/free%.19s.rif", pkg->content_id);
     snprintf(ip, sizeof(ip), "/user/license/free%.19s.idx", pkg->content_id);
     uint8_t *old_rif = read_all(rp, &rl), *old_idx = read_all(ip, &il);
@@ -3703,7 +3703,7 @@ static int adopt_dir_pass(const char *root, const char *dir, int pass) {
                 if (!g_cfg.dlc) {
                     if (first_time(path))
                         printf("[scan] skip %s (add-ons are turned off)\n", path);
-                } else if (pkg_fake_key(&pkg))
+                } else if (pkg_has_entry_key(&pkg))
                     moved += adopt_dlc(root, e->d_name, path, &pkg);
                 else if (first_time(path))
                     printf("[scan] skip %s (unsupported add-on package)\n", path);
@@ -3712,7 +3712,7 @@ static int adopt_dir_pass(const char *root, const char *dir, int pass) {
             pkg_close(&pkg);
             continue;
         }
-        int ok = (is_app || is_patch) && is_game_id(pkg.title_id) && pkg_fake_key(&pkg) &&
+        int ok = (is_app || is_patch) && is_game_id(pkg.title_id) && pkg_has_entry_key(&pkg) &&
                  !(is_app && homebrew_small(pkg.title_id, pkg.pkg_size));
         char tid[10], ver[16] = "";
         uint8_t digest[32];

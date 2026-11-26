@@ -55,10 +55,10 @@ static size_t make_check_sfo(uint8_t *d, const char *cat, uint32_t sysver, const
     return dof + voff;
 }
 
-/* A pkg with what pkg_check reads: header, entry table, the keys entry (with entry key 3
- * wrapped with the public fake key when fake) and param.sfo. The header declares size
+/* A pkg with what pkg_check reads: header, entry table, the keys entry (entry key 3
+ * wrapped when requested) and param.sfo. The header declares size
  * bytes; the file holds the first written bytes; it may disagree with the declared size. */
-static void make_pkg_ver(const char *path, const char *cid, const char *cat, uint32_t sysver, int fake, uint64_t size,
+static void make_pkg_ver(const char *path, const char *cid, const char *cat, uint32_t sysver, int entry_key, uint64_t size,
                          uint64_t written, const char *app_ver) {
     static uint8_t f[0x4000];
     memset(f, 0, sizeof(f));
@@ -81,7 +81,7 @@ static void make_pkg_ver(const char *path, const char *cid, const char *cat, uin
     for (int i = 0; i < 32; i++)
         block[256 - 32 + i] = (uint8_t)i;
     e[253] = 1, e[255] = 1; /* 65537 */
-    if (fake)
+    if (entry_key)
         rsa2048_modexp(block, e, k_pkg_key3_n, f + 0x1100 + 0x20 + 7 * 0x20 + 3 * 0x100);
     FILE *o = fopen(path, "wb");
     uint64_t n = written;
@@ -92,7 +92,7 @@ static void make_pkg_ver(const char *path, const char *cid, const char *cat, uin
 }
 
 /* The usual test pkg: APP_VER 01.04. */
-static void make_pkg(const char *path, const char *cid, const char *cat, uint32_t sysver, int fake, uint64_t size,
+static void make_pkg(const char *path, const char *cid, const char *cat, uint32_t sysver, int entry_key, uint64_t size,
                      uint64_t written) {
-    make_pkg_ver(path, cid, cat, sysver, fake, size, written, "01.04");
+    make_pkg_ver(path, cid, cat, sysver, entry_key, size, written, "01.04");
 }

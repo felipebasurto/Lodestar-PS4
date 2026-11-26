@@ -213,7 +213,7 @@ static int read_one(cat_pkg_t *p, pkg_t *pkg, sfo_t *sfo) {
                pkg->content_id);
         goto out;
     }
-    if (!is_game_id(pkg->title_id) || !pkg_fake_key(pkg))
+    if (!is_game_id(pkg->title_id) || !pkg_has_entry_key(pkg))
         goto out;
     d = pkg_entry(pkg, 0x1000, &len);
     if (!d || sfo_parse(d, len, sfo))

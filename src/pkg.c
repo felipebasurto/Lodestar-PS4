@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 gasb07
- * PS4 pkg reader: header, entry table, fake-key entry decryption, param.sfo. */
-/* PS4 pkg reader: header, entry table, fake-key entry decryption, param.sfo. */
+ * PS4 pkg reader: header, entry table, encrypted entries, param.sfo. */
+/* PS4 pkg reader: header, entry table, encrypted entries, param.sfo. */
 #include "pkg.h"
 
 #include <fcntl.h>
@@ -34,7 +34,7 @@ static int read_at(pkg_t *pkg, void *buf, size_t len, uint64_t off) {
     return 0;
 }
 
-int pkg_fake_key(pkg_t *pkg) {
+int pkg_has_entry_key(pkg_t *pkg) {
     if (!pkg->dk3_tried) {
         pkg->dk3_tried = 1;
         unwrap_key3(pkg);
@@ -146,7 +146,7 @@ uint8_t *pkg_entry(pkg_t *pkg, uint32_t id, size_t *len) {
             return NULL;
         }
         if (flags1 & 0x80000000u) {
-            if (!pkg_fake_key(pkg) || ((flags2 >> 12) & 0xf) != 3) {
+            if (!pkg_has_entry_key(pkg) || ((flags2 >> 12) & 0xf) != 3) {
                 mem_free(buf);
                 return NULL;
             }

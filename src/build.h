@@ -59,8 +59,8 @@ typedef struct {
 } bgft_task_t;
 
 void build_bgft_task(buf_t *out, const bgft_task_t *t);
-/* /user/license/fake<CID[:19]>.rif and .idx (free<CID[:19]> on the PS4): the current
- * files (NULL when missing) with the slot of content_id added or replaced. */
+/* /user/license/free<CID[:19]>.rif and .idx on the PS4 (the prefix differs on the PS5):
+ * the current files (NULL when missing) with the slot of content_id added or replaced. */
 void build_license(buf_t *rif, buf_t *idx, const uint8_t *old_rif, size_t rif_len, const uint8_t *old_idx,
                    size_t idx_len, const char *content_id, const uint8_t *license_dat);
 

@@ -25,7 +25,7 @@ static int g_failed, g_checks;
 
 #define GAME_CID "UP0000-CUSA00001_00-TESTGAME00000000"
 #define MERGED_CID "UP0000-CUSA00002_00-TESTGAME00000000"
-#define NOTFAKE_CID "UP0000-CUSA00003_00-TESTGAME00000000"
+#define NOKEY_CID "UP0000-CUSA00003_00-TESTGAME00000000"
 #define ZERO_CID "UP0000-CUSA00009_00-ZERODECLARED0000"
 #define CUT_CID "UP0000-CUSA00004_00-TESTGAME00000000"
 #define LEGACY_CID "UP0000-CUSA00005_00-TESTGAME00000000"
@@ -48,7 +48,7 @@ static void mkdirs(const char *path) {
     mkdir(tmp, 0777);
 }
 
-static void pkg_at(const char *root, const char *rel, const char *cid, const char *cat, int fake, uint64_t size,
+static void pkg_at(const char *root, const char *rel, const char *cid, const char *cat, int entry_key, uint64_t size,
                    uint64_t written, const char *app_ver) {
     char path[PATH_MAX], dir[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s", root, rel);
@@ -58,7 +58,7 @@ static void pkg_at(const char *root, const char *rel, const char *cid, const cha
         *slash = 0;
         mkdirs(dir);
     }
-    make_pkg_ver(path, cid, cat, 0x09008000, fake, size, written, app_ver);
+    make_pkg_ver(path, cid, cat, 0x09008000, entry_key, size, written, app_ver);
 }
 
 static void cleanup(const char *root) {
@@ -128,8 +128,8 @@ static void test_scan(void) {
     /* a second copy of the game, and an add-on without its game */
     pkg_at(root, "duplicate/Game A copy.pkg", GAME_CID, "gd", 1, 0x4000, 0x4000, "01.00");
     pkg_at(root, "orphan/orphan.pkg", ORPHAN_CID, "ac", 1, 0x4000, 0x4000, "01.00");
-    /* unusable pkgs: not fake, and cut off (the header claims more than the file has) */
-    pkg_at(root, "notfake.pkg", NOTFAKE_CID, "gd", 0, 0x4000, 0x4000, "01.00");
+    /* unusable pkgs: no usable entry key, and cut off (the header claims more than the file has) */
+    pkg_at(root, "nokey.pkg", NOKEY_CID, "gd", 0, 0x4000, 0x4000, "01.00");
     pkg_at(root, "zero-declared.pkg", ZERO_CID, "ac", 1, 0, 0x4000, "01.00");
     pkg_at(root, "cut.pkg", CUT_CID, "gd", 1, 0x10000, 0x8000, "01.00");
     /* the layout of older PS4Mount versions keeps working; its replaced update does not */
@@ -341,9 +341,9 @@ static void test_choose(void) {
     cleanup(other);
 }
 
-/* PS1/PS2/PSP Classics fPKGs (including gdO category and < 1 GB Sony prefixes) are grouped as games. */
+/* PS1/PS2/PSP Classic packages (including gdO category and < 1 GB Sony prefixes) are grouped as games. */
 static void test_classics(void) {
-    printf("catalog: PS2/PS1/PSP classics fpkgs\n");
+    printf("catalog: PS2/PS1/PSP classic packages\n");
     char root[] = "/tmp/ps4mount-cat-XXXXXX";
     if (!mkdtemp(root)) {
         CHECK(0);
