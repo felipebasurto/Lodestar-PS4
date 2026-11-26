@@ -87,6 +87,8 @@ Source: user (2026-11-24: idea 3, the storage panel). The old page (`/legacy`) d
 
 - Freeing the space of installed games, or choosing where a game is installed.
 - Deleting anything in `/user/app`, `/user/patch` or `/user/addcont`.
+- Garbage-collecting macOS AppleDouble `._*` files on user drives. They are metadata garbage to
+  Lodestar but not files Lodestar created; P4N-21 ignores them instead of deleting them.
 - Keeping a refused copy for a retry (see open questions).
 
 ## Open questions

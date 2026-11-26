@@ -5,6 +5,7 @@
 Run:
     python3 -I test/exfatmap_test.py
 """
+import errno
 import hashlib
 import json
 import math
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -424,6 +426,42 @@ class ExFatMapTest(unittest.TestCase):
         p = self.write_img("badck.img", bytes(raw))
         with self.assertRaisesRegex(exfatmap.ExFatError, "checksum"):
             exfatmap.analyze_paths(p, ["ck.bin"])
+
+    def test_raw_device_style_reads_are_aligned_to_512(self):
+        fs = SyntheticExFat(bytes_shift=9, spc_shift=3, cluster_count=64)
+        fs.add_file(fs.root_cluster, "aligned.pkg", [10, 12])
+        img_path = self.write_img("rawaligned.img", fs.finalize())
+
+        real_pread = os.pread
+
+        def strict_raw_pread(fd, length, offset):
+            if offset % 512 or length % 512:
+                raise OSError(errno.EINVAL, "unaligned raw-device read")
+            return real_pread(fd, length, offset)
+
+        short_path = os.path.join(self.tmp.name, "short.bin")
+        short_data = bytes(range(250)) * 4
+        with open(short_path, "wb") as fh:
+            fh.write(short_data)
+
+        with mock.patch.object(exfatmap.os, "pread", side_effect=strict_raw_pread):
+            rep = exfatmap.analyze_paths(img_path, ["aligned.pkg"])
+            fd = os.open(img_path, os.O_RDONLY)
+            try:
+                with open(img_path, "rb") as fh:
+                    expected = fh.read()[3:1001]
+                self.assertEqual(exfatmap.read_at(fd, 3, 998), expected)
+            finally:
+                os.close(fd)
+            fd = os.open(short_path, os.O_RDONLY)
+            try:
+                self.assertEqual(exfatmap.read_at(fd, 3, 997), short_data[3:1000])
+                with self.assertRaises(exfatmap.ExFatError):
+                    exfatmap.read_at(fd, 3, 998)
+            finally:
+                os.close(fd)
+
+        self.assertEqual(rep["targets"]["aligned.pkg"]["extent_count"], 2)
 
     def test_cli_human_and_json_output(self):
         fs = SyntheticExFat(cluster_count=32)

@@ -59,20 +59,32 @@ def u64le(b, off):
     return int.from_bytes(b[off:off + 8], "little")
 
 
+RAW_IO_ALIGNMENT = 512
+READ_WINDOW_CHUNK = 4 * 1024 * 1024
+
+
 def read_at(fd, offset, length):
     if length == 0:
         return b""
+    aligned_start = offset - (offset % RAW_IO_ALIGNMENT)
+    end = offset + length
+    aligned_end = end + ((-end) % RAW_IO_ALIGNMENT)
     out = bytearray()
-    pos = offset
-    rem = length
-    while rem > 0:
-        chunk = os.pread(fd, rem, pos)
-        if not chunk:
-            raise ExFatError(f"unexpected EOF reading {length} bytes at offset {offset}")
-        out.extend(chunk)
-        pos += len(chunk)
-        rem -= len(chunk)
-    return bytes(out)
+    pos = aligned_start
+    while pos < aligned_end:
+        read_pos = pos - (pos % RAW_IO_ALIGNMENT)
+        overlap = pos - read_pos
+        want = min(READ_WINDOW_CHUNK, aligned_end - read_pos)
+        chunk = os.pread(fd, want, read_pos)
+        if len(chunk) <= overlap:
+            break
+        new_bytes = chunk[overlap:]
+        out.extend(new_bytes)
+        pos += len(new_bytes)
+    skip = offset - aligned_start
+    if len(out) < skip + length:
+        raise ExFatError(f"unexpected EOF reading {length} bytes at offset {offset}")
+    return bytes(out[skip:skip + length])
 
 
 def boot_checksum(region_11_sectors):

@@ -184,17 +184,24 @@ Check: test (real hardware performance regression and scan timing/ordering). Tes
 `test_scanreq`; the sandbox-mount integration is compiled through `test/sdkcheck.sh`.
 Source: Lodestar background-load audit during CUSA23827 gameplay, 2026-11-26.
 
-### P4N-21: dotfiles and macOS AppleDouble sidecars are not PKG adoption candidates
+### P4N-21: dotfiles and macOS AppleDouble sidecars are ignored, not adopted or deleted
 Directory entries whose name starts with `.` (including macOS AppleDouble sidecars `._*.pkg`, `.pkg`
 and hidden dotfiles) are never PKG candidates in `adopt_dir_pass` or `has_pkg`. An AppleDouble
 `._*.pkg` sidecar is ignored silently (and counted in scan telemetry) without calling `stat` or
 `pkg_open`, avoiding repeated futile USB header reads across both adoption passes. Historical log
 lines from older payloads that skipped `._*.pkg` after header read remain informational in
 `tools/logcheck.py` (`LOG-5`).
+AppleDouble sidecars are macOS metadata garbage to Lodestar, but they are still files on the user's
+drive. Lodestar does not garbage-collect or delete them: deletion would be a destructive write outside
+the only user-file deletion exception allowed by STORE-1, while the measured Toshiba residue is only
+82 files / 335,872 bytes and the current filter removes their repeated open/stat cost. Ignoring them
+is the permanent behavior, not a temporary conservative default.
 Check: test (real hardware performance regression and external filename input space). Test:
 `test/unit.c` › `test_scanfilter`; `adopt_dir_pass` and `has_pkg` integration compiled through
 `test/sdkcheck.sh`.
-Source: CUSA23827 background-I/O audit, 2026-11-26 (41 `._*.pkg` sidecars opened twice per scan).
+Source: CUSA23827 background-I/O audit, 2026-11-26 (41 `._*.pkg` sidecars opened twice per scan);
+`evidence/cusa23827/layoutscan.json` archived in commit
+`ef98120b6524ea959fcd2a0e5e234333ba7ae0ac` (82 AppleDouble files, 335,872 bytes).
 
 ### P4N-22: scan epochs and `/api/games` emit compact key=value telemetry without changing behavior
 Every executed scan epoch emits one `[scan] epoch ...` key=value log line reporting `seq`, `trigger`,
@@ -210,16 +217,45 @@ Check: test (public log contract, trigger classification and BGFT read accountin
 `test/sdkcheck.sh`.
 Source: CUSA23827 background-I/O instrumentation plan, 2026-11-26.
 
-### P4N-23: offline exFAT allocation mapping is read-only and validates volume integrity
+### P4N-23: offline exFAT allocation mapping is read-only, alignment-safe and validates volume integrity
 `tools/exfatmap.py` maps physical cluster extents, fragmentation metrics (`extent_count`,
 `fragments_per_GiB`, `largest_extent_share`, forward gaps, backward jumps) and pairwise hole-sharing
 interleaving for target files directly from a raw exFAT device or image using only the Python standard
 library and `os.O_RDONLY`. It validates boot geometry and main/backup boot checksums, active FAT,
 allocation bitmap, `0x85`/`0xC0`/`0xC1` directory entry sets and `NoFatChain` vs FAT-chain resolution,
 rejecting corrupt geometry, FAT cycles, truncated chains and cross-file cluster overlaps.
+The parser's public byte offsets and lengths remain exact, but every physical read goes through a
+512-byte-aligned window: the start is padded down, the end is padded up, and the requested bytes are
+cropped out after reading. This is required for macOS raw `/dev/rdisk*` devices, which reject
+unaligned offset/length pairs with `EINVAL`; it must not change results on regular image files. A
+short read is fatal only when the requested bytes themselves are missing, never merely because the
+aligned padding crosses end-of-file.
 Check: test (keep bar 1: external binary filesystem format; keep bar 4: parser input space). Test:
-`test/exfatmap_test.py` (synthetic exFAT images).
-Source: CUSA23827 physical-allocation measurement design (`a2-report.txt`), 2026-11-26.
+`test/exfatmap_test.py` (synthetic exFAT images, including a strict raw-device-like `pread` that
+rejects unaligned offset/length pairs).
+Source: CUSA23827 physical-allocation measurement design (`a2-report.txt`), 2026-11-26; macOS raw
+device `EINVAL` failure observed while reading the Toshiba exFAT partition.
+
+### P4N-26: physical placement is operator guidance, not a runtime control plane
+The official recommendation for a large USB library whose games stream a patch and several add-ons
+concurrently is a USB SSD: solid-state storage has no moving head and therefore removes the mechanical
+seek component of this access pattern. Mechanical USB HDDs remain supported, but a large library with
+patch+add-on concurrency must be expected to degrade streaming when those files are widely separated;
+no payload ordering can move the user's data on the platter. This recommendation is operational
+guidance, not a measured claim that a specific SSD/console/game triple has already been benchmarked.
+Lodestar must not invent a mount-time fragmentation or physical-separation report. The file APIs
+available to the payload expose logical files, not exFAT cluster allocation. No hardware evidence
+establishes a supported payload interface for reading the live FAT of a mounted exFAT volume, and a
+raw-device shortcut would be unvalidated against the mounted filesystem's own metadata cache.
+Physical allocation is therefore unknown at runtime unless future console evidence proves a safe
+interface; `tools/exfatmap.py` remains an offline host diagnostic for an unmounted disk or image.
+Lodestar also must not hide, limit or reorder user-visible add-ons because of inferred disk layout.
+Reordering mount operations does not change physical placement, and suppressing concurrent add-ons
+can break the game. The runtime mitigations are limited to work Lodestar owns: gameplay scan cadence
+(P4N-20), sidecar filtering (P4N-21), one-fingerprint scan epochs (P4N-15) and external add-ons by
+default (P4N-25).
+Check: read. Source: CUSA23827 evidence bundle archived in commit
+`ef98120b6524ea959fcd2a0e5e234333ba7ae0ac` and the design decision of 2026-11-26.
 
 ## Toshiba reference profile (not a compatibility requirement)
 
@@ -233,14 +269,27 @@ drive-agnostic.
 
 ## CUSA23827 external-streaming evidence (2026-11-26)
 
-Hardware-verified facts from firmware 14.00 with the Toshiba USB 3.0 exFAT drive:
+Source key for the v2 console run and offline disk-layout bundle. Every file below is archived in
+commit `ef98120b6524ea959fcd2a0e5e234333ba7ae0ac`:
+
+- `[v2-bench]`: `evidence/cusa23827/benchdisk-v2-results.txt` (`bench_ver=2`, firmware 14.00,
+  run `1795722237-45`, `status=ok`, `errors=0`, `short_reads=0`, normal cached I/O without a cache
+  purge; `O_DIRECT` probe not accepted as proof of cache bypass).
+- `[exfat-map]`: `evidence/cusa23827/cusa23827-exfat-map.json` and
+  `evidence/cusa23827/exfatmap-stdout.txt` (offline read-only allocation map).
+- `[layout-scan]`: `evidence/cusa23827/layoutscan.json` (free-space runs and AppleDouble inventory).
+- `[mac-layout-bench]`: `evidence/cusa23827/layoutbench.txt` (same Toshiba disk attached to the Mac).
+- `[fsck]`: `evidence/cusa23827/fsck-exfat.txt` (`fsck_exfat -n`, exit 0).
+
+### FACT: hardware-verified or directly measured observations
 
 - `patch.pkg` is 55,208,181,760 bytes (51.42 GiB) and remains the shared Call of Duty HQ core package.
 - The MW3 executable `cod23-cod.elf` mounts exactly `CODMW3CONTENT003/004/005/006`; the initial launcher
   separately mounts seven add-ons, including MW3 campaign and BO6 packages that the MW3 executable does not.
 - In a controlled reversible experiment, those four MW3 runtime add-ons were temporarily present as complete
   internal copies while `patch.pkg` remained on USB. The user estimated only a 35-40% improvement: launch,
-  match entry, texture streaming and minimap population were still slow.
+  match entry, texture streaming and minimap population were still slow. The 35-40% figure is a user
+  estimate, not an instrumented gameplay measurement.
 - The launcher took about 101 seconds after its initial process appeared before `cod23-cod.elf` appeared;
   the later mount of the four MW3 runtime packages took only about 2.6 seconds.
 - The temporary internal copies were removed only after the external mount was restored and all twelve
@@ -250,7 +299,7 @@ Hardware-verified facts from firmware 14.00 with the Toshiba USB 3.0 exFAT drive
 - An FTP range-read comparison measured about 5.5-5.9 MB/s from both USB and an internal file. This is
   invalid as a disk benchmark because the FTP/network path saturates first; it must not be used as evidence
   that USB and internal storage perform equally.
-- Console-side read-only `pread` benchmark (`benchdisk` v1, `bench_ver=1`, `build=0329aaa4fafc+dirty`,
+- Console-side read-only `pread` benchmark v1 (`bench_ver=1`, `build=0329aaa4fafc+dirty`,
   `sdk=573b4a0d`, `seed=0xc0de000000023827`, measured on `2026-11-26T15:31:13Z`, run `1795707073-45`,
   `status=ok`, `errors=0`, `short_reads=0`, `total_bytes=1698037760`, normal cached I/O over unique 16 KiB
   granules without cache purge; artifacts SHA-256 `build/benchdisk.elf` =
@@ -262,35 +311,81 @@ Hardware-verified facts from firmware 14.00 with the Toshiba USB 3.0 exFAT drive
   - Random reads (`usb_rand`): 4 KiB mean `12.062 ms` (p50 `11.990 ms`, p95 `17.969 ms`, `0.324 MiB/s`);
     64 KiB mean `14.213 ms` (`4.401 MiB/s`); 1 MiB mean `37.316 ms` (`29.873 MiB/s`); 8 MiB mean
     `99.120 ms` (`80.841 MiB/s`).
-  - Concurrent interleaved 1 MiB streams (`usb_conc`, 1/2/4 threads, 3×64 MiB each): `92.590` → `63.644` →
-    `46.080 MiB/s` mean (4-stream min `21.505 MiB/s`).
+  - Concurrent interleaved 1 MiB streams inside the same patch file (`usb_conc`, 1/2/4 threads,
+    3×64 MiB each): `92.590` → `63.644` → `46.080 MiB/s` mean (4-stream min `21.505 MiB/s`).
   - Direct USB vs nullfs-mounted patch (`patch_cmp`, 4 paired alternating 32 MiB adjacent windows, same
     `dev=439 ino=4026532727`): `/mnt/usb0/ps4/CUSA23827/patch.pkg` mean `94.074 MiB/s` (sd `7.577`) vs
     `/user/patch/CUSA23827/patch.pkg` mean `94.268 MiB/s` (sd `2.095`).
   - Internal control (`/user/app/CUSA36843/app.pkg`, 9.01 GiB on encrypted UFS `/dev/da0x13.crypt`):
     `79.473 MiB/s` seq, 4 KiB rand mean `16.167 ms` (p50 `12.902 ms`). Not directly comparable to the
     51.42 GiB USB patch because file size, LBA placement, encryption and filesystem differ.
-  - `O_DIRECT` probe (`odirect_open=1`, `odirect_read=1`, 4 KiB rand mean `13.198 ms`) is accepted by the
-    kernel interface but is not proof of buffer-cache bypass.
+- Console-side `benchdisk` v2 `[v2-bench]`:
+  - Single-stream control (`usb_conc streams=1`): mean `93.120 MiB/s` (3 samples, min `91.592`, max
+    `95.203`). Same-file concurrency lowered this to `61.980 MiB/s` at 2 streams and `56.576 MiB/s`
+    at 4 streams.
+  - Real multi-file streaming (`multifile_seq1m`): `patch.pkg` plus all four MW3 add-ons open at once,
+    alternating 1 MiB reads, aggregate mean `22.469 MiB/s` (sd `0.353`, min `22.034`, max `22.899`).
+  - Real multi-file random 64 KiB (`multifile_rand64k`): mean latency `93.783 ms`, p50 `88.859 ms`,
+    p95 `176.821 ms`, max `241.290 ms`, aggregate mean `3.187 MiB/s`.
+  - Direct-vs-nullfs random parity (`patch_rand_cmp`): at 4 KiB, USB mean `13.181 ms` vs nullfs mean
+    `12.362 ms`; at 64 KiB, USB mean `13.238 ms` vs nullfs mean `13.584 ms`. No meaningful nullfs
+    random-read penalty was measured.
+  - Warm repeats: sequential 1 MiB repeat speedup `×2.660` (`85.667` → `227.873 MiB/s`); random 4 KiB
+    p50 speedup only `×1.091` and random 64 KiB p50 speedup `×0.994` (that is, no useful small-random
+    repeat speedup).
+  - Scan metadata microbenchmark (one `stat` + `open` + 4 KiB `pread` per operation): 41 sidecar
+    files read in two passes cost 82 operations / 335,872 bytes / `6.214 ms` total; one pass over
+    102 library PKG headers cost `1.449 s` (`14.201 ms` mean per operation, p95 `25.908 ms`).
+- Offline exFAT allocation map `[exfat-map]`:
+  - `patch.pkg`: `extent_count=65`, `contiguous=False`, `fragments_per_GiB=1.245`,
+    `largest_extent_share=0.0376`, `forward_gaps=59` totaling 124,725,755,904 bytes and
+    `backward_jumps=5` totaling 80,233,234,432 bytes. Its first extent starts at volume byte
+    389,394,464,768.
+  - `CODMW3CONTENT003/004/005/006`: extent counts `14`, `20`, `10` and `8`; no backward jumps; forward
+    gap totals only 3,670,016 / 5,242,880 / 1,835,008 / 1,703,936 bytes. They are therefore much closer
+    to contiguous than the patch, though not strictly one-extent files.
+  - There is no pairwise extent overlap and no hole-sharing interleaving between `patch.pkg` and any of
+    the four add-ons. The closest positive gaps from the patch to `003/004/005/006` are
+    425,644,261,376 / 402,086,821,888 / 441,899,548,672 / 452,538,925,056 bytes respectively: even
+    the nearest patch/add-on extents are separated by roughly 402-453 GB on this volume.
+  - `patch.pkg` extents span volume bytes 389,394,464,768 through 489,095,168,000; the four add-ons
+    occupy the roughly 891-953.5 GB region.
+- Filesystem/volume state `[fsck]`, `[layout-scan]`:
+  - `fsck_exfat -n` reports the volume `TOSHIBA` OK, exit 0.
+  - Free space is 86.73 GiB on the 1 TB-class volume (about 91% full), pulverized into 1,208 free runs;
+    the largest free run is 4.024 GiB.
+  - The library contains 82 macOS AppleDouble `._*` files totaling 335,872 bytes.
+- Host independence check `[mac-layout-bench]`: the same Toshiba disk on the Mac read the patch alone at
+  `99.1`/`98.8 MiB/s` in two sequential runs, versus `60.7`/`60.8 MiB/s` when five files were interleaved
+  in 8 MiB visits.
 
-Inference, not proof: sequential USB throughput (~92-94 MiB/s) is healthy and nullfs/path indirection shows
-no measurable sequential overhead (`94.074` vs `94.268 MiB/s`), so nullfs is not a priority suspect. The
-measured ~12 ms 4 KiB seek latency and sharp drop under concurrent streams (`92.6` → `63.6` → `46.1 MiB/s`)
-are consistent with mechanical-drive seek contention across the 51.42 GiB core package and large add-ons,
-compounded by background scan metadata loops (e.g., 41 macOS `._*.pkg` sidecars and `/api/games`
-fingerprint recomputation).
+### INFERENCE: interpretations supported by those facts, not direct proof
 
-Unknowns that still require console/offline proof:
-- Physical exFAT allocation and fragmentation (extent count, backward jumps, gaps and interleaving of
-  `patch.pkg` and `CODMW3CONTENT003/004/005/006` on the Toshiba drive).
+- Mechanical seek contention across physically separated files is now the primary explanation for the
+  CUSA23827 streaming degradation. The evidence chain is strong but still indirect: multi-file throughput
+  collapses to `22.469 MiB/s` while single-stream throughput is about `93 MiB/s`; even the nearest patch
+  and add-on extents are separated by 402-453 GB; the same host-independent penalty appears on macOS;
+  and direct/nullfs random parity removes nullfs as a priority suspect.
+- The 65 extents of `patch.pkg` are large enough (mean roughly 850 MB decimal) that intra-patch sequential
+  streaming can remain healthy. The measured catastrophic case is not ordinary fragmentation inside one
+  file but the patch↔add-on head movement caused by concurrent multi-file streaming.
+- Background scans are a secondary, controllable cost rather than the root cause: 102 real PKG
+  `stat`+`open`+4 KiB-read operations cost about 1.45 seconds per pass on this drive, while AppleDouble
+  residue is tiny. P4N-20/P4N-21 reduce that cost; they cannot repair the physical layout.
+- A USB SSD should remove the mechanical head-seek component because it has no moving head, and is the
+  correct operational recommendation for this access pattern. The size of the gameplay improvement on this
+  console/game pair is not measured here.
+- Copying add-ons internally is not a general solution: the reversible experiment improved the user's
+  perceived experience only partially while `patch.pkg` remained on USB, and large internal copies create
+  their own storage risk.
+
+### UNKNOWN: questions still open
+
+- The real runtime I/O access pattern of `cod23-cod.elf` (block sizes, offsets, threading and exact
+  concurrency across `patch.pkg` and the four add-on packages).
 - Runtime PFS/PFSC/HMAC read amplification (whether PS4 verifies signed 64 KiB outer-PFS HMACs on demand
   and what cache/readahead sizes apply).
-- Real runtime I/O access pattern of `cod23-cod.elf` (block sizes, offsets, concurrency across `patch.pkg`
-  and the four add-on packages).
-- Random 4K/64K nullfs parity, multi-file concurrent throughput (`patch.pkg` + 4 add-ons), cache warm-repeat
-  contrast, and scan metadata microbenchmark timings (scheduled for `benchdisk` v2).
-- PlayGo locus semantics, the functional effect of the repeated `/mnt/sandbox/download1/CUSA23827`
-  `0x809f8500` error, and whether a USB SSD changes cold-boot gameplay materially.
+- The gameplay A/B result for Legacy vs HEAD (phase C has not been run; no conclusion may be claimed yet).
 
 ## Open questions requiring console proof
 
