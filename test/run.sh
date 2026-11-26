@@ -84,6 +84,10 @@ echo "== pkg catalog"
 $CC $FLAGS -o "$B/catalog_test" test/catalog_test.c src/catalog.c src/pkg.c src/mem.c src/la_alloc.c src/crypto.c
 "$B/catalog_test"
 
+echo "== catalog snapshot"
+$CC $FLAGS -pthread -o "$B/catsnap_test" test/catsnap_test.c src/catsnap.c src/mem.c
+"$B/catsnap_test"
+
 echo "== refused updates"
 $CC $FLAGS -o "$B/badpatch_test" test/badpatch_test.c src/badpatch.c
 "$B/badpatch_test"
