@@ -134,11 +134,12 @@ Source: panel/API architecture audit and WEBAPI-2 implementation design.
 
 ### WEBAPI-7: the agent manifest and status endpoints are read-only additive contracts
 The product version exposed through the existing API (`version` in responses such as
-`GET /api/games`) is `Lodestar 3.0.0`. The internal state and log paths remain under
-`/data/ps4mount` for compatibility; this rule does not migrate console state.
+`GET /api/games`) is the build's `LODESTAR_VERSION`, including any prerelease suffix.
+The internal state and log paths remain under `/data/ps4mount` for compatibility; this rule does
+not migrate console state.
 
 `GET /api/agent` returns a machine-readable JSON manifest with `product` (`Lodestar`),
-`version` (`Lodestar 3.0.0`), `api_version` (`1`), the panel scheme/port, the write-header
+`version` (the same build version), `api_version` (`1`), the panel scheme/port, the write-header
 model (including that the server checks for the custom header's presence), an endpoint list
 in which every entry has `method`, `path`, `mutating` and `summary`, and safety rails.
 In that list `mutating` means intentionally starting or changing application/system state or

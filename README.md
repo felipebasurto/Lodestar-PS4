@@ -5,7 +5,9 @@
 **Juega pkgs fake de PS4 desde discos USB o la memoria de la consola, sin instalarlos.**
 **Play PS4 fake pkgs from USB drives or the console's storage, without installing them.**
 
-**[Español](#español) · [English](#english)**
+**[Empezar](#uso) · [Getting started](#use) · [Descargas / Downloads](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.1)**
+
+`3.1.0-rc.1` es la primera versión de prueba con app nativa de PS4. / `3.1.0-rc.1` is the first test release with the native PS4 app.
 
 Lodestar es un proyecto independiente para PS4, publicado como [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
 Lodestar is an independent PS4 project, published as [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
@@ -28,7 +30,7 @@ Lodestar está centrado deliberadamente en discos duros USB y almacenamiento loc
 
 El panel web enseña la biblioteca como una parrilla densa de carátulas, parecida a una biblioteca de Steam. La ficha y las acciones de un juego se abren solo cuando las pides, sin ocupar media pantalla permanentemente.
 
-Probado en una PS4 con firmware **13.52** y GoldHEN; también funciona en **14.00**. El panel y las notificaciones están en **español e inglés**: salen en el idioma de la consola (inglés si no es ninguno de los dos), y se puede cambiar en **Ajustes → Idioma**.
+El payload se ha probado en **13.52** y **14.00** con GoldHEN. El panel y las notificaciones están en **español e inglés**: salen en el idioma de la consola (inglés si no es ninguno de los dos), y se puede cambiar en **Ajustes → Idioma**.
 
 > [!WARNING]
 > **Versión beta.** Haz una copia de seguridad de tus partidas guardadas antes de usarlo, y [cuenta cualquier problema](#problemas-frecuentes) con el log.
@@ -70,7 +72,7 @@ Probado en una PS4 con firmware **13.52** y GoldHEN; también funciona en **14.0
 
 ## Uso
 
-1. **Descarga** `lodestar-ps4.bin` de [Releases](https://github.com/felipebasurto/Lodestar-PS4/releases) y cópialo en **`/data/payloads/`** de la consola.
+1. **Descarga** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.1/lodestar-ps4.bin) y cópialo en **`/data/payloads/`** de la consola.
 2. **Después de cada arranque**, carga Lodestar. Aparece una notificación con `Lodestar <versión> en marcha` y la dirección del panel.
 3. **Pon los juegos** de una de estas formas:
    - **En un USB:** copia los pkgs en la carpeta `PS4Mount` y conecta el USB a la PS4. Si desactivas **Organizar** en Ajustes, puedes guardarlos en cualquier carpeta de la unidad.
@@ -95,7 +97,7 @@ La consola solo prepara algunos juegos nuevos al arrancar. Cuando Lodestar regis
 
 ### App nativa de PS4
 
-La compilación de desarrollo incluye `lodestar-panel.pkg` con la interfaz nativa. Instálalo desde el instalador de paquetes de GoldHEN, carga el payload y abre **Lodestar** en la pantalla de inicio. La app usa la API local del payload. Las versiones publicadas hasta la 3.0.0 incluyen el acceso al panel mediante el navegador de la consola.
+Descarga [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.1/lodestar-panel.pkg) e instálalo con el instalador de paquetes de GoldHEN. Si ya tienes el icono de Lodestar 3.0.0, instala el PKG nuevo para actualizarlo. Carga el payload de esta release y abre **Lodestar** desde la pantalla de inicio. La app usa la API local del payload.
 
 - **Flechas** para moverte entre la barra lateral y las carátulas. **X** abre la ficha, **△** abre el teclado para buscar, **□** vuelve a escanear y **○** vuelve o sale.
 - Desde la barra lateral puedes encolar un enlace, consultar el progreso y abrir los ajustes de biblioteca, DLC y consola.
@@ -233,7 +235,7 @@ The web panel shows the library as a dense artwork grid, closer to a Steam libra
 
 ![The Lodestar panel](docs/panel-main.png)
 
-Tested on a PS4 running firmware **13.52** with GoldHEN; it also works on **14.00**. The panel and notifications are in **Spanish and English**: they follow the console language (English when it is neither), and can be changed in **Settings → Language**.
+The payload has been tested on firmware **13.52** and **14.00** with GoldHEN. The panel and notifications are in **Spanish and English**: they follow the console language (English when it is neither), and can be changed in **Settings → Language**.
 
 > [!WARNING]
 > **Beta software.** Back up your saved games before using it, and [report problems](#frequent-problems) with the log.
@@ -273,7 +275,7 @@ Tested on a PS4 running firmware **13.52** with GoldHEN; it also works on **14.0
 
 ## Use
 
-1. **Download** `lodestar-ps4.bin` from [Releases](https://github.com/felipebasurto/Lodestar-PS4/releases) and copy it to **`/data/payloads/`** on the console.
+1. **Download** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.1/lodestar-ps4.bin) and copy it to **`/data/payloads/`** on the console.
 2. **After every boot**, load Lodestar. A notification shows `Lodestar <version> running` and the panel address.
 3. **Add games** in one of these ways:
    - **USB:** copy the pkgs into the `PS4Mount` folder and connect the drive. If **Organize** is disabled in Settings, pkgs may stay anywhere on the drive.
@@ -298,7 +300,7 @@ The console prepares some new games only during boot. When Lodestar registers a 
 
 ### Native PS4 app
 
-Development builds include `lodestar-panel.pkg` with the native interface. Install it with GoldHEN’s Package Installer, load the payload, then open **Lodestar** from the home screen. The app uses the payload’s local API. Releases through 3.0.0 use the console browser to open the panel.
+Download [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.1/lodestar-panel.pkg) and install it with GoldHEN’s Package Installer. If you already have the Lodestar 3.0.0 tile, install the new PKG to update it. Load the payload from this release and open **Lodestar** from the home screen. The app uses the payload’s local API.
 
 - Use the **D-pad** to move between the sidebar and the game grid. **Cross** opens details, **Triangle** opens the search keyboard, **Square** scans again, and **Circle** goes back or exits.
 - From the sidebar you can queue a download link, check its progress, and open the library, add-on and console settings.

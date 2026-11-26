@@ -12,7 +12,7 @@ body:
     attributes:
       label: Lodestar version
       description: Shown at the top of the web panel and in the startup notification.
-      placeholder: "2.0.2"
+      placeholder: "3.1.0-rc.1"
     validations:
       required: true
   - type: input
@@ -26,11 +26,11 @@ body:
   - type: textarea
     id: jailbreak
     attributes:
-      label: Jailbreak, GoldHEN and other payloads
-      description: The exploit, the GoldHEN version, how you load Lodestar (Payload Guest, GoldHEN's autoload...) and every other payload you load.
+      label: GoldHEN and payload loader
+      description: Include your GoldHEN version, how you load Lodestar, and other payloads running at the time.
       placeholder: |
-        Lapse, GoldHEN 2.4b18
-        Lodestar from Payload Guest, AnyPad
+        GoldHEN 2.4b18
+        Lodestar from Payload Guest
     validations:
       required: true
   - type: textarea
@@ -45,7 +45,7 @@ body:
     id: drives
     attributes:
       label: Where the game is
-      description: A USB drive (how it is formatted, how many are connected) or the console's storage (/data/pkg).
+      description: A USB drive (how it is formatted, how many are connected) or the console's storage (/data/PS4Mount). Write "none" if the problem is unrelated to storage.
       placeholder: "1 USB SSD, exFAT, one partition"
     validations:
       required: true
@@ -60,7 +60,7 @@ body:
     id: log
     attributes:
       label: Log
-      description: Open the web panel, click **Log** and copy the text, or download `/data/ps4mount/log.txt` over FTP. Include the part from the moment the problem happened.
+      description: Open the web panel, click **Log** and copy the text, or download `/data/ps4mount/log.txt` over FTP. Include the lines from when the problem happened. Remove private links, passwords, and personal data.
       render: text
     validations:
       required: true

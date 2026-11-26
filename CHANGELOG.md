@@ -2,13 +2,29 @@
 
 Lodestar (PS4Mount PS4 before 2.0.0) began as a PS4-only port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (PS5); its versions start again at 0.1.0. The history of the original is in its project and in this repository's git history.
 
-## Unreleased
+## 3.1.0-rc.1
 
-**A cleaner panel and honest advice for hard drives.** Search, the state and platform filters and each drive's free space now sit above the grid; Scan for games, Send games, Download links and the notifications bell are always visible in the header, and the rest (Settings, Remove several, Log, Stop) is under **More**. Settings are grouped as Library, Add-ons and Console, with Save and Cancel always in view. The PS4 tile now opens a native controller interface with the library, game details, settings and a download queue. The separate web panel keeps its connection indicator visible on phones. The README explains why a spinning hard drive can stream a game's update and add-ons slowly (measured: ~92 MiB/s for one file, ~22 MiB/s for an update plus four add-ons whose files sit 400-450 GB apart) and recommends a USB SSD. `tools/exfatmap.py` reads macOS raw devices (`/dev/rdisk*`). Known bugs and pending work are tracked in GitHub issues. Unused screenshots and a leftover Google Drive certificate file are removed.
+**First test release with the native PS4 app.** Browse and search your library with the DualShock 4, open game details, adjust settings, and queue a download link. The separate web panel works on mobile and desktop and supports file uploads and advanced download management.
+
+1. Load `lodestar-ps4.bin` with GoldHEN. Use the `.elf` if your loader takes ELF.
+2. Install `lodestar-panel.pkg` through GoldHEN’s Package Installer. If you have the previous Lodestar tile, install this PKG to update it.
+3. Open **Lodestar** on the PS4, or use the address in the startup notification to open the web panel on a trusted local network.
+
+Host tests and package validation pass. Startup, controller and keyboard on actual PS4 hardware still need verification. [Track PS4 testing](https://github.com/felipebasurto/Lodestar-PS4/issues/13).
+
+The README includes measured HDD performance and guidance on USB storage. The read-only `tools/exfatmap.py` diagnostic handles aligned reads from raw macOS devices. [Known issues and improvements](https://github.com/felipebasurto/Lodestar-PS4/issues).
 
 **Español**
 
-**Un panel más limpio y consejos claros para discos duros.** El buscador, los filtros por estado y plataforma y el espacio libre de cada unidad están ahora encima de la parrilla; Buscar juegos, Enviar juegos, Descargar enlaces y la campana de notificaciones se ven siempre en la cabecera, y el resto (Ajustes, Quitar varios, Log, Detener) está en **Más**. Los ajustes se agrupan en Biblioteca, DLC y Consola, con Guardar y Cancelar siempre a la vista. El icono de PS4 abre una interfaz nativa con mando para la biblioteca, fichas, ajustes y cola de descargas. El panel web mantiene visible el estado de conexión en móviles. El README explica por qué un disco duro mecánico puede leer lento la actualización y los DLC de un juego (medido: ~92 MiB/s con un archivo, ~22 MiB/s con una actualización y cuatro DLC separados 400-450 GB en el disco) y recomienda un SSD USB. `tools/exfatmap.py` lee los dispositivos crudos de macOS (`/dev/rdisk*`). Los fallos conocidos y el trabajo pendiente están en los issues de GitHub. Se quitan capturas sin uso y un certificado sobrante de Google Drive.
+**Primera versión de prueba con app nativa de PS4.** Usa el DualShock 4 para recorrer y buscar en la biblioteca, abrir fichas, cambiar ajustes y encolar un enlace. El panel web sigue disponible en móvil y escritorio para subir archivos y gestionar descargas avanzadas.
+
+1. Carga `lodestar-ps4.bin` con GoldHEN. Usa el `.elf` si tu cargador trabaja con ELF.
+2. Instala `lodestar-panel.pkg` con el instalador de paquetes de GoldHEN. Si ya tienes el icono anterior, instala este PKG para actualizarlo.
+3. Abre **Lodestar** en la PS4 o usa la dirección del aviso de arranque para abrir el panel web desde una red local de confianza.
+
+Las pruebas de host y la validación del paquete pasan. El arranque, el mando y el teclado siguen pendientes de validación en una PS4 real. [Pruebas en consola](https://github.com/felipebasurto/Lodestar-PS4/issues/13).
+
+El README recoge las mediciones del HDD y explica cómo afecta la unidad USB al rendimiento. El diagnóstico de solo lectura `tools/exfatmap.py` admite lecturas alineadas de dispositivos crudos en macOS. [Problemas conocidos y mejoras](https://github.com/felipebasurto/Lodestar-PS4/issues).
 
 ## 3.0.0
 
