@@ -179,6 +179,7 @@ int nas_fw_tested(uint32_t fw) { return (fw >> 16) == 0x1352 || (fw >> 16) == 0x
 
 static struct fuse *g_fuse;
 static char g_mnt[PATH_MAX];
+static pthread_mutex_t g_mnt_mu = PTHREAD_MUTEX_INITIALIZER;
 static char g_status[192] = "off";
 /* A mirror for readers outside the netfs owner. g_lock can be held across backend work, so
  * panel workers never take it just to copy a short status string. Every mutation publishes
@@ -1051,7 +1052,9 @@ static int adopt(const nas_cfg_t *cfg, char *err, size_t n) {
         printf("[nas] %s: from an earlier load with other NAS code, not used\n", mnt);
         return -1;
     }
+    pthread_mutex_lock(&g_mnt_mu);
     snprintf(g_mnt, sizeof(g_mnt), "%s", mnt);
+    pthread_mutex_unlock(&g_mnt_mu);
     g_mounted = 1;
     g_adopted = 1;
     publish_mounted(1);
@@ -1083,7 +1086,13 @@ void nas_release(void) {
 
 int nas_mounted(void) { return g_mounted; }
 
-const char *nas_mountpoint(void) { return g_mnt; }
+void nas_mountpoint_copy(char *out, size_t n) {
+    if (!n)
+        return;
+    pthread_mutex_lock(&g_mnt_mu);
+    snprintf(out, n, "%s", g_mnt);
+    pthread_mutex_unlock(&g_mnt_mu);
+}
 
 int nas_active(void) {
     if (__atomic_load_n(&g_pub_adopted, __ATOMIC_ACQUIRE))
@@ -1228,7 +1237,9 @@ int nas_start(const nas_cfg_t *cfg, char *err, size_t n) {
         pthread_mutex_unlock(&g_lock);
         return -1;
     }
+    pthread_mutex_lock(&g_mnt_mu);
     snprintf(g_mnt, sizeof(g_mnt), "%s", mnt);
+    pthread_mutex_unlock(&g_mnt_mu);
     g_mounted = 1;
     g_active = 1;
     publish_mounted(1);

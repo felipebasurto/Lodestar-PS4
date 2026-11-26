@@ -552,19 +552,29 @@ static int is_mountpoint(const char *path) {
 #define NAS_ROOT_PATH STATE_DIR "/nas"
 #define INTERNAL_ROOT "/data"
 
-/* Points NAS_ROOT_PATH at the live mount when it moved. */
+/* Points NAS_ROOT_PATH at the live mount when it moved. The mountpoint string and this
+ * lazily repaired link can be observed from panel workers, so both are explicit boundaries. */
 static void nas_link_update(void) {
     static char linked[PATH_MAX];
-    const char *m = nas_mountpoint();
-    if (!m[0] || !strcmp(linked, m))
+    static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
+    char m[PATH_MAX];
+    nas_mountpoint_copy(m, sizeof(m));
+    if (!m[0])
         return;
+    pthread_mutex_lock(&mu);
+    if (!strcmp(linked, m)) {
+        pthread_mutex_unlock(&mu);
+        return;
+    }
     mkdir(STATE_DIR, 0777);
     unlink(NAS_ROOT_PATH);
     if (symlink(m, NAS_ROOT_PATH)) {
         printf("[nas] link %s: %s\n", NAS_ROOT_PATH, strerror(errno));
+        pthread_mutex_unlock(&mu);
         return;
     }
     snprintf(linked, sizeof(linked), "%s", m);
+    pthread_mutex_unlock(&mu);
     printf("[nas] %s -> %s\n", NAS_ROOT_PATH, m);
 }
 
@@ -630,6 +640,8 @@ static int is_nas(const char *root) { return !strcmp(root, NAS_ROOT_PATH); }
 
 /* Pkgs used where they are: with organizing off everywhere, and always on a share, which
  * is read-only and cannot be renamed into ps4/<TITLE_ID>/. */
+static int in_place_cfg(const char *root, const config_t *cfg) { return !cfg->organize || is_nas(root); }
+
 static int in_place(const char *root) { return !cfg_organize() || is_nas(root); }
 
 static int root_present(const char *root) {
@@ -1281,7 +1293,7 @@ static int src_open_paths(title_src_t *t, const char *tid, const addon_view_t *v
  * with organize off, where the catalog of the drive found them. */
 static int src_open(title_src_t *t, const char *root, const char *tid, const config_t *cfg) {
     memset(t, 0, sizeof(*t));
-    if (in_place(root)) {
+    if (in_place_cfg(root, cfg)) {
         const catalog_t *cat = drive_catalog(root);
         const cat_game_t *g = cat ? catalog_game(cat, tid) : NULL;
         if (!g)
@@ -1304,7 +1316,7 @@ static int src_open(title_src_t *t, const char *root, const char *tid, const con
  * the caller. Organized libraries do not need the catalog in either mode. */
 static int src_open_snapshot(title_src_t *t, const char *root, const char *tid, const config_t *cfg, const catsnap_t *snap) {
     memset(t, 0, sizeof(*t));
-    if (in_place(root)) {
+    if (in_place_cfg(root, cfg)) {
         const catsnap_game_t *g = catsnap_find(snap, tid);
         if (!g)
             return -1;
@@ -1334,11 +1346,11 @@ static uint64_t fp_stat(uint64_t h, const char *path) {
 
 /* The add-ons of the game, added to h; order independent (they come from a folder or a
  * catalog, in no fixed order). */
-static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, const catsnap_t *snap) {
+static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, int inplace, const catsnap_t *snap) {
     char x[40];
     uint64_t dh = 0;
     int nd = 0;
-    if (in_place(root)) {
+    if (inplace) {
         if (snap) {
             const catsnap_game_t *g = catsnap_find(snap, tid);
             const catsnap_dlc_t *dlcs = catsnap_dlcs((catsnap_t *)snap);
@@ -1400,11 +1412,11 @@ static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, const c
 
 /* The hash of the files of tid on root, from stats only: over a share, reading a pkg is
  * a megabyte where each of these is one getattr. */
-static uint64_t title_files_fp_mode(const char *root, const char *tid, int dlc, int dlc_mode, int dlc_big,
-                                    const catsnap_t *snap) {
+static uint64_t title_files_fp_mode(const char *root, const char *tid, const config_t *cfg, const catsnap_t *snap) {
     char app[PATH_MAX], patch[PATH_MAX];
+    int inplace = in_place_cfg(root, cfg);
     app[0] = patch[0] = 0;
-    if (in_place(root)) {
+    if (inplace) {
         if (snap) {
             const catsnap_game_t *g = catsnap_find(snap, tid);
             if (!g)
@@ -1433,12 +1445,12 @@ static uint64_t title_files_fp_mode(const char *root, const char *tid, int dlc, 
     /* an update left out (or tried again) changes what the game is */
     char mark[96];
     h = fp_stat(h, badpatch_path(tid, mark, sizeof(mark)));
-    h = title_fp_add(h, dlc ? "add-ons" : "no add-ons", 0, dlc_mode | (dlc_big ? 4 : 0));
-    return dlc ? fp_addons(h, root, tid, snap) : h;
+    h = title_fp_add(h, cfg->dlc ? "add-ons" : "no add-ons", 0, cfg->dlc_mode | (cfg->dlc_big ? 4 : 0));
+    return cfg->dlc ? fp_addons(h, root, tid, inplace, snap) : h;
 }
 
-static uint64_t title_files_fp(const char *root, const char *tid, int dlc, int dlc_mode, int dlc_big) {
-    return title_files_fp_mode(root, tid, dlc, dlc_mode, dlc_big, NULL);
+static uint64_t title_files_fp(const char *root, const char *tid, const config_t *cfg) {
+    return title_files_fp_mode(root, tid, cfg, NULL);
 }
 
 static void info_from_src(const title_src_t *t, title_info_t *e) {
@@ -1539,7 +1551,7 @@ static int title_info_fp_copy(const char *root, const char *tid, uint64_t fp, co
  * mutex; the fill/copy itself is serialized so no live cache pointer escapes to the panel. */
 static int title_info_snapshot_copy(const char *root, const char *tid, const config_t *cfg, const catsnap_t *snap,
                                     title_info_copy_t *out) {
-    uint64_t fp = title_files_fp_mode(root, tid, cfg->dlc, cfg->dlc_mode, cfg->dlc_big, snap);
+    uint64_t fp = title_files_fp_mode(root, tid, cfg, snap);
     if (!fp)
         return -1;
     return title_info_fp_copy(root, tid, fp, cfg, snap, out);
@@ -4009,8 +4021,9 @@ static int titles_on_root(const char *root, char (*tids)[10], int max) {
 
 /* Worker form of the same enumeration: in-place games come from one immutable epoch held
  * by the caller; organized folders are already plain filesystem state. */
-static int titles_on_root_snapshot(const char *root, char (*tids)[10], int max, const catsnap_t *snap) {
-    if (in_place(root)) {
+static int titles_on_root_snapshot(const char *root, char (*tids)[10], int max, const catsnap_t *snap,
+                                   const config_t *cfg) {
+    if (in_place_cfg(root, cfg)) {
         int n = 0;
         uint32_t ng = catsnap_ngames(snap);
         const catsnap_game_t *games = catsnap_games((catsnap_t *)snap);
@@ -4064,7 +4077,8 @@ static int internal_dir_skip(const char *path, const char *rel) {
  * must not find its games a second time (and the share would be organized by it).
  * The USB drive is exFAT: the name it was made with may not be the one given here. */
 static int nas_dir_skip(const char *path) {
-    const char *m = nas_mountpoint();
+    char m[PATH_MAX];
+    nas_mountpoint_copy(m, sizeof(m));
     size_t n = strlen(m);
     return m[0] && !strncasecmp(path, m, n) && (!path[n] || path[n] == '/');
 }
@@ -4230,7 +4244,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             pump_now(); /* the panel answers while a library is walked */
         activity_set("scanning", label, NULL, NULL, k, nt, 0, 0);
         const char *tid = tids[k];
-        uint64_t fp = title_files_fp(root, tid, g_cfg.dlc, g_cfg.dlc_mode, g_cfg.dlc_big);
+        uint64_t fp = title_files_fp(root, tid, &g_cfg);
         title_info_copy_t icopy;
         if (title_info_fp_copy(root, tid, fp, &g_cfg, NULL, &icopy))
             continue;
@@ -5358,13 +5372,14 @@ static void json_str(buf_t *b, const char *s) {
 /* Finds the drive tid is served from: the ps4/<TID> folder of older versions, or the
  * game the catalog found where it is. Panel workers use the completed-epoch presence
  * snapshot; owner actions keep the live catalog they already serialize with the scan. */
-static int find_root_impl(const char *tid, char *root, size_t n, int presence_snapshot) {
+static int find_root_impl(const char *tid, char *root, size_t n, int presence_snapshot, const config_t *cfg) {
     for (int i = 0; i < NROOTS; i++) {
         char r[PATH_MAX], p[PATH_MAX];
         root_path(i, r, sizeof(r));
         if (!root_present(r))
             continue;
-        if (in_place(r)) {
+        int inplace = cfg ? in_place_cfg(r, cfg) : in_place(r);
+        if (inplace) {
             int found = presence_snapshot ? catalog_presence_has(r, tid) : 0;
             if (!presence_snapshot) {
                 const catalog_t *c = drive_catalog(r);
@@ -5385,9 +5400,11 @@ static int find_root_impl(const char *tid, char *root, size_t n, int presence_sn
     return -1;
 }
 
-static int find_root(const char *tid, char *root, size_t n) { return find_root_impl(tid, root, n, 0); }
+static int find_root(const char *tid, char *root, size_t n) { return find_root_impl(tid, root, n, 0, NULL); }
 
-static int find_root_snapshot(const char *tid, char *root, size_t n) { return find_root_impl(tid, root, n, 1); }
+static int find_root_snapshot(const char *tid, char *root, size_t n, const config_t *cfg) {
+    return find_root_impl(tid, root, n, 1, cfg);
+}
 
 void app_games_json(buf_t *out) {
     config_t cfg;
@@ -5421,9 +5438,9 @@ void app_games_json(buf_t *out) {
         root_path(i, root, sizeof(root));
         if (!root_present(root))
             continue;
-        catsnap_t *snap = in_place(root) ? catalog_snapshot_acquire(root) : NULL;
+        catsnap_t *snap = in_place_cfg(root, &cfg) ? catalog_snapshot_acquire(root) : NULL;
         char tids[MAX_TITLES][10];
-        int nt = titles_on_root_snapshot(root, tids, MAX_TITLES, snap);
+        int nt = titles_on_root_snapshot(root, tids, MAX_TITLES, snap, &cfg);
         for (int k = 0; k < nt; k++) {
             const char *tid = tids[k];
             title_info_copy_t tcopy;
@@ -6920,11 +6937,11 @@ void app_check(const void *data, size_t len, uint64_t size, buf_t *out) {
         snprintf(notes[nnotes++], sizeof(notes[0]), "%s",
                  TR("add-ons are turned off in the settings: it will wait in the folder",
                     "los DLC están desactivados en los ajustes: esperará en la carpeta"));
-    if (c.kind == PKG_KIND_UPDATE && find_root_snapshot(c.title_id, where, sizeof(where)) && !db_is_registered(c.title_id))
+    if (c.kind == PKG_KIND_UPDATE && find_root_snapshot(c.title_id, where, sizeof(where), &cfg) && !db_is_registered(c.title_id))
         snprintf(notes[nnotes++], sizeof(notes[0]), "%s",
                  TR("the game of this update is not on a drive yet: send it too",
                     "el juego de esta actualización aún no está en ninguna unidad: envíalo también"));
-    if (c.kind == PKG_KIND_GAME && !find_root_snapshot(c.title_id, where, sizeof(where)))
+    if (c.kind == PKG_KIND_GAME && !find_root_snapshot(c.title_id, where, sizeof(where), &cfg))
         snprintf(notes[nnotes++], sizeof(notes[0]),
                  TR("%s already has a game in %s: this copy will be left where it is",
                     "%s ya tiene un juego en %s: esta copia se dejará donde está"),

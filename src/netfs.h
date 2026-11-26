@@ -91,7 +91,7 @@ int nas_active(void);
 /* Main-loop owner only: refreshes an adopted mount's state; workers read nas_active's mirror. */
 void nas_refresh(void);
 int nas_mounted(void);
-const char *nas_mountpoint(void);
+void nas_mountpoint_copy(char *out, size_t n);
 /* Copies "NFS 192.168.0.19:/ps4share: ready", or why it is not, without starting
  * the adopted-mount control conversation (the main loop refreshes that explicitly). */
 void nas_status_copy(char *out, size_t n);
