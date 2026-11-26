@@ -227,7 +227,7 @@ function tKeys(file) {
     if (url.indexOf('/api/check') === 0) {
       checks.push({ url, headers: (o && o.headers) || {} });
       const size = +url.split('size=')[1];
-      const j = size === 1100 ? { ok: false, problem: 'not a fake pkg: only fake pkgs can be used', kind: 'game', title_id: 'CUSA00002', dests: DESTS }
+      const j = size === 1100 ? { ok: false, problem: 'unsupported PS4 package format', kind: 'game', title_id: 'CUSA00002', dests: DESTS }
         : { ok: true, problem: '', kind: size === 2000 || size === 2100 ? 'update' : 'game', title: 'Game ' + size, title_id: 'CUSA00001', app_ver: '01.00', notes: [], dests: DESTS };
       return Promise.resolve({ ok: true, json: () => Promise.resolve(j) });
     }
@@ -246,7 +246,7 @@ function tKeys(file) {
     };
     x.abort = () => x.onabort();
   };
-  ok(!d.getElementById('sendbtn').hidden, 'Send games is offered where the browser can read files');
+  ok(!d.getElementById('sendbtn').hidden, 'Send packages is offered where the browser can read files');
   d.getElementById('sendbtn').click();
   ok(d.getElementById('senddlg').hasAttribute('open'), 'send dialog opens');
   const file = (name, n) => new w.File([new Uint8Array(n)], name);
@@ -257,7 +257,7 @@ function tKeys(file) {
   let items = d.querySelectorAll('#queue .item');
   ok(items.length === 3, 'three pkgs in the list');
   ok(items[0].textContent.includes('Ready to send') && items[0].textContent.includes('Game 1000'), 'a good pkg is ready, with its title');
-  ok(items[1].textContent.includes('Cannot be used') && items[1].textContent.includes('not a fake pkg'), 'an unusable pkg is refused with the reason');
+  ok(items[1].textContent.includes('Cannot be used') && items[1].textContent.includes('unsupported PS4 package format'), 'an unusable pkg is refused with the reason');
   ok(items[2].textContent.includes('not enough space in usb0'), 'a pkg that does not fit the chosen drive is refused');
   ok(d.getElementById('dest').options.length === 3 && d.getElementById('dest').value === 'usb0', 'the places come from the check, first one chosen');
   ok(d.getElementById('dest').options[1].textContent.includes('usb1') && d.getElementById('dest').options[1].textContent.includes('/mnt/usb1/PS4Mount'), 'a place shows its label, folder and free space');
@@ -330,11 +330,11 @@ function tKeys(file) {
   }
 
   // --- downloads from links
-  ok(d.getElementById('linkbtn').hidden, 'no Download links button when this build has none');
+  ok(d.getElementById('linkbtn').hidden, 'no Import from URL button when this build has none');
   LINKS = { configured: true, jobs: [], job: { busy: false }, result: '', ok: true };
   p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
   await tick(); await tick();
-  ok(!d.getElementById('linkbtn').hidden && d.getElementById('linkbtn').textContent === 'Download links', 'the Download links button');
+  ok(!d.getElementById('linkbtn').hidden && d.getElementById('linkbtn').textContent === 'Import from URL', 'the Import from URL button');
   d.getElementById('linkbtn').click(); await tick(); await tick();
   ok(d.getElementById('linkdlg').open && d.querySelector('#l-dest option').value === 'usb0', 'its window, with the drives to save to');
   reqs.length = 0;

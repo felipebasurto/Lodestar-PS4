@@ -462,7 +462,7 @@ static void test_check(void) {
     CHECK(pkg_check(p, 0, &c) == 0 && c.ok && !c.warning[0]);          /* no firmware check */
 
     make_pkg(p, cid, "gd", 0x09008000, 0, 0x4000, 0x4000);
-    CHECK(pkg_check(p, 0x13520001, &c) == 0 && !c.ok && !c.fake && strstr(c.problem, "fake"));
+    CHECK(pkg_check(p, 0x13520001, &c) == 0 && !c.ok && !c.fake && strstr(c.problem, "unsupported PS4 package format"));
     CHECK(!c.installable); /* not fake: nothing to offer */
 
     /* homebrew ports and apps have title IDs of their own */

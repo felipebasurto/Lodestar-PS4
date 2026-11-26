@@ -149,8 +149,8 @@ static const char *sidebar_name(const panel_view *v, int i) {
     case 0: return tr(v, "All games", "Todos");
     case 1: return tr(v, "Restart to play", "Reinicia para jugar");
     case 2: return tr(v, "Running", "Abiertos");
-    case 3: return tr(v, "Send games", "Enviar juegos");
-    case 4: return tr(v, "Downloads", "Descargas");
+    case 3: return tr(v, "Send packages", "Enviar paquetes");
+    case 4: return tr(v, "Transfers", "Transferencias");
     default: return tr(v, "Settings", "Ajustes");
     }
 }
@@ -362,7 +362,7 @@ static void show_settings(const panel_view *v, canvas c) {
 }
 
 static void show_phone(const panel_view *v, canvas c) {
-    header(v, c, tr(v, "Send games", "Enviar juegos"));
+    header(v, c, tr(v, "Send packages", "Enviar paquetes"));
     text(c, LEFT, 322, 1400, 34, WHITE,
          tr(v, "Open Lodestar on your phone or computer", "Abre Lodestar en tu móvil u ordenador"));
     text(c, LEFT, 397, 1500, 45, BLUE, *v->local_url ? v->local_url :
@@ -385,11 +385,11 @@ static const char *download_state(const panel_view *v, const char *state) {
 }
 
 static void show_downloads(const panel_view *v, canvas c) {
-    header(v, c, tr(v, "Downloads", "Descargas"));
+    header(v, c, tr(v, "Transfers", "Transferencias"));
     if (!v->links_ready || !v->links->configured) {
         text(c, LEFT, 322, 1450, 34, WHITE, v->loading_links ?
              tr(v, "Reading the download queue…", "Leyendo la cola de descargas…") :
-             tr(v, "Downloads are unavailable", "Descargas no disponibles"));
+             tr(v, "Transfers are unavailable", "Transferencias no disponibles"));
         return;
     }
     if (*v->entered_url) {
@@ -401,7 +401,7 @@ static void show_downloads(const panel_view *v, canvas c) {
             text(c, LEFT, 398, 1200, 22, MUTED, tr(v, "Left / Right to change drive", "Izquierda / derecha para cambiar de unidad"));
     } else {
         text(c, LEFT, 316, 1350, 28, TEXT,
-             tr(v, "Add a direct link to a package or archive", "Añade un enlace directo a un paquete o archivo"));
+             tr(v, "Enter a direct URL to your package or archive", "Introduce la URL directa de tu paquete o archivo"));
     }
     if (v->links->active) {
         char progress[200];

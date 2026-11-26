@@ -825,7 +825,7 @@ int main(int argc, char **argv) {
         printf("  %s: %s\n", name, err);
         CHECK(!strcmp(st, "failed"));
         if (!strcmp(name, "real"))
-            CHECK(strstr(err, "real.pkg: ") && strstr(err, "fake"));
+            CHECK(strstr(err, "real.pkg: ") && strstr(err, "unsupported PS4 package format"));
         else if (!strcmp(name, "page"))
             CHECK(strstr(err, "web page") != NULL);
         else if (!strcmp(name, "locked"))
@@ -847,7 +847,7 @@ int main(int argc, char **argv) {
     CHECK(links_retry(id0 + 1000, NULL, msg, sizeof(msg)) && strstr(msg, "not in the list"));
     CHECK(!wait_idle(60));
     job_field(0, "error", err, sizeof(err));
-    CHECK(strstr(err, "fake") != NULL);
+    CHECK(strstr(err, "unsupported PS4 package format") != NULL);
     snprintf(p, sizeof(p), "%s/.ps4mount-links/%d", g_scan, id0);
     CHECK(exists(p));
     while (njobs()) {

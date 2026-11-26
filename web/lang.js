@@ -7,7 +7,7 @@ var LANGS = {
     /* fixed texts of the pages */
     'Search game or CUSA': 'Buscar juego o CUSA',
     'Scan for games': 'Buscar juegos',
-    'Send games': 'Enviar juegos',
+    'Send packages': 'Enviar paquetes',
     'Settings': 'Ajustes',
     'Log': 'Log',
     'Notifications': 'Notificaciones',
@@ -200,9 +200,10 @@ var LANGS = {
     'Stop Lodestar? The games stay unavailable until it is loaded again.':
       '¿Detener Lodestar? Los juegos no se podrán abrir hasta que se vuelva a cargar.',
     /* downloads from links */
-    'Download links': 'Descargar enlaces',
-    'Paste direct links to a pkg, ZIP or RAR, one per line. The parts of a RAR become one download. The console downloads them itself, so you can close this page.':
-      'Pega enlaces directos a un pkg, ZIP o RAR, uno por línea. Las partes de un RAR son una sola descarga. La consola las descarga sola, así que puedes cerrar esta página.',
+    'Import from URL': 'Importar desde URL',
+    'Import files': 'Importar archivos',
+    'Enter one direct URL per file. The console imports your PKG, ZIP or RAR files and groups the parts of a RAR archive.':
+      'Introduce una URL directa por archivo. La consola importa tus archivos PKG, ZIP o RAR y agrupa las partes de un archivo RAR.',
     'A link with no file name in it: add | and its name.': 'Un enlace sin nombre de archivo: añade | y su nombre.',
     'Password (if the archive has one)': 'Contraseña (si el archivo la tiene)',
     'Passwords that opened an earlier download, and the [SITE] at the start of a name, are tried without asking.':

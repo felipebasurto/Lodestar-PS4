@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 gasb07
- * PS4Mount daemon: scans USB drives, registers PS4 fpkgs without installing them, follows klog and serves the web panel. */
-/* ps4mount: run PS4 fpkgs from external storage without installing them.
+ * PS4Mount daemon: scans USB drives, registers compatible local PS4 packages, follows klog and serves the web panel. */
+/* ps4mount: mount compatible PS4 packages from external storage.
  *
  * Every scan:
  *   1. A PS4 app pkg found at the root of /mnt/usbN or /mnt/extN is moved to
@@ -3706,7 +3706,7 @@ static int adopt_dir_pass(const char *root, const char *dir, int pass) {
                 } else if (pkg_fake_key(&pkg))
                     moved += adopt_dlc(root, e->d_name, path, &pkg);
                 else if (first_time(path))
-                    printf("[scan] skip %s (not a fake add-on pkg)\n", path);
+                    printf("[scan] skip %s (unsupported add-on package)\n", path);
             }
             scan_note_usb_pkg(path, &pkg);
             pkg_close(&pkg);
@@ -3725,7 +3725,7 @@ static int adopt_dir_pass(const char *root, const char *dir, int pass) {
         pkg_close(&pkg);
         if (!ok) {
             if (first_time(path))
-                printf("[scan] skip %s (not a fake PS4 game or update pkg)\n", path);
+                printf("[scan] skip %s (unsupported PS4 application or update package)\n", path);
             continue;
         }
         if (installed_internally(tid)) {
@@ -4115,7 +4115,7 @@ static int catalog_update(catalog_t *cat, const char *root, int fresh) {
     for (int i = 0; i < cat->npkgs; i++) {
         const cat_pkg_t *p = &cat->pkgs[i];
         if (p->state == CAT_BAD && first_time(p->path))
-            printf("[scan] skip %s (not a fake PS4 game, update or add-on pkg)\n", p->path);
+            printf("[scan] skip %s (unsupported PS4 application, update or add-on package)\n", p->path);
         else if (p->state == CAT_SHORT && first_time(p->path))
             printf("[scan] wait %s: incomplete, %llu of %llu bytes (still copying or cut off)\n", p->path,
                    (unsigned long long)p->size, (unsigned long long)p->full_size);

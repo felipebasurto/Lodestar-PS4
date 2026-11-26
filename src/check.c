@@ -81,7 +81,7 @@ int pkg_check(const char *path, uint32_t fw, pkg_check_t *out) {
                  out->title_id);
     else if (!out->fake)
         snprintf(out->problem, sizeof(out->problem), "%s",
-                 TR("not a fake pkg: only fake pkgs can be used", "no es un pkg fake: solo se pueden usar pkgs fake"));
+                 TR("unsupported PS4 package format", "formato de paquete de PS4 no compatible"));
     out->ok = !out->problem[0];
     /* not refused: a backport (an update or a patched eboot) makes it run, and the usual
      * installers do not look at SYSTEM_VER either */

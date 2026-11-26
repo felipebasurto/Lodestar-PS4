@@ -1,10 +1,10 @@
 {
   "name": {"message": "Lodestar: send to PS4"},
-  "description": {"message": "Downloads of a pkg, a ZIP or a RAR go to your PS4 running Lodestar, on your own network, instead of this computer."},
+  "description": {"message": "Send selected PKG, ZIP or RAR files to Lodestar on your PS4."},
   "consoleLabel": {"message": "The console's address"},
   "connect": {"message": "Connect"},
   "destLabel": {"message": "Save to"},
-  "onLabel": {"message": "Send pkg, ZIP and RAR downloads to the console"},
+  "onLabel": {"message": "Send PKG, ZIP and RAR transfers to the console"},
   "relayLabel": {"message": "Experimental: fetch the console's downloads through this browser too"},
   "relayHint": {"message": "The browser fetches part of each download and hands it to the console. It helps only with sites that do not slow each connection down, and while the browser stays open; closed, the console goes on by itself."},
   "basketTitle": {"message": "Parts of a RAR"},

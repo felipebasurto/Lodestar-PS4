@@ -157,12 +157,12 @@ int main(void) {
     CHECK(strstr(r, "\"ok\":true") && exists_in("Update.pkg"));
     free(data);
 
-    printf("not a fake pkg: stopped once its start is in\n");
+    printf("unsupported package: stopped once its start is in\n");
     make_pkg(src, cid, "gd", 0x09008000, 0, UPLOAD_CHECK_BYTES + 8000000, UPLOAD_CHECK_BYTES + 8000000);
     data = load(src, &len);
     g_done = 0;
     r = transfer("Retail.pkg", data, len, len, 0);
-    CHECK(strstr(r, "400") && strstr(r, "fake") && !g_done);
+    CHECK(strstr(r, "400") && strstr(r, "unsupported PS4 package format") && !g_done);
     CHECK(!exists_in("Retail.pkg") && !exists_in(".ps4mount-upload.part") && status_has("\"failed\""));
     free(data);
 

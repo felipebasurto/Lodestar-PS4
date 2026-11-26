@@ -192,8 +192,8 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
   </div>
   <div class="bar">
     <button id="rescan">Scan for games</button>
-    <button id="sendbtn" hidden>Send games</button>
-    <button id="linkbtn" hidden>Download links</button>
+    <button id="sendbtn" hidden>Send packages</button>
+    <button id="linkbtn" hidden>Import from URL</button>
     <button id="notifbtn" class="icon-btn" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.6L4.3 16h15.4L18 12.6V9a6 6 0 0 0-6-6zM9.5 18.5a2.5 2.5 0 0 0 5 0"/></svg><span id="notif-count" class="ncount" hidden></span></button>
     <details id="panel-tools" class="toolbar-more">
       <summary tabindex="0">More</summary>
@@ -230,8 +230,8 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
   <div class="empty" id="empty" hidden>
     <p id="empty-t">No PS4 games found. Put the .pkg files (game, update and add-ons) on a USB drive, then Scan for games or send them from this page.</p>
     <div class="bar center" id="empty-btns" hidden>
-      <button id="empty-send" hidden>Send games</button>
-      <button id="empty-links" hidden>Download links</button>
+      <button id="empty-send" hidden>Send packages</button>
+      <button id="empty-links" hidden>Import from URL</button>
     </div>
   </div>
 </main>
@@ -307,7 +307,7 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
 <div class="dlg-foot">
   <button type="button" id="r-cancel">Cancel</button><button type="button" class="danger" id="r-go" disabled>Remove the chosen ones</button>
 </div></dialog>
-<dialog id="senddlg"><h3>Send games</h3>
+<dialog id="senddlg"><h3>Send packages</h3>
 <div class="hint lead">Each pkg is checked first: only pkgs this console can use are sent. They are added to the library when they arrive.</div>
 <div class="drop" id="drop">Drop .pkg files here, or click to pick them<input type="file" id="files" accept=".pkg" multiple hidden></div>
 <div class="queue" id="queue"></div>
@@ -320,15 +320,15 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
 <h3 id="g-name"></h3><dl class="facts" id="g-facts"></dl>
 <div class="actions" id="g-actions"></div>
 <form method="dialog" class="dlg-foot"><button>Close</button></form></dialog>
-<dialog id="linkdlg"><h3>Download links</h3>
+<dialog id="linkdlg"><h3>Import from URL</h3>
 <form class="settings" id="l-form">
-  <div class="hint">Paste direct links to a pkg, ZIP or RAR, one per line. The parts of a RAR become one download. The console downloads them itself, so you can close this page.</div>
-  <textarea id="l-text" spellcheck="false" placeholder="https://example.com/game.part1.rar&#10;https://example.com/game.part2.rar&#10;https://example.com/file?id=123 | name.pkg"></textarea>
+  <div class="hint">Enter one direct URL per file. The console imports your PKG, ZIP or RAR files and groups the parts of a RAR archive.</div>
+  <textarea id="l-text" spellcheck="false" placeholder="https://example.com/archive.part1.rar&#10;https://example.com/archive.part2.rar&#10;https://example.com/file?id=123 | name.pkg"></textarea>
   <div class="meta">A link with no file name in it: add | and its name.</div>
   <label>Password (if the archive has one) <input id="l-pw" type="text" autocomplete="off" spellcheck="false"></label>
   <div class="meta">Passwords that opened an earlier download, and the [SITE] at the start of a name, are tried without asking.</div>
   <div class="sendbar"><label>Save to <select id="l-dest"></select></label>
-    <button type="submit" class="primary" id="l-go">Download</button></div>
+    <button type="submit" class="primary" id="l-go">Import files</button></div>
 </form>
 <div class="note" id="l-result" hidden></div>
 <div class="pickwrap"><table class="picker"><tbody id="l-rows"></tbody></table></div>

@@ -22,7 +22,7 @@ Source: user request for TV and controller operation.
 The grid shows artwork, titles, and states that need attention in compact cards. Details use the
 large artwork and expose package paths and maintenance actions there. The modern panel shows the
 search field, the state/platform filters and the drives' free space above the grid, the frequent
-actions (scan, send games, download links, notifications) in the header, and the rest (settings,
+actions (scan, send packages, import from URL, notifications) in the header, and the rest (settings,
 remove several, log, stop) in one menu. Back closes an open menu before leaving the PS4 panel, and in
 the PS4 app Up/Down move out of the search field so it never traps the controller.
 Check: test for reaching details, filtering and Back (`test/web/panel.test.js`), read for hierarchy.
@@ -54,3 +54,12 @@ Check: test for the native client's response parsing and HTTP boundary; read for
 focus, process ownership and route use. VideoOut, Pad and the system keyboard require a
 real PS4 smoke test before release.
 Source: user approval of the 1080p Lodestar mockup and native PS4 requirement (2026-11-26).
+
+### PANEL-6: package and URL transfer copy describes the user's files
+
+In English and Spanish, the public interface describes sending packages and importing
+files from a URL the user supplies. A package rejected for its format reports that format
+as unsupported. The compatibility check and transfer behavior follow their existing rules.
+Check: read for copy and technical accuracy; the existing panel and upload tests cover
+the transfer controls and the reason shown when a package cannot be used.
+Source: repository owner's public copy request (2026-11-26).

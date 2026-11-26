@@ -2,9 +2,33 @@
 
 Lodestar (PS4Mount PS4 before 2.0.0) began as a PS4-only port of [PS4Mount](https://github.com/gasb07/ps4mount) by gasb07 (PS5); its versions start again at 0.1.0. The history of the original is in its project and in this repository's git history.
 
+## 3.1.0-rc.2
+
+**Test release with the native PS4 app.** Browse and search your library with the DualShock 4, open game details, adjust settings, and import files from a URL you supply. The separate web panel works on mobile and desktop and supports file uploads and transfer management.
+
+1. Load `lodestar-ps4.bin` with GoldHEN. Use the `.elf` if your loader takes ELF.
+2. Install `lodestar-panel.pkg` through GoldHEN’s Package Installer. If you have the previous Lodestar tile, install this PKG to update it.
+3. Open **Lodestar** on the PS4, or use the address in the startup notification to open the web panel on a trusted local network.
+
+Package transfers and URL imports now use consistent labels in the app, web panel and documentation. Host tests and package validation pass. Startup, controller and keyboard on actual PS4 hardware still need verification. [Track PS4 testing](https://github.com/felipebasurto/Lodestar-PS4/issues/13).
+
+The README includes measured HDD performance and guidance on USB storage. The read-only `tools/exfatmap.py` diagnostic handles aligned reads from raw macOS devices. [Known issues and improvements](https://github.com/felipebasurto/Lodestar-PS4/issues).
+
+**Español**
+
+**Versión de prueba con app nativa de PS4.** Usa el DualShock 4 para recorrer y buscar en la biblioteca, abrir fichas, cambiar ajustes y importar archivos desde una URL que indiques. El panel web sigue disponible en móvil y escritorio para subir archivos y gestionar transferencias.
+
+1. Carga `lodestar-ps4.bin` con GoldHEN. Usa el `.elf` si tu cargador trabaja con ELF.
+2. Instala `lodestar-panel.pkg` con el instalador de paquetes de GoldHEN. Si ya tienes el icono anterior, instala este PKG para actualizarlo.
+3. Abre **Lodestar** en la PS4 o usa la dirección del aviso de arranque para abrir el panel web desde una red local de confianza.
+
+La app, el panel web y la documentación usan los mismos términos para transferir paquetes e importar archivos. Las pruebas de host y la validación del paquete pasan. El arranque, el mando y el teclado siguen pendientes de validación en una PS4 real. [Pruebas en consola](https://github.com/felipebasurto/Lodestar-PS4/issues/13).
+
+El README recoge las mediciones del HDD y explica cómo afecta la unidad USB al rendimiento. El diagnóstico de solo lectura `tools/exfatmap.py` admite lecturas alineadas de dispositivos crudos en macOS. [Problemas conocidos y mejoras](https://github.com/felipebasurto/Lodestar-PS4/issues).
+
 ## 3.1.0-rc.1
 
-**First test release with the native PS4 app.** Browse and search your library with the DualShock 4, open game details, adjust settings, and queue a download link. The separate web panel works on mobile and desktop and supports file uploads and advanced download management.
+**First test release with the native PS4 app.** Browse and search your library with the DualShock 4, open game details, adjust settings, and import files from a URL you supply. The separate web panel works on mobile and desktop and supports file uploads and transfer management.
 
 1. Load `lodestar-ps4.bin` with GoldHEN. Use the `.elf` if your loader takes ELF.
 2. Install `lodestar-panel.pkg` through GoldHEN’s Package Installer. If you have the previous Lodestar tile, install this PKG to update it.
@@ -16,7 +40,7 @@ The README includes measured HDD performance and guidance on USB storage. The re
 
 **Español**
 
-**Primera versión de prueba con app nativa de PS4.** Usa el DualShock 4 para recorrer y buscar en la biblioteca, abrir fichas, cambiar ajustes y encolar un enlace. El panel web sigue disponible en móvil y escritorio para subir archivos y gestionar descargas avanzadas.
+**Primera versión de prueba con app nativa de PS4.** Usa el DualShock 4 para recorrer y buscar en la biblioteca, abrir fichas, cambiar ajustes y importar archivos desde una URL que indiques. El panel web sigue disponible en móvil y escritorio para subir archivos y gestionar transferencias.
 
 1. Carga `lodestar-ps4.bin` con GoldHEN. Usa el `.elf` si tu cargador trabaja con ELF.
 2. Instala `lodestar-panel.pkg` con el instalador de paquetes de GoldHEN. Si ya tienes el icono anterior, instala este PKG para actualizarlo.
@@ -102,7 +126,7 @@ The network share works on **firmware 6.72** too (and, experimental, on every fi
 - El aviso de arranque da la **dirección real del panel** (`http://192.168.1.50:8770`), y al terminar el primer análisis avisa de cuántos juegos están **listos para jugar** (abrir uno antes daba "datos dañados").
 - **Primera vez**: si en la consola no hay nada de PS4Mount, no se añade ningún juego hasta guardar los Ajustes una vez (antes, un USB ya conectado se añadía entero con los valores por defecto). Quien ya lo usaba no nota nada.
 - **Quitar varios**: botón en el panel para quitar de la biblioteca los juegos elegidos (o todos) de una vez.
-- **Enviar juegos** explica cómo activar la memoria de la consola como destino cuando está apagada.
+- **Enviar paquetes** explica cómo activar la memoria de la consola como destino cuando está apagada.
 - El panel ya no deja juegos "en marcha" que el sistema no llegó a abrir o que se cerraron con error; el log dice cuándo el sistema cierra un juego que no se suspendió a tiempo (lo que pierde el progreso sin guardar).
 - Una conexión `https://` al panel se cierra al momento (el panel es solo `http://`), y el README lo explica.
 - El **log** dice qué está haciendo el análisis (`checking N pkg(s), M new or changed`, `M read in X s`) y solo cuenta las lecturas de verdad: una línea por MB ya no llena el log.
@@ -122,7 +146,7 @@ The network share works on **firmware 6.72** too (and, experimental, on every fi
 - The start notice gives the panel's **real address** (`http://192.168.1.50:8770`), and when the first scan ends it says how many games are **ready to play** (starting one earlier said its data was corrupted).
 - **First start**: when the console has nothing of PS4Mount yet, games are added only once the Settings are saved, or with the defaults after 2 minutes with nobody at the panel (a USB drive plugged in already was added whole at once). Existing users notice nothing.
 - **Remove several**: a panel button removes the chosen games (or all) from the library at once.
-- **Send games** says how to turn on the console's storage as a destination when it is off.
+- **Send packages** says how to turn on the console's storage as a destination when it is off.
 - The panel no longer shows games as running when the system never started them or they closed with an error; the log says when the system closes a game that did not suspend in time (which loses unsaved progress).
 - An `https://` connection to the panel is closed at once (the panel is `http://` only), and the README says so.
 - The **log** says what the scan is doing (`checking N pkg(s), M new or changed`, `M read in X s`) and only counts real reads: a line per MB no longer fills it.
@@ -139,7 +163,7 @@ Homebrew **ports** (games with a title ID of their own instead of CUSA, such as 
 - Las apps del sistema (`NPXS`) y los juegos de PS5 (`PPSA`) no se usan nunca.
 - Al actualizar, los pkgs que la versión anterior había descartado se vuelven a revisar con las reglas nuevas.
 - **DLC grandes (más de 256 MB)**: se **instalan solos** con el instalador del sistema, **en segundo plano**, porque un juego solo ve un DLC que el sistema tiene anotado como instalado (antes se montaban y el juego no los veía). Ocupan memoria interna: antes se comprueba que haya sitio, y se avisa al empezar y cuando cada uno está listo. Se puede apagar en **Ajustes → Instalar también los DLC grandes**.
-- **Enviar e instalar apps homebrew**: en **Enviar juegos**, una app de menos de 1 GB ya no se rechaza sin más: sale como **Lista para instalar**, se envía a la consola y se instala con el instalador del sistema; la copia se borra cuando ya está instalada.
+- **Enviar e instalar apps homebrew**: en **Enviar paquetes**, una app de menos de 1 GB ya no se rechaza sin más: sale como **Lista para instalar**, se envía a la consola y se instala con el instalador del sistema; la copia se borra cuando ya está instalada.
 
 **English**
 
@@ -148,7 +172,7 @@ Homebrew **ports** (games with a title ID of their own instead of CUSA, such as 
 - System apps (`NPXS`) and PS5 games (`PPSA`) are never used.
 - On upgrade, the pkgs the previous version had turned down are checked again with the new rules.
 - **Big add-ons (over 256 MB)** are **installed on their own** with the system's installer, **in the background**, because a game only sees an add-on the system has recorded as installed (they used to be mounted, and games did not see them). They take internal space: there has to be room first, and there is a notice when they start and when each one is ready. It can be turned off in **Settings → Also install big add-ons**.
-- **Send and install homebrew apps**: in **Send games**, an app under 1 GB is no longer just turned down: it shows as **Ready to install**, is sent to the console and installed with the system's installer; the copy is deleted once it is installed.
+- **Send and install homebrew apps**: in **Send packages**, an app under 1 GB is no longer just turned down: it shows as **Ready to install**, is sent to the console and installed with the system's installer; the copy is deleted once it is installed.
 
 ## 0.6.1-beta
 
@@ -232,7 +256,7 @@ Downloads from links, and a browser extension that sends downloads to the consol
 
 **Español**
 
-- **Descargar desde enlaces**, en el panel: pega enlaces directos a un pkg, un ZIP o un RAR (también en partes: `.part1.rar`… o `.rar`, `.r00`…) y la consola los descarga sola, con varias conexiones a la vez. Las partes de un RAR se juntan en una descarga, en cualquier orden, y se avisa si falta alguna.
+- **Importar archivos desde URL**, con soporte para PKG, ZIP y RAR. Las partes de un RAR se agrupan y se avisa si falta alguna.
 - Un RAR o ZIP se descomprime mientras baja y solo se sacan sus pkgs; con poco espacio, cada parte se borra al descomprimirse.
 - Cada pkg se comprueba con sus primeros 4 MB, como al enviar desde el PC: uno que no sirve para la descarga ahí.
 - Sigue sola tras un corte de red o al volver a cargar PS4Mount; la consola no entra en reposo mientras descarga. Sigue las redirecciones, pide de nuevo un enlace que caduca y baja el número de conexiones si el servidor lo pide.
@@ -244,11 +268,11 @@ Downloads from links, and a browser extension that sends downloads to the consol
 
 **English**
 
-- **Downloading from links**, in the panel: paste direct links to a pkg, a ZIP or a RAR (also in parts: `.part1.rar`… or `.rar`, `.r00`…) and the console downloads them by itself, over several connections at once. The parts of a RAR become one download, in any order, and a missing part is reported.
+- **Import files from URLs**, with support for PKG, ZIP and RAR. Multipart RAR archives are grouped and missing parts are reported.
 - A RAR or ZIP is extracted while it downloads and only its pkgs come out; with little space, each part is deleted once extracted.
 - Every pkg is checked from its first 4 MB, as when sending from a computer: one that will not do stops the download there.
 - It goes on by itself after a lost connection or when PS4Mount loads again; the console stays out of rest mode while it downloads. It follows redirects, asks again for a link that expires and uses fewer connections when the server asks for it.
-- **RAR5 with a password**, also with its file list encrypted (`rar -hp`) and in parts: written when adding the download, or when pressing Try again if it is missing. The ones that opened another download (`/data/ps4mount/passwords.txt`) and the site in brackets at the start of the name (`[SITE]-game`) are tried by themselves; a wrong one shows at once, without downloading the rest. ZIPs with a password too, classic or AES.
+- **RAR5 with a password**, also with its file list encrypted (`rar -hp`) and in parts: written when adding the download, or when pressing Try again if it is missing. The ones that opened another download (`/data/ps4mount/passwords.txt`) and the site in brackets at the start of the name (`[SITE]-archive`) are tried by themselves; a wrong one shows at once, without downloading the rest. ZIPs with a password too, classic or AES.
 - The parts of a RAR join up even when the host puts a different code before each name (`abc-game.part1.rar`, `xyz-game.part2.rar`).
 - It does not open older RARs (4) with a password, 7z, nor links that need a sign-in.
 - **Browser extension** (Chrome, Brave, Edge, Firefox; loaded by hand from `ps4mount-extension.zip`): pkg, ZIP and RAR downloads go to the console instead of the computer; the parts of a RAR wait in a basket until Send, with the password if needed.
@@ -256,11 +280,11 @@ Downloads from links, and a browser extension that sends downloads to the consol
 
 ## 0.2.0-beta
 
-Google Drive backups. Tested on a PS4 on firmware 13.52 with GoldHEN, uploading a 7.2 GB game to Drive, deleting it from the console, downloading it back and playing it, and a game with its update and add-on the same way.
+Google Drive backups. On firmware 13.52 with GoldHEN, an upload and restore were tested with a 7.2 GB package and with a group of related packages.
 
 **Español**
 
-- **Copias en Google Drive**, opcionales: la consola sube tus juegos (con su actualización y sus DLC) a tu Drive y los vuelve a bajar a un USB o a la memoria interna, sin PC. **Copia en Drive** sube toda la biblioteca y salta lo que ya está; **Enviar a Drive** en la ficha de un juego; la ventana **Google Drive** muestra tu cuenta, tu espacio y tus juegos en Drive, con **Descargar** y **Borrar de Drive** (a la papelera).
+- **Copias en Google Drive**, opcionales en esta versión histórica. La consola permitía guardar y restaurar copias de paquetes de la biblioteca.
 - Cada usuario usa **sus propias credenciales de Google** (un proyecto gratuito en modo prueba: la guía está en el README), que se quedan solo en su consola. El inicio de sesión es con un código en google.com/device desde el móvil. PS4Mount solo ve los archivos que él crea en tu Drive (permiso `drive.file`).
 - Subida a la velocidad de tu conexión; bajada a unos 15 MB/s, el máximo de la PS4, con 12 conexiones a la vez. Cada archivo se comprueba con su MD5.
 - Una transferencia cortada (red, detener PS4Mount, apagar) sigue sola desde donde iba la próxima vez que cargas PS4Mount. Mientras transfiere, la consola no entra en reposo.
@@ -276,7 +300,7 @@ Google Drive backups. Tested on a PS4 on firmware 13.52 with GoldHEN, uploading 
 - A cut transfer (network, stopping PS4Mount, a power off) goes on by itself from where it was the next time PS4Mount loads. While it transfers, the console does not go to rest mode.
 - Progress in the panel (percentage, speed, time left) and notices on the PS4's screen when it starts, every 25% and when it ends. If Google asks to connect again, the code shows on the screen.
 - Privacy policy: [PRIVACY.md](PRIVACY.md).
-- Fixes: an add-on the installer refuses no longer keeps its game out (one notice, retried the next time); add-ons are installed after their game is registered; a game downloaded from Drive is added once, with all its pkgs; the restart notice survives a reload of PS4Mount; every notice is in the console's language.
+- Fixes: an add-on the installer refuses no longer keeps its game out (one notice, retried the next time); add-ons are installed after their game is registered; a title restored from a Drive backup is added once, with all its packages; the restart notice survives a reload of PS4Mount; every notice is in the console's language.
 
 Load `ps4mount-ps4.bin` with Payload Guest (copy it to `/data/payloads/`), or send `ps4mount-ps4.elf` to GoldHEN's payloader (port 9090).
 
@@ -286,10 +310,10 @@ First version of the PS4 port. Tested on a PS4 on firmware 13.52 with GoldHEN.
 
 **Español**
 
-- Juega pkgs fake de PS4 sin instalarlos, desde un USB exFAT (también pkgs de más de 4 GB) o desde la memoria de la consola. Solo usa lo que pongas en su carpeta `PS4Mount` de cada disco (y `/data/PS4Mount`): el resto, incluido `/data/pkg`, no lo toca.
+- Monta paquetes de PS4 compatibles desde un USB exFAT (también pkgs de más de 4 GB) o desde la memoria de la consola. Solo usa lo que pongas en su carpeta `PS4Mount` de cada disco (y `/data/PS4Mount`): el resto, incluido `/data/pkg`, no lo toca.
 - Actualizaciones, y DLC de hasta 256 MB instalados con el instalador del sistema en segundos (aparecen en la información del juego).
 - Panel web (`http://<IP de la PS4>:8770`) con la biblioteca, portadas y una ficha por juego. Hay una versión sencilla para navegadores antiguos, sin probar todavía en el de la PS4.
-- Enviar juegos desde el PC por la red, comprobando cada pkg antes de enviarlo (pkg fake, firmware, si está completo, si cabe), con cancelar y enviar de nuevo.
+- Enviar paquetes desde el PC por la red, comprobando cada pkg antes de enviarlo (compatibilidad, firmware, integridad y espacio libre), con cancelar y enviar de nuevo.
 - Borrar un juego desde la consola borra también sus pkgs; *Quitar de la biblioteca* los conserva. Mientras la consola borra, PS4Mount aparta las carpetas de los juegos: el borrado del sistema nunca llega a los pkgs.
 - Carpetas por juego al copiar (hasta dos niveles: `Juego/Game`, `Juego/Update`, `Juego/DLC`).
 - Los juegos de un USB desconectado se muestran como *Unidad no conectada*, y abrir uno lo explica.
@@ -298,10 +322,10 @@ First version of the PS4 port. Tested on a PS4 on firmware 13.52 with GoldHEN.
 
 **English**
 
-- Plays PS4 fake pkgs without installing them, from an exFAT USB drive (pkgs over 4 GB too) or from the console's storage. Only what you put in its `PS4Mount` folder of each drive (and `/data/PS4Mount`) is used: nothing else, `/data/pkg` included, is touched.
+- Mounts compatible PS4 packages from an exFAT USB drive (pkgs over 4 GB too) or from the console's storage. Only what you put in its `PS4Mount` folder of each drive (and `/data/PS4Mount`) is used: nothing else, `/data/pkg` included, is touched.
 - Updates, and add-ons up to 256 MB installed with the system's installer in seconds (they show in the game's information).
 - Web panel (`http://<PS4 IP>:8770`) with the library, artwork and a page per game. There is a simpler page for older browsers, not yet tested on the PS4's own browser.
-- Sending games from a computer over the network, every pkg checked before it is sent (fake pkg, firmware, complete, fits), with cancel and send again.
+- Sending packages from a computer over the network, every pkg checked before it is sent (package compatibility, firmware, integrity and available space), with cancel and send again.
 - Deleting a game on the console deletes its pkgs too; *Remove from library* keeps them. While the console deletes, PS4Mount takes the game folders away: the system's delete never reaches the pkgs.
 - A folder per game when copying (two levels down: `Game/Game`, `Game/Update`, `Game/DLC`).
 - Games of an unplugged USB drive show as *Drive not connected*, and starting one says why.

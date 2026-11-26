@@ -2,12 +2,12 @@
 
 # Lodestar
 
-**Juega pkgs fake de PS4 desde discos USB o la memoria de la consola, sin instalarlos.**
-**Play PS4 fake pkgs from USB drives or the console's storage, without installing them.**
+**Organiza y monta tus paquetes locales de PS4 desde USB o el almacenamiento de la consola.**
+**Organize and mount your local PS4 packages from USB or console storage.**
 
-**[Empezar](#uso) · [Getting started](#use) · [Descargas / Downloads](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.1)**
+**[Empezar](#uso) · [Getting started](#use) · [Descargas / Downloads](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.2)**
 
-`3.1.0-rc.1` es la primera versión de prueba con app nativa de PS4. / `3.1.0-rc.1` is the first test release with the native PS4 app.
+`3.1.0-rc.2` incluye la app nativa de PS4 y el panel web. / `3.1.0-rc.2` includes the native PS4 app and web panel.
 
 Lodestar es un proyecto independiente para PS4, publicado como [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
 Lodestar is an independent PS4 project, published as [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
@@ -16,8 +16,8 @@ Lodestar is an independent PS4 project, published as [felipebasurto/Lodestar-PS4
 
 **Independence and attribution.** Lodestar began as a PS4 port of [PS4Mount](https://github.com/gasb07/ps4mount) by **gasb07** (for the PS5), then continued from [Vld439/PS4Mount-PS4](https://github.com/Vld439/PS4Mount-PS4) and its contributors; since version 2.0.0 it follows its own path as an independent project. As required by GPL-3.0-or-later, it keeps the attribution to gasb07/PS4Mount as the origin project, its copyright notices and the same license.
 
-*Proyecto no oficial, sin relación con Sony Interactive Entertainment. PlayStation y PS4 son marcas de Sony Interactive Entertainment. Úsalo solo con juegos que te pertenecen.*
-*Unofficial project, not affiliated with Sony Interactive Entertainment. PlayStation and PS4 are trademarks of Sony Interactive Entertainment. Only use it with games you own.*
+*Proyecto no oficial, sin relación con Sony Interactive Entertainment. PlayStation y PS4 son marcas de Sony Interactive Entertainment. Usa contenido propio o que tengas autorización para utilizar. Lodestar recibe los archivos que tú selecciones.*
+*Unofficial project, not affiliated with Sony Interactive Entertainment. PlayStation and PS4 are trademarks of Sony Interactive Entertainment. Use content you own or are authorized to use. Lodestar receives files you select.*
 
 ---
 
@@ -51,33 +51,33 @@ El payload se ha probado en **13.52** y **14.00** con GoldHEN. El panel y las no
 | **DLC externos** (`dlc_mode=external`, por defecto) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado con los DLC de Modern Warfare 3 y Black Ops 6: el paquete se monta desde su unidad y los metadatos se guardan en la consola. Otros juegos, sin probar |
 | DLC **instalados** (`dlc_mode=internal`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado: se instalan con el instalador del sistema y ocupan memoria interna. Los de más de 256 MB también, salvo que desmarques **Instalar también los DLC grandes** (marcado por defecto); sin esa opción no se usan |
 | DLC **apagados** (`dlc_mode=off`) | <img src="docs/icons/no.svg" width="14" height="14" alt=""> No se usan |
-| **Enviar juegos desde el PC** por la red local, con comprobación previa | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado (unos 16 MB/s por cable) |
+| **Enviar paquetes desde el PC** por la red local, con comprobación previa | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado (unos 16 MB/s por cable) |
 | **Descargar desde enlaces**: un pkg, un ZIP o un RAR (también en partes y con contraseña) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado en la consola |
 | **Extensión del navegador**: las descargas de pkg, ZIP y RAR van a la consola | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado en Brave; Firefox sin probar |
 | **Borrar** un juego desde la consola | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado: borra también sus pkgs y libera el espacio |
 | Un juego **nuevo**, o una actualización que llega después del juego | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Necesita **reiniciar la consola una vez**; después se juega siempre |
 | **Ports homebrew** (juegos sin CUSA, como `SMWR00001` o `SSBU00001`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Probado si pesan **1 GB o más** |
-| Apps homebrew de menos de 1 GB | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> No se juegan desde el pkg, pero **Enviar juegos** las instala en la consola |
+| Apps homebrew de menos de 1 GB | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> No se juegan desde el pkg, pero **Enviar paquetes** las instala en la consola |
 | **Clásicos de PS1, PS2 y PSP** empaquetados como pkg de PS4 | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Se reconocen y se montan; arranque pendiente de verificar en consola |
 | **ROM de emuladores** sin copiarlas a la consola | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Pendiente de verificar en consola |
-| Pkgs **retail** (no fake) | <img src="docs/icons/no.svg" width="14" height="14" alt=""> No |
+| Paquetes comerciales de PlayStation Store | <img src="docs/icons/no.svg" width="14" height="14" alt=""> No |
 | Google Drive, NAS, SMB, NFS o FUSE | <img src="docs/icons/no.svg" width="14" height="14" alt=""> Eliminado deliberadamente |
 
 ## Requisitos
 
 - Una PS4 con jailbreak y **GoldHEN** (con su BinLoader activado, el puerto 9090).
 - Una forma de cargar payloads: **Payloader/Launchpad** de GoldHEN (recomendado), Payload Guest, o **Ajustes → Arrancar con la consola** en el panel.
-- Pkgs **fake** de PS4 (`CUSA…`).
+- Paquetes `.pkg` de PS4 compatibles que tengas derecho a usar, como aplicaciones homebrew.
 - Para jugar desde USB: un disco formateado en **exFAT**. Mejor un **SSD**: con un disco duro mecánico algunos juegos cargan lento (ver [Rendimiento](#rendimiento-disco-duro-mecánico-o-ssd)).
 
 ## Uso
 
-1. **Descarga** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.1/lodestar-ps4.bin) y cópialo en **`/data/payloads/`** de la consola.
+1. **Descarga** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-ps4.bin) y cópialo en **`/data/payloads/`** de la consola.
 2. **Después de cada arranque**, carga Lodestar. Aparece una notificación con `Lodestar <versión> en marcha` y la dirección del panel.
 3. **Pon los juegos** de una de estas formas:
    - **En un USB:** copia los pkgs en la carpeta `PS4Mount` y conecta el USB a la PS4. Si desactivas **Organizar** en Ajustes, puedes guardarlos en cualquier carpeta de la unidad.
    - **En la memoria interna:** copia los pkgs en `/data/PS4Mount` por FTP.
-   - **Desde el panel:** usa **Enviar juegos** para mandarlos por la red local.
+   - **Desde el panel:** usa **Enviar paquetes** para mandarlos por la red local.
 4. Abre el panel desde el móvil o el PC: `http://<IP de la PS4>:8770`.
 
 ### En la consola
@@ -90,18 +90,18 @@ La consola solo prepara algunos juegos nuevos al arrancar. Cuando Lodestar regis
 
 ### El panel
 
-- **Arriba**: **Buscar juegos** (vuelve a mirar las unidades), **Enviar juegos**, **Descargar enlaces**, la campana de notificaciones y **Más** (Ajustes, Quitar varios, Log y Detener).
+- **Arriba**: **Buscar juegos** (vuelve a mirar las unidades), **Enviar paquetes**, **Importar desde URL**, la campana de notificaciones y **Más** (Ajustes, Quitar varios, Log y Detener).
 - **Encima de la parrilla**: el buscador, los filtros por estado (Listo, Reinicia para jugar, Unidad no conectada…) y por plataforma, y el espacio libre de cada unidad.
 - **La parrilla**: una carátula por juego. Al pulsarla se abre su ficha: versión, DLC, firmware que necesita, dónde están sus pkgs y las acciones (quitar o añadir a la biblioteca, restaurar sus archivos originales).
 - **Ajustes**: biblioteca (carpetas, organizar, memoria interna, grupos), DLC, consola (idioma, AutoRun, log del sistema), lo que Lodestar ocupa en la consola y restaurar archivos originales.
 
 ### App nativa de PS4
 
-Descarga [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.1/lodestar-panel.pkg) e instálalo con el instalador de paquetes de GoldHEN. Si ya tienes el icono de Lodestar 3.0.0, instala el PKG nuevo para actualizarlo. Carga el payload de esta release y abre **Lodestar** desde la pantalla de inicio. La app usa la API local del payload.
+Descarga [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) e instálalo con el instalador de paquetes de GoldHEN. Si ya tienes el icono de Lodestar 3.0.0, instala el PKG nuevo para actualizarlo. Carga el payload de esta release y abre **Lodestar** desde la pantalla de inicio. La app usa la API local del payload.
 
 - **Flechas** para moverte entre la barra lateral y las carátulas. **X** abre la ficha, **△** abre el teclado para buscar, **□** vuelve a escanear y **○** vuelve o sale.
 - Desde la barra lateral puedes encolar un enlace, consultar el progreso y abrir los ajustes de biblioteca, DLC y consola.
-- **Enviar juegos** muestra la dirección del panel para abrirlo desde otro equipo. Allí se envían archivos del móvil o PC y se gestionan descargas y ajustes avanzados.
+- **Enviar paquetes** muestra la dirección del panel para abrirlo desde otro equipo. Allí se envían archivos del móvil o PC y se gestionan descargas y ajustes avanzados.
 
 La compilación y las pruebas de host están verificadas. La [validación en una PS4 real](https://github.com/felipebasurto/Lodestar-PS4/issues/13) sigue pendiente.
 
@@ -109,30 +109,30 @@ La compilación y las pruebas de host están verificadas. La [validación en una
 
 El panel es también una API HTTP en el puerto **8770**. `GET /api/agent` devuelve el manifiesto completo de rutas, cabeceras y límites de seguridad en JSON; `GET /api/status` devuelve un estado ligero sin enumerar la biblioteca. Las peticiones que escriben necesitan la cabecera `X-Lodestar: 1` (`X-PS4Mount: 1` se acepta como alias legacy) y solo se aceptan desde la red local. La tabla completa está en [AI-WORKFLOW.md](AI-WORKFLOW.md).
 
-### Enviar juegos desde el PC
+### Enviar paquetes desde el PC
 
-![Enviar juegos](docs/panel-send-es.png)
+![Enviar paquetes](docs/panel-send-es.png)
 
-1. Pulsa **Enviar juegos**.
+1. Pulsa **Enviar paquetes**.
 2. Elige el pkg o arrástralo al panel.
-3. Lodestar comprueba antes de enviarlo que es un pkg fake usable por esa consola.
+3. Lodestar comprueba antes de enviarlo que el paquete es compatible con esa consola.
 4. Elige destino: una unidad USB o la memoria interna.
 
-### Descargar desde enlaces
+### Importar archivos desde URL
 
-![Descargas desde enlaces](docs/links-panel-es.png)
+![Importación desde URL](docs/links-panel-es.png)
 
-Lodestar puede descargar en la propia consola:
+Lodestar puede importar los archivos que indiques mediante una URL directa:
 
 - un `.pkg` directo;
 - un `.zip`;
 - un `.rar`, incluidos RAR en partes y RAR con contraseña.
 
-Pega el enlace en **Descargar enlaces**, elige destino y la consola baja y extrae sin usar un PC. Una descarga interrumpida se reanuda al cargar Lodestar otra vez.
+Pega la URL del archivo en **Importar desde URL** y elige la unidad de destino. La consola recibe el archivo y extrae el contenido si está comprimido. Una descarga interrumpida se reanuda al cargar Lodestar otra vez.
 
 ### Extensión del navegador
 
-`lodestar-extension.zip` en Releases contiene una extensión para navegadores de escritorio. Redirige descargas de `.pkg`, `.zip` y `.rar` hacia el panel de la consola para que sea la PS4 quien las baje.
+`lodestar-extension.zip` en Releases contiene una extensión para navegadores de escritorio. Cuando la activas, la extensión envía las transferencias de `.pkg`, `.zip` y `.rar` del navegador a Lodestar en tu consola.
 
 ### ROM de emuladores
 
@@ -260,27 +260,27 @@ The payload has been tested on firmware **13.52** and **14.00** with GoldHEN. Th
 | **Deleting** a game from the console | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested: also deletes its pkgs and frees the space |
 | A **new** game, or an update arriving after the game | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Needs **one console restart**; then it stays ready |
 | **Homebrew ports** (non-CUSA games such as `SMWR00001` or `SSBU00001`) | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Tested when they are **1 GB or larger** |
-| Homebrew apps under 1 GB | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Not playable straight from pkg, but **Send games** installs them on the console |
+| Homebrew apps under 1 GB | <img src="docs/icons/ok.svg" width="14" height="14" alt=""> Not playable straight from pkg, but **Send packages** installs them on the console |
 | **PS1, PS2 and PSP classics** packaged as PS4 pkgs | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Recognized and mounted; launch verification pending |
 | **Emulator ROMs** without copying them to the console | <img src="docs/icons/warn.svg" width="14" height="14" alt=""> Console verification pending |
-| **Retail** (non-fake) pkgs | <img src="docs/icons/no.svg" width="14" height="14" alt=""> No |
+| Commercial PlayStation Store packages | <img src="docs/icons/no.svg" width="14" height="14" alt=""> No |
 | Google Drive, NAS, SMB, NFS or FUSE | <img src="docs/icons/no.svg" width="14" height="14" alt=""> Deliberately removed |
 
 ## Requirements
 
 - A jailbroken PS4 with **GoldHEN** (BinLoader enabled, port 9090).
 - A way to load payloads: GoldHEN **Payloader/Launchpad** (recommended), Payload Guest, or the panel's **Start with the console** setting.
-- PS4 **fake** packages (`CUSA…`).
+- Compatible PS4 `.pkg` files you are authorized to use, such as homebrew applications.
 - For USB play: an **exFAT** formatted drive. An **SSD** is best: with a spinning hard drive some games load slowly (see [Performance](#performance-hard-drive-or-ssd)).
 
 ## Use
 
-1. **Download** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.1/lodestar-ps4.bin) and copy it to **`/data/payloads/`** on the console.
+1. **Download** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-ps4.bin) and copy it to **`/data/payloads/`** on the console.
 2. **After every boot**, load Lodestar. A notification shows `Lodestar <version> running` and the panel address.
 3. **Add games** in one of these ways:
    - **USB:** copy the pkgs into the `PS4Mount` folder and connect the drive. If **Organize** is disabled in Settings, pkgs may stay anywhere on the drive.
    - **Internal storage:** copy pkgs into `/data/PS4Mount` over FTP.
-   - **Panel:** use **Send games** to upload them over the local network.
+   - **Panel:** use **Send packages** to upload them over the local network.
 4. Open the panel from a phone or PC: `http://<PS4 IP>:8770`.
 
 ### On the console
@@ -293,18 +293,18 @@ The console prepares some new games only during boot. When Lodestar registers a 
 
 ### The panel
 
-- **Top**: **Scan for games** (looks at the drives again), **Send games**, **Download links**, the notifications bell and **More** (Settings, Remove several, Log and Stop).
+- **Top**: **Scan for games** (looks at the drives again), **Send packages**, **Import from URL**, the notifications bell and **More** (Settings, Remove several, Log and Stop).
 - **Above the grid**: the search field, the filters by state (Ready, Restart to play, Drive not connected…) and by platform, and each drive's free space.
 - **The grid**: one artwork per game. Choosing it opens its details: version, add-ons, required firmware, where its pkgs are, and its actions (remove from or add to the library, restore its original files).
 - **Settings**: library (folders, organize, internal storage, groups), add-ons, console (language, AutoRun, system log), what Lodestar keeps on the console, and restoring original files.
 
 ### Native PS4 app
 
-Download [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.1/lodestar-panel.pkg) and install it with GoldHEN’s Package Installer. If you already have the Lodestar 3.0.0 tile, install the new PKG to update it. Load the payload from this release and open **Lodestar** from the home screen. The app uses the payload’s local API.
+Download [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) and install it with GoldHEN’s Package Installer. If you already have the Lodestar 3.0.0 tile, install the new PKG to update it. Load the payload from this release and open **Lodestar** from the home screen. The app uses the payload’s local API.
 
 - Use the **D-pad** to move between the sidebar and the game grid. **Cross** opens details, **Triangle** opens the search keyboard, **Square** scans again, and **Circle** goes back or exits.
 - From the sidebar you can queue a download link, check its progress, and open the library, add-on and console settings.
-- **Send games** shows the panel address to open on another device. Use that panel to upload files from your phone or PC and manage advanced download options and settings.
+- **Send packages** shows the panel address to open on another device. Use that panel to upload files from your phone or PC and manage advanced download options and settings.
 
 The package builds and the host checks pass. [PS4 hardware validation](https://github.com/felipebasurto/Lodestar-PS4/issues/13) is still pending.
 
@@ -312,26 +312,26 @@ The package builds and the host checks pass. [PS4 hardware validation](https://g
 
 The panel is also an HTTP API on port **8770**. `GET /api/agent` returns the complete route, header and safety manifest as JSON; `GET /api/status` returns a lightweight state without listing the library. Write requests need the `X-Lodestar: 1` header (`X-PS4Mount: 1` is accepted as a legacy alias) and are accepted only from the local network. The full route table is in [AI-WORKFLOW.md](AI-WORKFLOW.md).
 
-### Sending games from a PC
+### Sending packages from a PC
 
-1. Choose **Send games**.
+1. Choose **Send packages**.
 2. Pick a pkg or drag it into the panel.
-3. Lodestar checks before upload that it is a fake pkg usable by that console.
+3. Lodestar checks before upload whether the package is compatible with that console.
 4. Choose the destination: a USB drive or internal storage.
 
-### Downloading from links
+### Importing files from a URL
 
-Lodestar can download directly on the console:
+Lodestar can import files from a direct URL you supply:
 
 - a direct `.pkg`;
 - a `.zip`;
 - a `.rar`, including multipart and password-protected RAR archives.
 
-Paste the link in **Download links**, choose a destination, and the console downloads and extracts it without a PC. An interrupted download resumes when Lodestar is loaded again.
+Paste the file URL in **Import from URL** and choose a destination. The console transfers the file and extracts the contents if it is an archive. An interrupted download resumes when Lodestar is loaded again.
 
 ### Browser extension
 
-`lodestar-extension.zip` in Releases contains a desktop browser extension. It sends `.pkg`, `.zip` and `.rar` downloads to the console panel so the PS4 downloads them itself.
+`lodestar-extension.zip` in Releases contains a desktop browser extension. When enabled, the extension forwards `.pkg`, `.zip` and `.rar` transfers from the browser to Lodestar on your console.
 
 ### Emulator ROMs
 
