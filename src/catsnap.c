@@ -25,9 +25,13 @@ static size_t strings_off(uint32_t ngames, uint32_t ndlcs) {
 }
 
 catsnap_t *catsnap_alloc(uint32_t ngames, uint32_t ndlcs, uint32_t strings_len) {
+    if ((size_t)ngames > (SIZE_MAX - games_off()) / sizeof(catsnap_game_t))
+        return NULL;
+    size_t at = dlcs_off(ngames);
+    if ((size_t)ndlcs > (SIZE_MAX - at) / sizeof(catsnap_dlc_t))
+        return NULL;
     size_t end = strings_off(ngames, ndlcs);
-    if ((size_t)ngames > (SIZE_MAX - end) / sizeof(catsnap_game_t) ||
-        (size_t)ndlcs > (SIZE_MAX - end) / sizeof(catsnap_dlc_t) || end > SIZE_MAX - strings_len)
+    if (end < at || end > SIZE_MAX - strings_len)
         return NULL;
     size_t total = end + strings_len;
     catsnap_t *s = mem_alloc(total);
@@ -52,11 +56,11 @@ void catsnap_unref(catsnap_t *s) {
 
 uint32_t catsnap_ngames(const catsnap_t *s) { return s ? s->ngames : 0; }
 
-catsnap_game_t *catsnap_games(catsnap_t *s) { return (catsnap_game_t *)((unsigned char *)s + games_off()); }
+catsnap_game_t *catsnap_games(catsnap_t *s) { return s ? (catsnap_game_t *)((unsigned char *)s + games_off()) : NULL; }
 
-catsnap_dlc_t *catsnap_dlcs(catsnap_t *s) { return (catsnap_dlc_t *)((unsigned char *)s + dlcs_off(s->ngames)); }
+catsnap_dlc_t *catsnap_dlcs(catsnap_t *s) { return s ? (catsnap_dlc_t *)((unsigned char *)s + dlcs_off(s->ngames)) : NULL; }
 
-char *catsnap_strings(catsnap_t *s) { return (char *)s + strings_off(s->ngames, s->ndlcs); }
+char *catsnap_strings(catsnap_t *s) { return s ? (char *)s + strings_off(s->ngames, s->ndlcs) : NULL; }
 
 const char *catsnap_path(const catsnap_t *s, uint32_t off) {
     if (!s || off == CATSNAP_NO_PATH || off >= s->strings_len)

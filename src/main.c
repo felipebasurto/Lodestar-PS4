@@ -864,6 +864,15 @@ _Static_assert(10 * sizeof(dlc_src_t) <= 16320, "initial add-on allocation must 
 /* title_info_t is title_src_t without the open pkgs (titlecache.h) */
 _Static_assert(MAX_DLC_TIDS == TITLE_DLC_TIDS, "the cache keeps the add-on title IDs of a game");
 
+/* Add-on paths as one coherent view: the scan owner uses the live catalog it just linked,
+ * while a panel worker uses an immutable epoch reference acquired before opening anything. */
+typedef struct {
+    const catalog_t *cat;
+    const cat_game_t *game;
+    const catsnap_t *snap;
+    const catsnap_game_t *sgame;
+} addon_view_t;
+
 /* sha and slen, when given, take the digest and length of the param.sfo (the launch
  * check compares the system's copy with it). */
 static int read_sfo_ex(pkg_t *pkg, sfo_t *sfo, unsigned char *sha, uint32_t *slen) {
@@ -1058,6 +1067,52 @@ static void dlc_open_catalog(title_src_t *t, const catalog_t *c, const cat_game_
         qsort(t->dlc, (size_t)t->ndlc, sizeof(*t->dlc), dlc_cmp);
 }
 
+/* Same selection as dlc_open_catalog, but from an immutable catalog epoch. The snapshot
+ * carries the same duplicates the catalog grouped; duplicate content IDs are still mounted once. */
+static void dlc_open_snapshot(title_src_t *t, const catsnap_t *snap, const catsnap_game_t *g, const config_t *cfg) {
+    const catsnap_dlc_t *dlcs = catsnap_dlcs((catsnap_t *)snap);
+    for (uint32_t k = 0; k < g->ndlc && t->ndlc < MAX_DLC; k++) {
+        const catsnap_dlc_t *p = &dlcs[g->first_dlc + k];
+        const char *path = catsnap_path(snap, p->path_off);
+        int dup = 0;
+        for (int i = 0; i < t->ndlc; i++)
+            dup |= !strcmp(t->dlc[i].pkg.content_id, p->content_id);
+        char rm[96];
+        snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", p->content_id);
+        if (dup || exists(rm)) /* removed: deleted on the console */
+            continue;
+        dlc_src_t *a = dlc_next(t);
+        if (!a) {
+            printf("[scan] %s: no memory for its add-ons\n", t->dir);
+            break;
+        }
+        snprintf(a->path, sizeof(a->path), "%s", path);
+        /* the catalog checked the category and the fake key when it first read the pkg;
+         * checking the key again on every scan would cost an RSA operation per add-on */
+        if (pkg_open(&a->pkg, a->path) || read_meta(&a->pkg, &a->meta)) {
+            if (a->pkg.fd >= 0)
+                pkg_close(&a->pkg);
+            continue;
+        }
+        if (dlc_skip(a->pkg.pkg_size, cfg->dlc_mode, cfg->dlc_big)) {
+            pkg_close(&a->pkg);
+            continue;
+        }
+        a->data = a->pkg.content_type == 0x1b; /* 0x1b with data, 0x1c license only */
+        a->install = cfg->dlc_mode == DLC_INTERNAL && (a->pkg.pkg_size <= DLC_INSTALL_MAX || cfg->dlc_big);
+        t->ndlc++;
+        if (a->install)
+            continue; /* not mounted: no /user/addcont folder of PS4Mount's */
+        int known = 0;
+        for (int i = 0; i < t->ndlc_tids; i++)
+            known |= !strcmp(t->dlc_tids[i], a->pkg.title_id);
+        if (!known && t->ndlc_tids < MAX_DLC_TIDS)
+            snprintf(t->dlc_tids[t->ndlc_tids++], 10, "%s", a->pkg.title_id);
+    }
+    if (t->ndlc)
+        qsort(t->dlc, (size_t)t->ndlc, sizeof(*t->dlc), dlc_cmp);
+}
+
 /* --- the updates the system turns down --- */
 
 /* STATE_DIR/<TID>.badpatch names the update pkg the system refused (its size and time), so
@@ -1140,7 +1195,7 @@ static int title_patch_path(const char *root, const char *tid, char *out, size_t
 
 /* Opens the pkgs of tid with the paths already chosen (dir, app_path and patch_path).
  * cat is NULL for the folders of older versions. */
-static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat, const cat_game_t *g, const config_t *cfg) {
+static int src_open_paths(title_src_t *t, const char *tid, const addon_view_t *view, const config_t *cfg) {
     if (pkg_open(&t->app, t->app_path) || read_meta(&t->app, &t->app_meta)) {
         if (first_time(t->app_path))
             printf("[scan] %s: unreadable app pkg\n", t->app_path);
@@ -1193,8 +1248,10 @@ static int src_open_paths(title_src_t *t, const char *tid, const catalog_t *cat,
             snprintf(digest + i * 2, 3, "%02x", t->patch.digest[i]);
     snprintf(t->marker, sizeof(t->marker), "%s\n%s\n", t->dir, t->has_patch ? digest : "nopatch");
     if (cfg->dlc) {
-        if (cat)
-            dlc_open_catalog(t, cat, g, cfg);
+        if (view && view->cat)
+            dlc_open_catalog(t, view->cat, view->game, cfg);
+        else if (view && view->snap)
+            dlc_open_snapshot(t, view->snap, view->sgame, cfg);
         else
             dlc_open(t, cfg);
     }
@@ -1234,12 +1291,34 @@ static int src_open(title_src_t *t, const char *root, const char *tid, const con
         if (patch)
             snprintf(t->patch_path, sizeof(t->patch_path), "%s", patch->path);
         game_location(root, tid, t->app_path, t->dir, sizeof(t->dir));
-        return src_open_paths(t, tid, cat, g, cfg);
+        addon_view_t view = {cat, g, NULL, NULL};
+        return src_open_paths(t, tid, &view, cfg);
     }
     snprintf(t->dir, sizeof(t->dir), "%s/ps4/%s", root, tid);
     snprintf(t->app_path, sizeof(t->app_path), "%s/app.pkg", t->dir);
     snprintf(t->patch_path, sizeof(t->patch_path), "%s/patch.pkg", t->dir);
-    return src_open_paths(t, tid, NULL, NULL, cfg);
+    return src_open_paths(t, tid, NULL, cfg);
+}
+
+/* Same pkg opening as src_open, but the in-place paths come from an immutable epoch held by
+ * the caller. Organized libraries do not need the catalog in either mode. */
+static int src_open_snapshot(title_src_t *t, const char *root, const char *tid, const config_t *cfg, const catsnap_t *snap) {
+    memset(t, 0, sizeof(*t));
+    if (in_place(root)) {
+        const catsnap_game_t *g = catsnap_find(snap, tid);
+        if (!g)
+            return -1;
+        snprintf(t->app_path, sizeof(t->app_path), "%s", catsnap_path(snap, g->app_off));
+        if (g->patch_off != CATSNAP_NO_PATH)
+            snprintf(t->patch_path, sizeof(t->patch_path), "%s", catsnap_path(snap, g->patch_off));
+        game_location(root, tid, t->app_path, t->dir, sizeof(t->dir));
+        addon_view_t view = {NULL, NULL, snap, g};
+        return src_open_paths(t, tid, &view, cfg);
+    }
+    snprintf(t->dir, sizeof(t->dir), "%s/ps4/%s", root, tid);
+    snprintf(t->app_path, sizeof(t->app_path), "%s/app.pkg", t->dir);
+    snprintf(t->patch_path, sizeof(t->patch_path), "%s/patch.pkg", t->dir);
+    return src_open_paths(t, tid, NULL, cfg);
 }
 
 /* --- what each game is, kept between looks (titlecache.c) --- */
@@ -1255,23 +1334,39 @@ static uint64_t fp_stat(uint64_t h, const char *path) {
 
 /* The add-ons of the game, added to h; order independent (they come from a folder or a
  * catalog, in no fixed order). */
-static uint64_t fp_addons(uint64_t h, const char *root, const char *tid) {
+static uint64_t fp_addons(uint64_t h, const char *root, const char *tid, const catsnap_t *snap) {
     char x[40];
     uint64_t dh = 0;
     int nd = 0;
     if (in_place(root)) {
-        const catalog_t *c = drive_catalog(root);
-        const cat_game_t *g = c ? catalog_game(c, tid) : NULL;
-        const cat_pkg_t *list[CAT_MAX_DLC];
-        int nl = g ? catalog_dlc_of(g_cat, c, g, list, CAT_MAX_DLC) : 0;
-        for (int k = 0; k < nl; k++) {
-            char rm[96];
-            uint64_t v = fp_stat(title_fp_start(), list[k]->path);
-            snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", list[k]->content_id);
-            if (exists(rm)) /* deleted on the console: src_open leaves it out too */
-                v ^= 0x9e3779b97f4a7c15ull;
-            dh ^= v;
-            nd++;
+        if (snap) {
+            const catsnap_game_t *g = catsnap_find(snap, tid);
+            const catsnap_dlc_t *dlcs = catsnap_dlcs((catsnap_t *)snap);
+            uint32_t nl = g ? g->ndlc : 0;
+            for (uint32_t k = 0; k < nl; k++) {
+                const catsnap_dlc_t *d = &dlcs[g->first_dlc + k];
+                char rm[96];
+                uint64_t v = fp_stat(title_fp_start(), catsnap_path(snap, d->path_off));
+                snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", d->content_id);
+                if (exists(rm)) /* deleted on the console: src_open leaves it out too */
+                    v ^= 0x9e3779b97f4a7c15ull;
+                dh ^= v;
+                nd++;
+            }
+        } else {
+            const catalog_t *c = drive_catalog(root);
+            const cat_game_t *g = c ? catalog_game(c, tid) : NULL;
+            const cat_pkg_t *list[CAT_MAX_DLC];
+            int nl = g ? catalog_dlc_of(g_cat, c, g, list, CAT_MAX_DLC) : 0;
+            for (int k = 0; k < nl; k++) {
+                char rm[96];
+                uint64_t v = fp_stat(title_fp_start(), list[k]->path);
+                snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", list[k]->content_id);
+                if (exists(rm)) /* deleted on the console: src_open leaves it out too */
+                    v ^= 0x9e3779b97f4a7c15ull;
+                dh ^= v;
+                nd++;
+            }
         }
     } else {
         char base[PATH_MAX];
@@ -1305,18 +1400,28 @@ static uint64_t fp_addons(uint64_t h, const char *root, const char *tid) {
 
 /* The hash of the files of tid on root, from stats only: over a share, reading a pkg is
  * a megabyte where each of these is one getattr. */
-static uint64_t title_files_fp(const char *root, const char *tid, int dlc, int dlc_mode, int dlc_big) {
+static uint64_t title_files_fp_mode(const char *root, const char *tid, int dlc, int dlc_mode, int dlc_big,
+                                    const catsnap_t *snap) {
     char app[PATH_MAX], patch[PATH_MAX];
     app[0] = patch[0] = 0;
     if (in_place(root)) {
-        const catalog_t *c = drive_catalog(root);
-        const cat_game_t *g = c ? catalog_game(c, tid) : NULL;
-        if (!g)
-            return 0;
-        snprintf(app, sizeof(app), "%s", c->pkgs[g->app].path);
-        const cat_pkg_t *p = catalog_patch(g_cat, c, g);
-        if (p)
-            snprintf(patch, sizeof(patch), "%s", p->path);
+        if (snap) {
+            const catsnap_game_t *g = catsnap_find(snap, tid);
+            if (!g)
+                return 0;
+            snprintf(app, sizeof(app), "%s", catsnap_path(snap, g->app_off));
+            if (g->patch_off != CATSNAP_NO_PATH)
+                snprintf(patch, sizeof(patch), "%s", catsnap_path(snap, g->patch_off));
+        } else {
+            const catalog_t *c = drive_catalog(root);
+            const cat_game_t *g = c ? catalog_game(c, tid) : NULL;
+            if (!g)
+                return 0;
+            snprintf(app, sizeof(app), "%s", c->pkgs[g->app].path);
+            const cat_pkg_t *p = catalog_patch(g_cat, c, g);
+            if (p)
+                snprintf(patch, sizeof(patch), "%s", p->path);
+        }
     } else {
         char dir[PATH_MAX];
         snprintf(dir, sizeof(dir), "%s/ps4/%s", root, tid);
@@ -1329,7 +1434,11 @@ static uint64_t title_files_fp(const char *root, const char *tid, int dlc, int d
     char mark[96];
     h = fp_stat(h, badpatch_path(tid, mark, sizeof(mark)));
     h = title_fp_add(h, dlc ? "add-ons" : "no add-ons", 0, dlc_mode | (dlc_big ? 4 : 0));
-    return dlc ? fp_addons(h, root, tid) : h;
+    return dlc ? fp_addons(h, root, tid, snap) : h;
+}
+
+static uint64_t title_files_fp(const char *root, const char *tid, int dlc, int dlc_mode, int dlc_big) {
+    return title_files_fp_mode(root, tid, dlc, dlc_mode, dlc_big, NULL);
 }
 
 static void info_from_src(const title_src_t *t, title_info_t *e) {
@@ -1374,7 +1483,8 @@ static pthread_mutex_t g_titlecache_mu = PTHREAD_MUTEX_INITIALIZER;
 
 /* What tid is, read from its pkgs only when its files changed since the last look (or it
  * was never looked at). NULL when the drive has no such game. */
-static const title_info_t *title_info_fp_impl(const char *root, const char *tid, uint64_t fp, const config_t *cfg) {
+static const title_info_t *title_info_fp_impl(const char *root, const char *tid, uint64_t fp, const config_t *cfg,
+                                              const catsnap_t *snap) {
     if (!fp)
         return NULL;
     /* the games are kept per drive, not per path: a share mounted under another name in
@@ -1385,7 +1495,8 @@ static const title_info_t *title_info_fp_impl(const char *root, const char *tid,
     if (hit)
         return hit;
     title_src_t src;
-    if (src_open(&src, root, tid, cfg))
+    int opened = snap ? src_open_snapshot(&src, root, tid, cfg, snap) : src_open(&src, root, tid, cfg);
+    if (opened)
         return NULL;
     title_info_t *e = title_cache_add(key, tid, fp);
     if (e)
@@ -1394,15 +1505,44 @@ static const title_info_t *title_info_fp_impl(const char *root, const char *tid,
     return e;
 }
 
-static const title_info_t *title_info_fp(const char *root, const char *tid, uint64_t fp, const config_t *cfg) {
-    pthread_mutex_lock(&g_titlecache_mu);
-    const title_info_t *t = title_info_fp_impl(root, tid, fp, cfg);
-    pthread_mutex_unlock(&g_titlecache_mu);
-    return t;
+/* Owned copy of one cache entry. The fixed add-on storage keeps the copy independent of the
+ * cache's pool even when a later scan reuses or rewrites that entry. No cache pointer leaves
+ * the mutex: scan and panel consumers both use this representation. */
+typedef struct {
+    title_info_t info;
+    title_dlc_t dlc[TITLE_DLC_MAX];
+} title_info_copy_t;
+
+static void title_info_copy_data(title_info_copy_t *out, const title_info_t *src) {
+    memcpy(&out->info, src, sizeof(out->info));
+    if (src->ndlc > 0 && src->dlc) {
+        int ndlc = src->ndlc < TITLE_DLC_MAX ? src->ndlc : TITLE_DLC_MAX;
+        memcpy(out->dlc, src->dlc, (size_t)ndlc * sizeof(out->dlc[0]));
+        out->info.ndlc = ndlc;
+        out->info.dlc = out->dlc;
+    } else {
+        out->info.dlc = NULL;
+    }
 }
 
-static const title_info_t *title_info(const char *root, const char *tid, const config_t *cfg) {
-    return title_info_fp(root, tid, title_files_fp(root, tid, cfg->dlc, cfg->dlc_mode, cfg->dlc_big), cfg);
+static int title_info_fp_copy(const char *root, const char *tid, uint64_t fp, const config_t *cfg, const catsnap_t *snap,
+                              title_info_copy_t *out) {
+    pthread_mutex_lock(&g_titlecache_mu);
+    const title_info_t *t = title_info_fp_impl(root, tid, fp, cfg, snap);
+    if (t)
+        title_info_copy_data(out, t);
+    pthread_mutex_unlock(&g_titlecache_mu);
+    return t ? 0 : -1;
+}
+
+/* Cache lookup for a worker using a catalog epoch. The fingerprint is taken before the cache
+ * mutex; the fill/copy itself is serialized so no live cache pointer escapes to the panel. */
+static int title_info_snapshot_copy(const char *root, const char *tid, const config_t *cfg, const catsnap_t *snap,
+                                    title_info_copy_t *out) {
+    uint64_t fp = title_files_fp_mode(root, tid, cfg->dlc, cfg->dlc_mode, cfg->dlc_big, snap);
+    if (!fp)
+        return -1;
+    return title_info_fp_copy(root, tid, fp, cfg, snap, out);
 }
 
 static void write_meta(pkg_t *pkg, const char *meta_dir, int *rc) {
@@ -3835,16 +3975,8 @@ static int adopt_root_pkgs(const char *root) {
     return moved;
 }
 
-/* The title IDs PS4Mount serves from root: its ps4/<TID> folders when pkgs are moved
- * there, or the games the catalog of the drive found anywhere. */
-static int titles_on_root(const char *root, char (*tids)[10], int max) {
+static int titles_on_root_dirs(const char *root, char (*tids)[10], int max) {
     int n = 0;
-    if (in_place(root)) {
-        const catalog_t *c = drive_catalog(root);
-        for (int i = 0; c && i < c->ngames && n < max; i++)
-            snprintf(tids[n++], 10, "%s", c->games[i].title_id);
-        return n;
-    }
     char lib[PATH_MAX];
     snprintf(lib, sizeof(lib), "%s/ps4", root);
     DIR *d = opendir(lib);
@@ -3860,6 +3992,33 @@ static int titles_on_root(const char *root, char (*tids)[10], int max) {
     if (d)
         closedir(d);
     return n;
+}
+
+/* The title IDs PS4Mount serves from root: its ps4/<TID> folders when pkgs are moved
+ * there, or the games the catalog of the drive found anywhere. This live form is owner state. */
+static int titles_on_root(const char *root, char (*tids)[10], int max) {
+    if (in_place(root)) {
+        int n = 0;
+        const catalog_t *c = drive_catalog(root);
+        for (int i = 0; c && i < c->ngames && n < max; i++)
+            snprintf(tids[n++], 10, "%s", c->games[i].title_id);
+        return n;
+    }
+    return titles_on_root_dirs(root, tids, max);
+}
+
+/* Worker form of the same enumeration: in-place games come from one immutable epoch held
+ * by the caller; organized folders are already plain filesystem state. */
+static int titles_on_root_snapshot(const char *root, char (*tids)[10], int max, const catsnap_t *snap) {
+    if (in_place(root)) {
+        int n = 0;
+        uint32_t ng = catsnap_ngames(snap);
+        const catsnap_game_t *games = catsnap_games((catsnap_t *)snap);
+        for (uint32_t i = 0; i < ng && n < max; i++)
+            snprintf(tids[n++], 10, "%s", games[i].title_id);
+        return n;
+    }
+    return titles_on_root_dirs(root, tids, max);
 }
 
 /* The game and update pkg paths of tid on root (empty patch without an update). */
@@ -4072,9 +4231,10 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         activity_set("scanning", label, NULL, NULL, k, nt, 0, 0);
         const char *tid = tids[k];
         uint64_t fp = title_files_fp(root, tid, g_cfg.dlc, g_cfg.dlc_mode, g_cfg.dlc_big);
-        const title_info_t *info = title_info_fp(root, tid, fp, &g_cfg);
-        if (!info)
+        title_info_copy_t icopy;
+        if (title_info_fp_copy(root, tid, fp, &g_cfg, NULL, &icopy))
             continue;
+        const title_info_t *info = &icopy.info;
         if (reconnected) {
             char rm[64];
             snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", tid);
@@ -4109,9 +4269,10 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         if (!(i % 8))
             pump_now();
         title_t *t = &titles[i];
-        const title_info_t *info;
-        if (t->state != 0 || !(info = title_info_fp(root, t->tid, fps[i], &g_cfg)))
+        title_info_copy_t icopy;
+        if (t->state != 0 || title_info_fp_copy(root, t->tid, fps[i], &g_cfg, NULL, &icopy))
             continue;
+        const title_info_t *info = &icopy.info;
         enforce_patch_sfo(info->title_id, info->has_patch, info->patch_path, info->sfo_len, info->sfo_sha);
         manage_info(info);
         /* PS4: the system registered another version (the update came later) */
@@ -5260,13 +5421,15 @@ void app_games_json(buf_t *out) {
         root_path(i, root, sizeof(root));
         if (!root_present(root))
             continue;
+        catsnap_t *snap = in_place(root) ? catalog_snapshot_acquire(root) : NULL;
         char tids[MAX_TITLES][10];
-        int nt = titles_on_root(root, tids, MAX_TITLES);
+        int nt = titles_on_root_snapshot(root, tids, MAX_TITLES, snap);
         for (int k = 0; k < nt; k++) {
             const char *tid = tids[k];
-            const title_info_t *t = title_info(root, tid, &cfg);
-            if (!t)
+            title_info_copy_t tcopy;
+            if (title_info_snapshot_copy(root, tid, &cfg, snap, &tcopy))
                 continue;
+            const title_info_t *t = &tcopy.info;
             const char *state, *mount = "";
             char target[64], from[PATH_MAX];
             snprintf(target, sizeof(target), "/user/app/%s", tid);
@@ -5319,6 +5482,7 @@ void app_games_json(buf_t *out) {
             buf_printf(out, "}");
             first = 0;
         }
+        catsnap_unref(snap);
     }
     /* games of drives that are not connected: still on the home screen, not playable */
     DIR *sd = opendir(STATE_DIR);
