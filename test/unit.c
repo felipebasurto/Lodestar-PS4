@@ -79,6 +79,14 @@ static void test_crypto(void) {
     hex("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", want, 32);
     CHECK(!memcmp(h, want, 32));
     CHECK(crc32c("123456789", 9) == 0xe3069283u);
+    /* NIST SP 800-38A F.2.2 AES-128-CBC decrypt (2 blocks) */
+    uint8_t key[16], iv[16], ct[32], pt[32];
+    hex("2b7e151628aed2a6abf7158809cf4f3c", key, 16);
+    hex("000102030405060708090a0b0c0d0e0f", iv, 16);
+    hex("7649abac8119b246cee98e9b12e9197d5086cb9b507219ee95db113a917678b2", ct, 32);
+    hex("6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e51", pt, 32);
+    aes128_cbc_decrypt(key, iv, ct, sizeof(ct));
+    CHECK(!memcmp(ct, pt, sizeof(pt)));
 }
 
 static void test_app_json(void) {

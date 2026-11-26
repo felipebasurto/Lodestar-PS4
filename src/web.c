@@ -296,8 +296,16 @@ static web_owner_job_t *g_owner_head, *g_owner_tail;
 static int g_owner_count;
 static size_t g_owner_body_bytes;
 
-static void web_handle_connection(int fd, int queue_owner);
-static void web_dispatch(int fd, web_req_t *r);
+static void web_handle_connection(int fd, int queue_owner, int slot);
+static void web_dispatch(int fd, web_req_t *r, int slot);
+
+static void web_active_clear(int slot) {
+    if (slot < 0)
+        return;
+    pthread_mutex_lock(&g_pool_mu);
+    g_pool_active[slot] = -1;
+    pthread_mutex_unlock(&g_pool_mu);
+}
 
 static void nonblock_fd(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
@@ -435,14 +443,14 @@ void web_owner_pump(void) {
         if (!job)
             break;
         if (!capture_key_ready()) {
-            web_dispatch(job->fd, &job->req); /* direct historical fallback: dispatch closes fd */
+            web_dispatch(job->fd, &job->req, -1); /* direct historical fallback: dispatch closes fd */
             owner_body_free(&job->req);
             mem_free(job);
             continue;
         }
         web_capture_t cap = {0};
         pthread_setspecific(g_capture_key, &cap);
-        web_dispatch(job->fd, &job->req);
+        web_dispatch(job->fd, &job->req, -1);
         pthread_setspecific(g_capture_key, NULL);
         if (web_write_enqueue(job->fd, &cap.out))
             close(job->fd);
@@ -450,7 +458,6 @@ void web_owner_pump(void) {
         owner_body_free(&job->req);
         mem_free(job);
     }
-    web_owner_drain_wake();
     pumping = 0;
 }
 
@@ -484,6 +491,7 @@ static void *web_pool_worker(void *arg) {
 
         if (write_job) {
             send_all(write_job->fd, write_job->data, write_job->len);
+            web_active_clear(slot);
             close(write_job->fd);
             size_t len = write_job->len;
             mem_free(write_job->data);
@@ -493,7 +501,7 @@ static void *web_pool_worker(void *arg) {
             g_write_active--;
             pthread_mutex_unlock(&g_pool_mu);
         } else
-            web_handle_connection(fd, 1);
+            web_handle_connection(fd, 1, slot);
 
         pthread_mutex_lock(&g_pool_mu);
         g_pool_active[slot] = -1;
@@ -820,8 +828,6 @@ void web_serve(int listen_fd) {
         close(fd); /* bounded overload: kernel memory is never allowed to grow without a cap */
 }
 
-static void web_dispatch(int fd, web_req_t *r);
-
 /* 0: r is ready for dispatch; 1: close without more work; -1: malformed request. */
 static int web_read_request(int fd, web_req_t *r) {
     struct timeval tv = {5, 0};
@@ -953,15 +959,17 @@ static int web_prepare_check_body(int fd, web_req_t *r) {
     return 0;
 }
 
-static void web_handle_connection(int fd, int queue_owner) {
+static void web_handle_connection(int fd, int queue_owner, int slot) {
     web_req_t r;
     int rr = web_read_request(fd, &r);
     if (rr > 0) {
+        web_active_clear(slot);
         close(fd);
         return;
     }
     if (rr < 0) {
         reply(fd, "400 Bad Request", "text/plain", "bad request\n", 12);
+        web_active_clear(slot);
         close(fd);
         return;
     }
@@ -969,13 +977,16 @@ static void web_handle_connection(int fd, int queue_owner) {
         if (web_prepare_check_body(fd, &r)) {
             owner_body_free(&r);
             reply(fd, "503 Service Unavailable", "text/plain", "panel busy\n", 11);
+            web_active_clear(slot);
             close(fd);
             return;
         }
-        web_dispatch(fd, &r);
+        web_dispatch(fd, &r, slot);
         owner_body_free(&r);
         return;
     }
+    /* Request bytes are already read; release active-fd tracking before handing fd to the owner queue. */
+    web_active_clear(slot);
     if (web_owner_enqueue(fd, &r)) {
         owner_body_free(&r);
         reply(fd, "503 Service Unavailable", "text/plain", "panel busy\n", 11);
@@ -983,9 +994,9 @@ static void web_handle_connection(int fd, int queue_owner) {
     }
 }
 
-void web_handle(int fd) { web_handle_connection(fd, 0); }
+void web_handle(int fd) { web_handle_connection(fd, 0, -1); }
 
-static void web_dispatch(int fd, web_req_t *r) {
+static void web_dispatch(int fd, web_req_t *r, int slot) {
     const char *req = r->raw, *path = r->path;
     char *body = r->body;
     size_t have = r->have;
@@ -1080,10 +1091,13 @@ static void web_dispatch(int fd, web_req_t *r) {
     } else if (post && !strncmp(path, "/api/upload", 11) && (path[11] == 0 || path[11] == '?')) {
         if (!length)
             json_msg(fd, 0, TR("nothing was sent", "no se envió nada"));
-        else if (!app_upload(fd, path, body, have, length, msg, sizeof(msg)))
-            return; /* the upload answers and closes it */
-        else
+        else {
+            /* Once app_upload starts, the detached upload thread owns fd and close(). */
+            web_active_clear(slot);
+            if (!app_upload(fd, path, body, have, length, msg, sizeof(msg)))
+                return; /* the upload answers and closes it */
             json_msg(fd, 0, msg);
+        }
     } else if (!strcmp(path, "/api/uploads")) {
         buf_t b = {0};
         app_uploads_json(&b);
@@ -1144,6 +1158,8 @@ static void web_dispatch(int fd, web_req_t *r) {
     } else {
         reply(fd, "404 Not Found", "text/plain", "not found\n", 10);
     }
-    if (!capture_current())
+    if (!capture_current()) {
+        web_active_clear(slot);
         close(fd);
+    }
 }

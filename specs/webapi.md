@@ -117,7 +117,10 @@ to the owner queue. The main loop executes it through the same dispatcher, prese
 response contract. A worker must adjust the body pointer when copying the request into a
 queue node; it may never leave that pointer referring to its own stack. A pipe or equivalent
 wake mechanism tells the main loop that owner work is pending, so responses do not wait for
-the normal select timeout.
+the normal select timeout. While `/user/app` is masked for registration, accepted owner work
+waits too: a queued mount, unmount, restore or configuration action must not inspect or mutate
+through the mask, and becomes dispatchable again only after the real `/user/app` tree is
+restored.
 
 Owner responses are captured whole while they are produced, then their fd and bytes move
 together to a bounded writer queue. A worker transmits every byte and closes the fd; the

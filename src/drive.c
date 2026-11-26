@@ -129,16 +129,32 @@ static void queue_front_locked(int op);
 
 /* --- small helpers --- */
 
+static void set_result_v(int ok, int notify, const char *fmt, va_list ap) {
+    char buf[sizeof(g_result)];
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    pthread_mutex_lock(&g_mu);
+    snprintf(g_result, sizeof(g_result), "%s", buf);
+    g_result_ok = ok;
+    pthread_mutex_unlock(&g_mu);
+    printf("[drive] %s\n", buf);
+    if (notify && g_host.notify)
+        g_host.notify(buf);
+}
+
 static void set_result(int ok, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static void set_result(int ok, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    pthread_mutex_lock(&g_mu);
-    vsnprintf(g_result, sizeof(g_result), fmt, ap);
-    g_result_ok = ok;
-    pthread_mutex_unlock(&g_mu);
+    set_result_v(ok, 0, fmt, ap);
     va_end(ap);
-    printf("[drive] %s\n", g_result);
+}
+
+static void set_result_notify(int ok, int notify, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+static void set_result_notify(int ok, int notify, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    set_result_v(ok, notify, fmt, ap);
+    va_end(ap);
 }
 
 static void json_esc(buf_t *b, const char *s) {
@@ -1088,18 +1104,13 @@ static void run_upload(const char *tid) {
     if (nsend) {
         char took[48];
         fmt_left((double)(time(NULL) - g_job_start), took, sizeof(took));
-        set_result(1, TR("%s is in Google Drive (%s in %s)", "%s está en Google Drive (%s en %s)"), title, size_text,
-                   took + (took[0] == '~'));
-        if (g_host.notify)
-            g_host.notify(g_result);
+        set_result_notify(1, 1, TR("%s is in Google Drive (%s in %s)", "%s está en Google Drive (%s en %s)"), title, size_text,
+                          took + (took[0] == '~'));
     } else
         set_result(1, TR("%s was already in Google Drive", "%s ya estaba en Google Drive"), title);
 fail:
-    if (rc) {
-        set_result(0, TR("%s was not uploaded: %s", "%s no se subió: %s"), title, err);
-        if (g_host.notify && !flag_read(&g_cancel))
-            g_host.notify(g_result);
-    }
+    if (rc)
+        set_result_notify(0, !flag_read(&g_cancel), TR("%s was not uploaded: %s", "%s no se subió: %s"), title, err);
 out:
     mem_free(files);
     mem_free(rem);
@@ -1376,12 +1387,12 @@ static void run_download(const char *tid, const char *dest) {
     drive_file_t *local = mem_alloc(sizeof(*local) * 1);
     char err[512] = "", scan[PATH_MAX], title[128] = "", fname[192];
     int nr = 0, rc = -1;
+    pthread_mutex_lock(&g_mu);
     for (int i = 0; i < g_nremote; i++)
         if (!strcmp(g_remote[i].tid, tid))
             snprintf(title, sizeof(title), "%s", g_remote[i].name);
     if (!title[0])
         snprintf(title, sizeof(title), "%s", tid);
-    pthread_mutex_lock(&g_mu);
     snprintf(g_cur_name, sizeof(g_cur_name), "%s", title);
     pthread_mutex_unlock(&g_mu);
     if (!rem || !local) {
@@ -1532,18 +1543,13 @@ static void run_download(const char *tid, const char *dest) {
     rc = 0;
     char took[48];
     fmt_left((double)(time(NULL) - g_job_start), took, sizeof(took));
-    set_result(1, TR("%s was downloaded from Google Drive (%s in %s)", "%s se descargó de Google Drive (%s en %s)"), title,
-               size_text, took + (took[0] == '~'));
-    if (g_host.notify)
-        g_host.notify(g_result);
+    set_result_notify(1, 1, TR("%s was downloaded from Google Drive (%s in %s)", "%s se descargó de Google Drive (%s en %s)"), title,
+                      size_text, took + (took[0] == '~'));
     if (g_host.downloaded)
         g_host.downloaded(tid);
 fail:
-    if (rc) {
-        set_result(0, TR("%s was not downloaded: %s", "%s no se descargó: %s"), title, err);
-        if (g_host.notify && !flag_read(&g_cancel))
-            g_host.notify(g_result);
-    }
+    if (rc)
+        set_result_notify(0, !flag_read(&g_cancel), TR("%s was not downloaded: %s", "%s no se descargó: %s"), title, err);
     mem_free(rem);
     mem_free(local);
 }
@@ -1552,12 +1558,12 @@ static void run_trash(const char *tid) {
     remote_file_t *rem = mem_alloc(sizeof(*rem) * DRIVE_MAX_FILES);
     char err[512] = "", q[256], title[128] = "";
     int nr = 0, rc = -1;
+    pthread_mutex_lock(&g_mu);
     for (int i = 0; i < g_nremote; i++)
         if (!strcmp(g_remote[i].tid, tid))
             snprintf(title, sizeof(title), "%s", g_remote[i].name);
     if (!title[0])
         snprintf(title, sizeof(title), "%s", tid);
-    pthread_mutex_lock(&g_mu);
     snprintf(g_cur_name, sizeof(g_cur_name), "%s", title);
     pthread_mutex_unlock(&g_mu);
     if (!rem || remote_files(tid, rem, DRIVE_MAX_FILES, &nr, err, sizeof(err)))
@@ -1879,9 +1885,11 @@ void drive_start(const char *state_dir, const drive_endpoints_t *ep, const drive
     snprintf(g_session_path, sizeof(g_session_path), "%s/drive_upload.txt", state_dir);
     snprintf(g_client_path, sizeof(g_client_path), "%s/drive_client.txt", state_dir);
     snprintf(g_queue_path, sizeof(g_queue_path), "%s/drive_queue.txt", state_dir);
-    if (g_started)
-        return;
     pthread_mutex_lock(&g_mu);
+    if (g_started) {
+        pthread_mutex_unlock(&g_mu);
+        return;
+    }
     load_client();
     if (g_client_id[0])
         load_state();
@@ -1916,9 +1924,11 @@ void drive_start(const char *state_dir, const drive_endpoints_t *ep, const drive
 }
 
 void drive_stop(void) {
-    if (!g_started)
-        return;
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        return;
+    }
     flag_write(&g_quit, 1);
     flag_write(&g_cancel, 1);
     pthread_cond_signal(&g_cv);
@@ -2038,6 +2048,11 @@ int drive_connect(char *msg, size_t n) {
     if (ready(msg, n, 0))
         return -1;
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
+        return -1;
+    }
     g_login = 0;
     g_login_error[0] = 0;
     queue_locked(OP_LOGIN, "", "");
@@ -2050,6 +2065,11 @@ int drive_disconnect(char *msg, size_t n) {
     if (ready(msg, n, 0))
         return -1;
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
+        return -1;
+    }
     flag_write(&g_cancel, 1);
     g_njobs = 0;
     g_login = 0;
@@ -2080,6 +2100,12 @@ int drive_upload(const char *tid, char *msg, size_t n) {
         }
     }
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        mem_free(tids);
+        snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
+        return -1;
+    }
     for (int i = 0; i < count; i++)
         queue_locked(OP_UPLOAD, tid ? tid : tids[i], "");
     pthread_mutex_unlock(&g_mu);
@@ -2102,6 +2128,11 @@ int drive_download(const char *tid, const char *dest, char *msg, size_t n) {
         return -1;
     }
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
+        return -1;
+    }
     queue_locked(OP_DOWNLOAD, tid, dest);
     pthread_mutex_unlock(&g_mu);
     snprintf(msg, n, TR("%s will be downloaded from Google Drive", "%s se descargará de Google Drive"), tid);
@@ -2112,6 +2143,11 @@ int drive_trash(const char *tid, char *msg, size_t n) {
     if (ready(msg, n, 1))
         return -1;
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
+        return -1;
+    }
     queue_locked(OP_TRASH, tid, "");
     pthread_mutex_unlock(&g_mu);
     snprintf(msg, n, TR("%s will be moved to the Drive trash", "%s se moverá a la papelera de Drive"), tid);
@@ -2122,6 +2158,11 @@ int drive_refresh(char *msg, size_t n) {
     if (ready(msg, n, 1))
         return -1;
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
+        return -1;
+    }
     queue_locked(OP_LIST, "", "");
     pthread_mutex_unlock(&g_mu);
     snprintf(msg, n, "%s", TR("Reading Google Drive", "Leyendo Google Drive"));
@@ -2132,6 +2173,11 @@ int drive_cancel(char *msg, size_t n) {
     if (ready(msg, n, 0))
         return -1;
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
+        return -1;
+    }
     /* the queue goes too; the list stays */
     int k = 0;
     for (int i = 0; i < g_njobs; i++)
@@ -2169,7 +2215,10 @@ static int secret_ok(const char *s) {
 }
 
 int drive_set_client(const char *id, const char *secret, char *msg, size_t n) {
-    if (!g_started) {
+    pthread_mutex_lock(&g_mu);
+    int started = g_started;
+    pthread_mutex_unlock(&g_mu);
+    if (!started) {
         snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
         return -1;
     }
@@ -2199,6 +2248,11 @@ int drive_set_client(const char *id, const char *secret, char *msg, size_t n) {
         return -1;
     }
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
+        return -1;
+    }
     int changed = strcmp(id, g_client_id) != 0;
     snprintf(g_client_id, sizeof(g_client_id), "%s", id);
     snprintf(g_client_secret, sizeof(g_client_secret), "%s", secret);
@@ -2219,16 +2273,21 @@ int drive_set_client(const char *id, const char *secret, char *msg, size_t n) {
 }
 
 int drive_forget_client(char *msg, size_t n) {
-    if (!g_started) {
+    pthread_mutex_lock(&g_mu);
+    int started = g_started, connected = g_refresh[0] != 0;
+    pthread_mutex_unlock(&g_mu);
+    if (!started) {
         snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
         return -1;
     }
-    pthread_mutex_lock(&g_mu);
-    int connected = g_refresh[0] != 0;
-    pthread_mutex_unlock(&g_mu);
     if (connected)
         drive_disconnect(msg, n);
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        snprintf(msg, n, "%s", TR("Google Drive is not running", "Google Drive no está en marcha"));
+        return -1;
+    }
     g_client_id[0] = 0;
     memset(g_client_secret, 0, sizeof(g_client_secret));
     g_login = 0;

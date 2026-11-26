@@ -140,16 +140,32 @@ static void rt_stop_write(int value) { __atomic_store_n(&g_rt.stop, value, __ATO
 
 /* --- small helpers --- */
 
+static void set_result_v(int ok, int notify, const char *fmt, va_list ap) {
+    char buf[sizeof(g_result)];
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    pthread_mutex_lock(&g_mu);
+    snprintf(g_result, sizeof(g_result), "%s", buf);
+    g_result_ok = ok;
+    pthread_mutex_unlock(&g_mu);
+    printf("[links] %s\n", buf);
+    if (notify && g_host.notify)
+        g_host.notify(buf);
+}
+
 static void set_result(int ok, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static void set_result(int ok, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    pthread_mutex_lock(&g_mu);
-    vsnprintf(g_result, sizeof(g_result), fmt, ap);
-    g_result_ok = ok;
-    pthread_mutex_unlock(&g_mu);
+    set_result_v(ok, 0, fmt, ap);
     va_end(ap);
-    printf("[links] %s\n", g_result);
+}
+
+static void set_result_notify(int ok, int notify, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+static void set_result_notify(int ok, int notify, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    set_result_v(ok, notify, fmt, ap);
+    va_end(ap);
 }
 
 /* The first failure of the download in progress; everything of it stops. */
@@ -999,24 +1015,33 @@ static void relay_start(void) {
         close(fd);
         return;
     }
+    pthread_mutex_lock(&g_relay_mu);
     g_relay_fd = fd;
+    pthread_mutex_unlock(&g_relay_mu);
     flag_write(&g_relay_quit, 0);
     if (pthread_create(&g_relay_thread, NULL, relay_thread, NULL)) {
-        close(fd);
+        pthread_mutex_lock(&g_relay_mu);
         g_relay_fd = -1;
+        pthread_mutex_unlock(&g_relay_mu);
+        close(fd);
         return;
     }
     printf("[links] helpers on port %d\n", links_relay_port());
 }
 
 static void relay_stop(void) {
-    if (g_relay_fd < 0)
+    pthread_mutex_lock(&g_relay_mu);
+    int fd = g_relay_fd;
+    pthread_mutex_unlock(&g_relay_mu);
+    if (fd < 0)
         return;
     flag_write(&g_relay_quit, 1);
-    shutdown(g_relay_fd, SHUT_RDWR);
+    shutdown(fd, SHUT_RDWR);
     pthread_join(g_relay_thread, NULL);
-    close(g_relay_fd);
+    pthread_mutex_lock(&g_relay_mu);
     g_relay_fd = -1;
+    pthread_mutex_unlock(&g_relay_mu);
+    close(fd);
     /* connections still served end on their own (their download is gone, or 10 s without a
        byte): none may outlive PS4Mount */
     for (int i = 0; i < 240; i++) {
@@ -1032,9 +1057,12 @@ static void relay_stop(void) {
 int links_relay_port(void) {
     struct sockaddr_in sa;
     socklen_t sl = sizeof(sa);
-    if (g_relay_fd < 0 || getsockname(g_relay_fd, (struct sockaddr *)&sa, &sl))
-        return 0;
-    return ntohs(sa.sin_port);
+    int port = 0;
+    pthread_mutex_lock(&g_relay_mu);
+    if (g_relay_fd >= 0 && !getsockname(g_relay_fd, (struct sockaddr *)&sa, &sl))
+        port = ntohs(sa.sin_port);
+    pthread_mutex_unlock(&g_relay_mu);
+    return port;
 }
 
 int links_relay_active(void) { return relay_active(); }
@@ -1925,10 +1953,8 @@ static int run_job(ljob_t *j) {
     rmdir(parent);
     char took[48];
     fmt_left((double)(time(NULL) - g_job_start), took, sizeof(took));
-    set_result(1, TR("%s was downloaded: %d pkg(s), %s in %s", "%s se descargó: %d pkg(s), %s en %s"), j->name, g_rt.npkgs,
-               size_text, took + (took[0] == '~'));
-    if (g_host.notify)
-        g_host.notify(g_result);
+    set_result_notify(1, 1, TR("%s was downloaded: %d pkg(s), %s in %s", "%s se descargó: %d pkg(s), %s en %s"), j->name, g_rt.npkgs,
+                      size_text, took + (took[0] == '~'));
     if (g_host.arrived)
         g_host.arrived(dir);
     return 0;
@@ -2115,11 +2141,8 @@ static void *worker(void *arg) {
                     rmdir(g_rt.work); /* the hidden folder, when no other download is in it */
                 }
             }
-        } else if (rc < 0) {
-            set_result(0, TR("%s was not downloaded: %s", "%s no se descargó: %s"), run.name, g_rt.err);
-            if (g_host.notify)
-                g_host.notify(g_result);
-        }
+        } else if (rc < 0)
+            set_result_notify(0, 1, TR("%s was not downloaded: %s", "%s no se descargó: %s"), run.name, g_rt.err);
         pthread_mutex_lock(&g_rt.mu);
         g_rt.v = NULL;
         g_rt.job = NULL;
@@ -2158,18 +2181,25 @@ void links_start(const char *state_dir, const links_host_t *host) {
     g_host = *host;
     snprintf(g_queue_path, sizeof(g_queue_path), "%s/links_queue.txt", state_dir);
     snprintf(g_pw_path, sizeof(g_pw_path), "%s/passwords.txt", state_dir);
-    if (g_started)
-        return;
-    flag_write(&g_quit, 0);
     pthread_mutex_lock(&g_mu);
+    if (g_started) {
+        pthread_mutex_unlock(&g_mu);
+        return;
+    }
+    flag_write(&g_quit, 0);
     int resumed = load_queue_locked();
     pthread_mutex_unlock(&g_mu);
     pthread_attr_t at;
     pthread_attr_init(&at);
     pthread_attr_setstacksize(&at, 1 << 20);
     if (!pthread_create(&g_thread, &at, worker, NULL)) {
+        pthread_mutex_lock(&g_mu);
         g_started = 1;
-        if (g_relay_fd < 0)
+        pthread_mutex_unlock(&g_mu);
+        pthread_mutex_lock(&g_relay_mu);
+        int need_relay = g_relay_fd < 0;
+        pthread_mutex_unlock(&g_relay_mu);
+        if (need_relay)
             relay_start();
         if (resumed) {
             printf("[links] %d download(s) left by the last run: going on with them\n", resumed);
@@ -2186,9 +2216,11 @@ void links_start(const char *state_dir, const links_host_t *host) {
 }
 
 void links_stop(void) {
-    if (!g_started)
-        return;
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        return;
+    }
     flag_write(&g_quit, 1);
     flag_write(&g_cancel, 1);
     pthread_cond_signal(&g_cv);
@@ -2199,8 +2231,8 @@ void links_stop(void) {
     pthread_mutex_unlock(&g_rt.mu);
     pthread_join(g_thread, NULL);
     relay_stop();
-    g_started = 0;
     pthread_mutex_lock(&g_mu);
+    g_started = 0;
     for (int i = 0; i < g_njobs; i++)
         free_job(&g_jobs[i]);
     g_njobs = 0;
@@ -2413,7 +2445,10 @@ static int valid_dest(const char *d) {
 }
 
 int links_add(const char *text, const char *dest, const char *password, char *msg, size_t n) {
-    if (!g_started) {
+    pthread_mutex_lock(&g_mu);
+    int started = g_started;
+    pthread_mutex_unlock(&g_mu);
+    if (!started) {
         snprintf(msg, n, "%s", TR("downloads from links are not running", "las descargas de enlaces no están en marcha"));
         return -1;
     }
@@ -2544,6 +2579,13 @@ int links_add(const char *text, const char *dest, const char *password, char *ms
         return -1;
     }
     pthread_mutex_lock(&g_mu);
+    if (!g_started) {
+        pthread_mutex_unlock(&g_mu);
+        for (int i = 0; i < na; i++)
+            free_job(&add[i]);
+        snprintf(msg, n, "%s", TR("downloads from links are not running", "las descargas de enlaces no están en marcha"));
+        return -1;
+    }
     int added = 0, same = 0;
     for (int i = 0; i < na; i++) {
         /* the same first link already in the list: not twice */
@@ -2581,13 +2623,15 @@ int links_cancel(int id, char *msg, size_t n) {
         return -1;
     }
     if (g_busy && g_cur_id == id) {
+        char name[256];
+        snprintf(name, sizeof(name), "%s", j->name);
         flag_write(&g_cancel, 1);
         rt_stop_write(1);
         pthread_mutex_unlock(&g_mu);
         pthread_mutex_lock(&g_rt.mu);
         pthread_cond_broadcast(&g_rt.cv);
         pthread_mutex_unlock(&g_rt.mu);
-        snprintf(msg, n, TR("%s will stop and its files will be deleted", "%s se detendrá y se borrarán sus archivos"), j->name);
+        snprintf(msg, n, TR("%s will stop and its files will be deleted", "%s se detendrá y se borrarán sus archivos"), name);
         return 0;
     }
     char name[256], dest[16], scan[PATH_MAX], work[PATH_MAX];

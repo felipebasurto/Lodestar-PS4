@@ -1934,16 +1934,12 @@ static char g_reboot_tids[MAX_TITLES][10];
 static int g_nreboot;
 static pthread_mutex_t g_reboot_mu = PTHREAD_MUTEX_INITIALIZER;
 
-static int reboot_listed(const char *tid) {
-    int found = 0;
-    pthread_mutex_lock(&g_reboot_mu);
+static void reboot_record_locked(const char *tid) {
     for (int i = 0; i < g_nreboot; i++)
-        if (!strcmp(g_reboot_tids[i], tid)) {
-            found = 1;
-            break;
-        }
-    pthread_mutex_unlock(&g_reboot_mu);
-    return found;
+        if (!strcmp(g_reboot_tids[i], tid))
+            return;
+    if (g_nreboot < MAX_TITLES)
+        snprintf(g_reboot_tids[g_nreboot++], 10, "%s", tid);
 }
 
 static int same_file(const char *path, const void *data, size_t size);
@@ -1965,36 +1961,46 @@ static long boot_time(void) {
  * needs a restart while the console has not booted since (a PS4Mount loaded again keeps
  * knowing it). */
 static int needs_reboot(const char *tid) {
-    if (reboot_listed(tid))
-        return 1;
+    pthread_mutex_lock(&g_reboot_mu);
+    for (int i = 0; i < g_nreboot; i++)
+        if (!strcmp(g_reboot_tids[i], tid)) {
+            pthread_mutex_unlock(&g_reboot_mu);
+            return 1;
+        }
     char p[64], buf[32] = "";
     snprintf(p, sizeof(p), STATE_DIR "/%s.restart", tid);
     int fd = open(p, O_RDONLY);
-    if (fd < 0)
+    if (fd < 0) {
+        pthread_mutex_unlock(&g_reboot_mu);
         return 0;
+    }
     ssize_t n = read(fd, buf, sizeof(buf) - 1);
     close(fd);
     long boot = boot_time(), when = n > 0 ? atol(buf) : -1;
-    if (boot && when > 0 && labs(when - boot) <= SAME_BOOT_SECONDS)
+    if (boot && when > 0 && labs(when - boot) <= SAME_BOOT_SECONDS) {
+        reboot_record_locked(tid);
+        pthread_mutex_unlock(&g_reboot_mu);
         return 1;
+    }
     unlink(p); /* booted since: BGFT has read the task */
+    pthread_mutex_unlock(&g_reboot_mu);
     return 0;
 }
 
 static void mark_reboot(const char *tid) {
-    if (!needs_reboot(tid)) {
-        pthread_mutex_lock(&g_reboot_mu);
-        int found = 0;
-        for (int i = 0; i < g_nreboot; i++)
-            found |= !strcmp(g_reboot_tids[i], tid);
-        if (!found && g_nreboot < MAX_TITLES)
-            snprintf(g_reboot_tids[g_nreboot++], 10, "%s", tid);
-        pthread_mutex_unlock(&g_reboot_mu);
-    }
-    char p[64], buf[32];
+    char p[64], tmp[80], buf[32];
     snprintf(p, sizeof(p), STATE_DIR "/%s.restart", tid);
+    snprintf(tmp, sizeof(tmp), STATE_DIR "/%s.restart.tmp", tid);
     int n = snprintf(buf, sizeof(buf), "%ld\n", boot_time());
-    write_file(p, buf, (size_t)n, 0666);
+    pthread_mutex_lock(&g_reboot_mu);
+    reboot_record_locked(tid);
+    if (!write_file(tmp, buf, (size_t)n, 0666)) {
+        if (rename(tmp, p))
+            unlink(tmp);
+    } else {
+        unlink(tmp);
+    }
+    pthread_mutex_unlock(&g_reboot_mu);
 }
 
 static int contains(const uint8_t *d, size_t n, const char *s) {
@@ -2495,9 +2501,13 @@ static int g_will_mount_warned;
 static int delete_pending_is(const char *tid) { return g_will_delete[0] && !strcmp(g_will_delete, tid); }
 
 static void managed_mark_unused(managed_t *m) {
+    char tid[10];
     pthread_mutex_lock(&g_managed_id_mu);
+    snprintf(tid, sizeof(tid), "%s", m->tid);
     m->used = 0;
     pthread_mutex_unlock(&g_managed_id_mu);
+    if (tid[0])
+        runtime_publish(tid, 0);
 }
 
 static managed_t *managed_by(const char *tid, const char *cid) {
@@ -7451,15 +7461,18 @@ static int drive_game_files(const char *tid, drive_file_t *files, int max, char 
 }
 
 static int drive_library(char (*tids)[10], int max) {
+    config_t cfg;
+    cfg_snapshot(&cfg);
     int n = 0;
-    static char found[MAX_TITLES][10];
-    pthread_mutex_lock(&g_cat_lock);
+    char found[MAX_TITLES][10];
     for (int i = 0; i < NROOTS; i++) {
         char root[PATH_MAX];
         root_path(i, root, sizeof(root));
-        if (!root_present(root))
+        if (!root_present_cfg(root, &cfg))
             continue;
-        int nf = titles_on_root(root, found, MAX_TITLES);
+        catsnap_t *snap = in_place_cfg(root, &cfg) ? catalog_snapshot_acquire(root) : NULL;
+        int nf = titles_on_root_snapshot(root, found, MAX_TITLES, snap, &cfg);
+        catsnap_unref(snap);
         for (int k = 0; k < nf && n < max; k++) {
             int seen = 0;
             for (int j = 0; j < n; j++)
@@ -7468,7 +7481,6 @@ static int drive_library(char (*tids)[10], int max) {
                 snprintf(tids[n++], 10, "%s", found[k]);
         }
     }
-    pthread_mutex_unlock(&g_cat_lock);
     return n;
 }
 
@@ -7575,13 +7587,13 @@ static int g_klog = -1, g_web = -1;
  * loader's) and anything left open in it would keep the next PS4Mount out. */
 static void shutdown_daemon(int lock) {
     nas_release();
+    if (g_web >= 0)
+        close(g_web);
+    web_stop(); /* before subsystems and log: no worker may still call Drive/links or hold a queued fd */
     links_stop();
     drive_stop();
     install_close();
     bgftscan_free(&g_bgftscan);
-    if (g_web >= 0)
-        close(g_web);
-    web_stop(); /* before log_stop: no worker may still write or hold a queued fd */
     if (g_klog >= 0)
         close(g_klog);
     if (lock >= 0)
@@ -8085,7 +8097,8 @@ static void pump_events(int ms) {
     end.tv_sec += ms / 1000;
     end.tv_nsec += (long)(ms % 1000) * 1000000;
     for (;;) {
-        web_owner_pump();
+        if (!g_masked)
+            web_owner_pump();
         if (g_klog < 0) {
             g_klog = klog_connect();
             g_live = 0;
@@ -8109,7 +8122,7 @@ static void pump_events(int ms) {
             if (g_web > maxfd)
                 maxfd = g_web;
         }
-        int owner_wake = web_owner_wake_fd();
+        int owner_wake = g_masked ? -1 : web_owner_wake_fd();
         if (owner_wake >= 0) {
             FD_SET(owner_wake, &fs);
             if (owner_wake > maxfd)
