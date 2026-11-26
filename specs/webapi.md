@@ -66,13 +66,13 @@ arrives short the route still produces the historical "did not arrive whole" ans
 calling the application check; if the body quota cannot be reserved the request is answered
 `503`. Validation writes to a per-request temporary name, never the historical shared
 `check.part`, and reads configuration through a snapshot. In-place game presence comes from
-a lightweight title-to-root snapshot published only when a catalog epoch is complete; a
+an immutable catalog epoch snapshot published only when a catalog epoch is complete; a
 worker never takes the catalog lock that a scan may hold while pumping events.
 
 Only routes whose state is static or internally synchronized may complete in a worker in
 this first matrix: the two HTML pages, `/api/log`, Drive status/actions, links
 status/actions, `/api/upload`, `/api/uploads`, `/api/rescan`, `/api/dests`, `/api/storage`,
-GET `/api/games`, GET `/api/config`, POST `/api/check`, `/api/nas/scan`, `/api/nas/shares` and `/api/nas/reload`. `/api/rescan` is worker-safe only because its cache/marker invalidation
+GET `/api/games`, icons/pics, GET `/api/config`, POST `/api/check`, `/api/nas/scan`, `/api/nas/shares` and `/api/nas/reload`. `/api/rescan` is worker-safe only because its cache/marker invalidation
 is part of the synchronized scan intent consumed later by the owner epoch. `/api/nas/reload`
 keeps its synchronous BinLoader answer but is serialized with the automatic reload attempt;
 the owner uses a non-blocking trylock and skips its retry while a worker holds that reload,
@@ -88,10 +88,17 @@ mutex; that status copy never starts an adopted-mount control conversation. `/ap
 also worker-safe: it publishes only a one-way atomic stop intent, so the request is not
 stranded behind a long scan. `/api/storage` copies only the managed-game identities it
 needs under a short mutex, then measures filesystem trees outside that mutex through a
-bounded iterative traversal. Icons/pics, mounts, restore,
+bounded iterative traversal. Mounts, restore,
 configuration changes and `/api/app/close` remain owner routes because they read or mutate library/mount/configuration
 state or call process-control services of the system. Unknown routes are worker safe because
 they produce only the fixed 404 response.
+
+Icons and pics are worker-safe because their fast path reads `/user/appmeta` through the
+same narrow file mutex used when registration writes those extracted entries, so a worker
+cannot observe a partially written image. Their fallback uses the same request configuration
+snapshot plus catalog epoch snapshots to find the game/update pkg paths. They never enter
+`g_cat_lock` or the title cache; opening the pkg entries in the worker preserves the
+historical on-demand fallback without blocking the owner.
 
 `/api/games` is worker-safe only because every library owner it reads has an immutable or
 copied boundary. In-place rows come from a refcounted catalog epoch snapshot carrying the

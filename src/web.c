@@ -232,8 +232,6 @@ typedef struct {
 /* WEBAPI-6: conservative route ownership. Worker routes either have no mutable state or are
  * already owned by a subsystem with its own locks. Everything else waits for the main loop. */
 int web_route_worker_safe(const char *path, int post) {
-    if (!strncmp(path, "/icon/", 6) || !strncmp(path, "/pic/", 5))
-        return 0;
     if (!strncmp(path, "/api/", 5)) {
         if (!strcmp(path, "/api/log") || !strcmp(path, "/api/drive") || !strcmp(path, "/api/links") ||
             !strcmp(path, "/api/uploads") || !strcmp(path, "/api/dests") || !strcmp(path, "/api/storage") ||

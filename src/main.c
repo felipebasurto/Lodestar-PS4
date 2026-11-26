@@ -644,6 +644,12 @@ static int in_place_cfg(const char *root, const config_t *cfg) { return !cfg->or
 
 static int in_place(const char *root) { return !cfg_organize() || is_nas(root); }
 
+static int root_present_cfg(const char *root, const config_t *cfg) {
+    if (is_nas(root))
+        return nas_active();
+    return is_internal(root) ? cfg->internal : is_mountpoint(root);
+}
+
 static int root_present(const char *root) {
     if (is_nas(root))
         return nas_active();
@@ -828,12 +834,18 @@ static const meta_entry_t k_user_meta[] = {
     {0, NULL},
 };
 
+/* Registration writes these entries while panel workers may read them. Serialize only the
+ * file write/read boundary: pkg extraction and event pumping stay outside the mutex. */
+static pthread_mutex_t g_meta_file_mu = PTHREAD_MUTEX_INITIALIZER;
+
 static int write_entry(pkg_t *pkg, uint32_t id, const char *path) {
     size_t len;
     uint8_t *data = pkg_entry(pkg, id, &len);
     if (!data)
         return 1; /* absent entry is fine */
+    pthread_mutex_lock(&g_meta_file_mu);
     int rc = write_file(path, data, len, 0777);
+    pthread_mutex_unlock(&g_meta_file_mu);
     mem_free(data);
     return rc;
 }
@@ -4034,18 +4046,22 @@ static int titles_on_root_snapshot(const char *root, char (*tids)[10], int max, 
     return titles_on_root_dirs(root, tids, max);
 }
 
-/* The game and update pkg paths of tid on root (empty patch without an update). */
-static int title_pkgs(const char *root, const char *tid, char *patch, size_t pn, char *app, size_t an) {
+/* Grouped paths for artwork come from one immutable epoch reference acquired and released
+ * inside the lookup; organized folders remain plain filesystem state. */
+static int title_pkgs_snapshot(const char *root, const char *tid, const config_t *cfg, char *patch, size_t pn, char *app,
+                               size_t an) {
     patch[0] = app[0] = 0;
-    if (in_place(root)) {
-        const catalog_t *c = drive_catalog(root);
-        const cat_game_t *g = c ? catalog_game(c, tid) : NULL;
-        if (!g)
+    if (in_place_cfg(root, cfg)) {
+        catsnap_t *snap = catalog_snapshot_acquire(root);
+        const catsnap_game_t *g = catsnap_find(snap, tid);
+        if (!g) {
+            catsnap_unref(snap);
             return -1;
-        snprintf(app, an, "%s", c->pkgs[g->app].path);
-        const cat_pkg_t *p = catalog_patch(g_cat, c, g);
-        if (p)
-            snprintf(patch, pn, "%s", p->path);
+        }
+        snprintf(app, an, "%s", catsnap_path(snap, g->app_off));
+        if (g->patch_off != CATSNAP_NO_PATH)
+            snprintf(patch, pn, "%s", catsnap_path(snap, g->patch_off));
+        catsnap_unref(snap);
         return 0;
     }
     char dir[PATH_MAX];
@@ -5376,7 +5392,8 @@ static int find_root_impl(const char *tid, char *root, size_t n, int presence_sn
     for (int i = 0; i < NROOTS; i++) {
         char r[PATH_MAX], p[PATH_MAX];
         root_path(i, r, sizeof(r));
-        if (!root_present(r))
+        int present = cfg ? root_present_cfg(r, cfg) : root_present(r);
+        if (!present)
             continue;
         int inplace = cfg ? in_place_cfg(r, cfg) : in_place(r);
         if (inplace) {
@@ -5421,7 +5438,7 @@ void app_games_json(buf_t *out) {
         root_path(i, root, sizeof(root));
         struct statfs sf;
         /* the share is read only and statfs() on it can stall while the NAS hangs */
-        if (!root_present(root) || is_nas(root) || statfs(root, &sf))
+        if (!root_present_cfg(root, &cfg) || is_nas(root) || statfs(root, &sf))
             continue;
         buf_printf(out, "%s{\"label\":", dfirst ? "" : ",");
         dfirst = 0;
@@ -5436,7 +5453,7 @@ void app_games_json(buf_t *out) {
     for (int i = 0; i < NROOTS; i++) {
         char root[PATH_MAX];
         root_path(i, root, sizeof(root));
-        if (!root_present(root))
+        if (!root_present_cfg(root, &cfg))
             continue;
         catsnap_t *snap = in_place_cfg(root, &cfg) ? catalog_snapshot_acquire(root) : NULL;
         char tids[MAX_TITLES][10];
@@ -5586,6 +5603,7 @@ int app_pic(const char *tid, buf_t *out) { return app_art(tid, "pic0.png", 0x122
 static int app_art(const char *tid, const char *name, uint32_t id, buf_t *out) {
     char p[PATH_MAX], root[PATH_MAX];
     snprintf(p, sizeof(p), "/user/appmeta/%s/%s", tid, name);
+    pthread_mutex_lock(&g_meta_file_mu);
     int fd = open(p, O_RDONLY);
     if (fd >= 0) {
         char tmp[65536];
@@ -5593,12 +5611,16 @@ static int app_art(const char *tid, const char *name, uint32_t id, buf_t *out) {
         while ((n = read(fd, tmp, sizeof(tmp))) > 0)
             buf_put(out, tmp, (size_t)n);
         close(fd);
-        return out->len ? 0 : -1;
     }
-    if (find_root(tid, root, sizeof(root)))
+    pthread_mutex_unlock(&g_meta_file_mu);
+    if (fd >= 0)
+        return out->len ? 0 : -1;
+    config_t cfg;
+    cfg_snapshot(&cfg);
+    if (find_root_snapshot(tid, root, sizeof(root), &cfg))
         return -1;
     char patch[PATH_MAX], app[PATH_MAX];
-    if (title_pkgs(root, tid, patch, sizeof(patch), app, sizeof(app)))
+    if (title_pkgs_snapshot(root, tid, &cfg, patch, sizeof(patch), app, sizeof(app)))
         return -1;
     const char *files[] = {patch, app}; /* the update's artwork wins, as with a real install */
     for (int i = 0; i < 2; i++) {
