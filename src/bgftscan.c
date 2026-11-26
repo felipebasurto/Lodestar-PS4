@@ -212,6 +212,64 @@ void bgftscan_load(bgftscan_t *s, const char *dir, uint32_t first, uint32_t last
     s->usable = 1;
 }
 
+static int numeric_dir_exists(const char *dir, uint32_t id) {
+    char path[512];
+    int n = snprintf(path, sizeof(path), "%s/%08x", dir, id);
+    struct stat st;
+    return n > 0 && (size_t)n < sizeof(path) && !stat(path, &st);
+}
+
+void bgft_taken_add(bgft_taken_t *taken, uint32_t id) {
+    if (id <= 0xffff)
+        taken->bits[id / 8] |= (uint8_t)(1u << (id % 8));
+}
+
+int bgft_taken_has(const bgft_taken_t *taken, uint32_t id) {
+    return id <= 0xffff && !!(taken->bits[id / 8] & (uint8_t)(1u << (id % 8)));
+}
+
+static int alloc_id_used(const bgftscan_t *s, const bgft_taken_t *taken, const char *dir,
+                         int use_snapshot, uint32_t id) {
+    if (bgft_taken_has(taken, id))
+        return 1;
+    return use_snapshot ? bgftscan_id_used(s, id) : numeric_dir_exists(dir, id);
+}
+
+uint32_t bgftscan_alloc_id(const bgftscan_t *s, const bgft_taken_t *taken, const char *dir,
+                           uint32_t first, uint32_t last) {
+    if (first > last || !(first & 1) || first < 2 || !taken)
+        return 0;
+    int use_snapshot = s && s->usable;
+    if (!use_snapshot) {
+        DIR *probe = opendir(dir);
+        if (!probe && errno != ENOENT && errno != ENOTDIR)
+            return 0;
+        if (probe)
+            closedir(probe);
+    }
+    /* Above every task there, as BGFT gives its own: an id whose task was deleted in this
+     * boot is never used again. The lowest free one is used only once the ids run out. */
+    uint32_t scan_first = first - 1, top = first - 2;
+    for (uint32_t id = last;; id--) {
+        if (alloc_id_used(s, taken, dir, use_snapshot, id)) {
+            top = id;
+            break;
+        }
+        if (id == scan_first)
+            break;
+    }
+    uint64_t next = ((uint64_t)top + 2) | 1;
+    if (next >= first && next <= last)
+        return (uint32_t)next;
+    for (uint64_t v = first; v <= last; v += 2) {
+        uint32_t game = (uint32_t)v, install = game - 1;
+        if (!alloc_id_used(s, taken, dir, use_snapshot, game) &&
+            !alloc_id_used(s, taken, dir, use_snapshot, install))
+            return game;
+    }
+    return 0;
+}
+
 const bgftscan_entry_t *bgftscan_find(const bgftscan_t *s, const char *tid) {
     if (!s->usable)
         return NULL;

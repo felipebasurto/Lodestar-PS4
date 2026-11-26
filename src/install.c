@@ -104,6 +104,8 @@ int install_pkg(const char *path, const char *name, int user, char *msg, unsigne
     p.params.playgo_scenario_id = "0";
     p.params.option = BGFT_OPT_DISABLE_CDN_QUERY_PARAM;
     int task = -1, rc = g_register(&p, &task);
+    if (task > 0)
+        bgft_task_id_taken((uint32_t)task);
     if (rc == BGFT_ERR_TASK_EXISTS && task > 0) {
         /* an install of this pkg already waits in the installer's queue (one that stalled):
          * start that one instead of asking for another */

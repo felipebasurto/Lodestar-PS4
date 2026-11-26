@@ -37,6 +37,18 @@ void bgftscan_remove_id(bgftscan_t *s, uint32_t id);
 /* Whether the numeric task directory id existed in the epoch, even when its PDB could not
  * be parsed. IDs outside the snapshotted range answer 0. */
 int bgftscan_id_used(const bgftscan_t *s, uint32_t id);
+/* Boot-scoped task ids known to be occupied even when their directories do not exist yet. */
+typedef struct {
+    uint8_t bits[0x10000 / 8];
+} bgft_taken_t;
+
+void bgft_taken_add(bgft_taken_t *taken, uint32_t id);
+int bgft_taken_has(const bgft_taken_t *taken, uint32_t id);
+/* Allocates a new odd game-task id whose even install-task id is free too. Occupancy is the
+ * scan epoch when usable (or direct directory evidence otherwise) plus the boot-scoped taken
+ * set. 0 means occupancy could not be proven or no id is free. */
+uint32_t bgftscan_alloc_id(const bgftscan_t *s, const bgft_taken_t *taken, const char *dir,
+                           uint32_t first, uint32_t last);
 const bgftscan_entry_t *bgftscan_find(const bgftscan_t *s, const char *tid);
 /* 1 when a well-formed task's canonical URL record is exactly url. */
 int bgftscan_names(const bgftscan_entry_t *e, const char *url);

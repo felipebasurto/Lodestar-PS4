@@ -88,8 +88,10 @@ PDB records (`0x7c` title id, exact length-delimited `0x1388` package URL, `0x68
 field present with the wrong width is malformed, not absent. A malformed or unreadable task is unknown/untrusted,
 never proof that registration is healthy. Within the serialized scan/registration epoch, absence and task-id
 occupancy may come from that snapshot; positive identity used for mutation is re-read fresh, and uncertain writes
-invalidate the epoch as specified in `specs/bgft.md`. Fresh fallback reads use exactly the same canonical health
-semantics as the snapshot; they differ only in I/O cost.
+invalidate the epoch as specified in `specs/bgft.md`. New task-id allocation additionally uses
+the boot-scoped taken set of `specs/bgft.md`, because system install tasks created inside the
+scan epoch may not have directories yet. Fresh fallback reads use exactly the same canonical
+health semantics as the snapshot; they differ only in I/O cost.
 Check: test (keep bar 1: external file format; keep bar 3: scan ordering). Test: `test/unit.c` ›
 `test_bgft_info` and `test_bgft_scan`. Source: performance audit 2026-11-25; flatz BGFT format notes.
 

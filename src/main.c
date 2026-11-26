@@ -2012,6 +2012,10 @@ static int contains(const uint8_t *d, size_t n, const char *s) {
 }
 
 static bgftscan_t g_bgftscan;
+static bgft_taken_t g_bgft_taken;
+
+/* install.c reports every task id the system assigns, before that task is started. */
+void bgft_task_id_taken(uint32_t id) { bgft_taken_add(&g_bgft_taken, id); }
 
 /* A task write/remove is rare. Invalidating the whole scan snapshot keeps the ordering
  * proof simple: later title_state calls fall back to fresh direct reads until the next
@@ -2104,49 +2108,10 @@ static uint32_t bgft_task_error(const char *tid) {
     return info.error_present ? info.error : 0;
 }
 
-/* A free odd id whose install task id (one below) is free too. */
+/* A free odd id whose install task id (one below) is free too. This is a fresh scan even
+ * inside a registration epoch: add-on installs create system tasks within that epoch. */
 static uint32_t bgft_free_id(void) {
-    char p[64];
-    /* above every task there, as BGFT gives its own: an id whose task was deleted in this
-     * boot is never used again (a game given one could not start: BGFT still had the
-     * deleted task's state); the lowest free one only once the ids run out */
-    uint32_t top = BGFT_FIRST - 2;
-    if (g_bgftscan.usable) {
-        for (uint32_t id = BGFT_LAST; id >= BGFT_FIRST - 1; id--)
-            if (bgftscan_id_used(&g_bgftscan, id)) {
-                top = id;
-                break;
-            }
-    } else {
-        DIR *d = opendir(BGFT_DIR);
-        struct dirent *e;
-        while (d && (e = readdir(d))) {
-            char *end;
-            unsigned long id = strtoul(e->d_name, &end, 16);
-            if (!*end && id >= BGFT_FIRST - 1 && id <= BGFT_LAST && id > top)
-                top = (uint32_t)id;
-        }
-        if (d)
-            closedir(d);
-    }
-    uint32_t next = (top + 2) | 1;
-    if (next <= BGFT_LAST)
-        return next;
-    for (uint32_t id = BGFT_FIRST; id <= BGFT_LAST; id += 2) {
-        int game_used, install_used;
-        if (g_bgftscan.usable) {
-            game_used = bgftscan_id_used(&g_bgftscan, id);
-            install_used = bgftscan_id_used(&g_bgftscan, id - 1);
-        } else {
-            snprintf(p, sizeof(p), BGFT_DIR "/%08x", id);
-            game_used = exists(p);
-            snprintf(p, sizeof(p), BGFT_DIR "/%08x", id - 1);
-            install_used = exists(p);
-        }
-        if (!game_used && !install_used)
-            return id;
-    }
-    return 0;
+    return bgftscan_alloc_id(&g_bgftscan, &g_bgft_taken, BGFT_DIR, BGFT_FIRST, BGFT_LAST);
 }
 
 static void bgft_remove(const char *tid) {
@@ -2156,6 +2121,7 @@ static void bgft_remove(const char *tid) {
     char p[64];
     snprintf(p, sizeof(p), BGFT_DIR "/%08x", id);
     rm_tree(p);
+    bgft_taken_add(&g_bgft_taken, id); /* BGFT keeps the removed task's state for this boot */
     bgftscan_invalidate();
     printf("[reg] %s: BGFT game task %08x removed\n", tid, id);
 }

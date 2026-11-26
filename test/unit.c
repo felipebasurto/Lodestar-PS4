@@ -1081,6 +1081,16 @@ static void test_bgft_scan(void) {
     CHECK(bgftscan_id_used(&scan, 0xf000));
     CHECK(bgftscan_id_used(&scan, 0xf001));
     CHECK(!bgftscan_id_used(&scan, 0xf002));
+    /* BGFT-4: installer ids taken after the snapshot are occupied even before their task
+     * directories exist. 0xf07b therefore must not be handed to a game. */
+    bgft_taken_t taken = {0};
+    CHECK(bgftscan_alloc_id(&scan, &taken, root, 0xf001, 0xffff) == 0xf007);
+    for (uint32_t id = 0xf078; id <= 0xf07c; id++)
+        bgft_taken_add(&taken, id);
+    CHECK(bgftscan_alloc_id(&scan, &taken, root, 0xf001, 0xffff) == 0xf07f);
+    scan.usable = 0; /* same answer from direct directory evidence plus reservations */
+    CHECK(bgftscan_alloc_id(&scan, &taken, root, 0xf001, 0xffff) == 0xf07f);
+    scan.usable = 1;
     const bgftscan_entry_t *e = bgftscan_find(&scan, "CUSA00001");
     CHECK(e && e->id == 0xf001 && !e->malformed);
     CHECK(bgftscan_names(e, url));

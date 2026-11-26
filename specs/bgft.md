@@ -26,11 +26,21 @@ Source: rewrite BGFT audit 2026-11-25.
 ### BGFT-2A: task-id occupancy is separate from task identity
 Every numeric directory in the snapshotted task-id range is occupancy evidence, including the
 even install-task id below a game id, an unreadable task and a task whose PDB has no usable
-title identity. Allocation of a new game-task id must use that occupancy snapshot when the epoch
-is usable. A malformed task must not be treated as an available id merely because its title could
-not be parsed.
+title identity. A malformed task must not be treated as an available id merely because its title
+could not be parsed.
 Check: test. Test: `test/unit.c` › `test_bgft_scan` occupancy assertions.
 Source: first-principles audit of the registration epoch, 2026-11-25.
+
+### BGFT-4: allocation never reuses an id taken within the payload run
+An id returned by the system installer for any install PS4Mount starts is occupied immediately,
+even before its task directory exists and even if starting or installing it later fails. An id
+whose game task PS4Mount removes is occupied for the rest of the payload run too, because BGFT
+does not forget task state within a boot. New game-task allocation treats this boot-scoped taken
+set as occupancy in addition to the scan epoch or direct directory evidence; otherwise a system
+install task created inside the scan epoch can be overwritten by a game task.
+Check: test (ordering and external system state). Test: `test/unit.c` › `test_bgft_scan` allocation
+assertions; compile boundary `test/sdkcheck.sh`.
+Source: firmware 14.00 collision between an add-on install task and a game task, 2026-11-26.
 
 ### BGFT-3: malformed tasks remain unknown, never healthy
 Canonical records with wrong widths, conflicting identity evidence, unreadable tasks or malformed
