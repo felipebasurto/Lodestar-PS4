@@ -5073,13 +5073,13 @@ void app_games_json(buf_t *out) {
     }
     buf_printf(out, "],\"games\":[");
     int first = 1, nlisted = 0;
-    static char listed[MAX_TITLES][10];
+    char listed[MAX_TITLES][10];
     for (int i = 0; i < NROOTS; i++) {
         char root[PATH_MAX];
         root_path(i, root, sizeof(root));
         if (!root_present(root))
             continue;
-        static char tids[MAX_TITLES][10];
+        char tids[MAX_TITLES][10];
         int nt = titles_on_root(root, tids, MAX_TITLES);
         for (int k = 0; k < nt; k++) {
             const char *tid = tids[k];
@@ -5170,7 +5170,7 @@ void app_games_json(buf_t *out) {
         closedir(sd);
     buf_printf(out, "],\"dlc_mode\":\"%s\"", dlc_mode_name(g_cfg.dlc_mode));
     /* the last notifications the console was sent, newest first */
-    static notice_entry_t nsnap[NOTICE_MAX];
+    notice_entry_t nsnap[NOTICE_MAX];
     int nn;
     pthread_mutex_lock(&g_notice_mu);
     nn = g_nnotices;
@@ -5185,7 +5185,7 @@ void app_games_json(buf_t *out) {
     }
     buf_put(out, "]", 1);
     /* what the daemon is doing now, and the add-ons the system is still installing */
-    static dlc_pending_t dpsnap[MAX_DLC_PENDING];
+    dlc_pending_t dpsnap[MAX_DLC_PENDING];
     activity_t act;
     int ndp;
     pthread_mutex_lock(&g_act_mu);
