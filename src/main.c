@@ -4908,7 +4908,7 @@ static void trace_klog(const char *line) {
 /* "system file disagree [<TID>]": the system refused to start a game with an update.
  * Removing the game from the library and adding it again made it start; this is done
  * once per title and daemon run, so a game that still fails is not removed again. */
-static char g_readd_tid[10], g_readd_why[64];
+static char g_readd_tid[10], g_readd_why[64], g_readd_active[10];
 /* The readd of a game whose update was refused: removing it clears the mark (clean_holds),
  * so it is written again before the game is added back. */
 static int g_readd_badpatch;
@@ -4990,7 +4990,11 @@ static void disagree_seen(const char *tid) {
     char root[PATH_MAX], patch[PATH_MAX] = "";
     if (!find_root(tid, root, sizeof(root)))
         title_patch_path(root, tid, patch, sizeof(patch));
-    if (patch[0])
+    /* A mismatch whose repair is already queued/running is circular evidence: the launch
+     * disagrees because the console still holds the old registered version, not because the
+     * update itself is known bad. Let the re-add try the update. */
+    int repair_pending = !strcmp(g_readd_tid, tid) || !strcmp(g_readd_active, tid);
+    if (patch[0] && !repair_pending)
         refuse_patch(tid, patch, m->name);
     if (readd_queue(tid, TR("the system found another version", "el sistema encontró otra versión"))) {
         g_readd_badpatch = patch[0] != 0;
@@ -5784,6 +5788,7 @@ int app_remove(const char *tid, char *msg, size_t cap) {
 /* Removes a game refused with "system file disagree" from the library and adds it again. */
 static void readd_title(const char *tid) {
     char msg[256], name[128];
+    snprintf(g_readd_active, sizeof(g_readd_active), "%s", tid);
     managed_t *m = managed_by(tid, NULL);
     snprintf(name, sizeof(name), "%s", m ? m->name : tid);
     if (g_nreadd_done < MAX_TITLES)
@@ -5802,6 +5807,7 @@ static void readd_title(const char *tid) {
     if (!rc)
         wait_db_quiet(3, 30);
     app_add(tid, msg, sizeof(msg));
+    g_readd_active[0] = 0;
 }
 
 /* --- moving pkgs back where they came from --- */

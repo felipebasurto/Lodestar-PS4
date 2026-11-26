@@ -28,6 +28,16 @@ wrong types into valid values.
 Check: test. Test: `test/unit.c` › `test_pkg_meta`.
 Source: existing registration behavior.
 
+### REG-4: a known registered-version mismatch is not proof that the update is bad
+When PS4Mount has already queued or started the remove/re-add repair because the console's
+registered `APP_VER` differs from the update version, a launch-version disagreement for that same
+title is circular evidence and must not write a `.badpatch` mark. The repair is allowed to try the
+update. Only a fresh disagreement outside that repair, or registration repeatedly failing with the
+update, may classify the update as refused.
+Check: read (kernel-log/registration ordering is system-facing and compiled through `test/sdkcheck.sh`).
+Source: firmware 14.00 Uncharted `CUSA02320` run, 2026-11-24: a valid `gp` 01.02 update was marked
+bad while the registered 01.00/expected 01.02 repair was already pending.
+
 ### REG-3: registration-time add-on arrays grow by demand within the fixed cap
 The transient `dlc_src_t` array of a title is owned by that `title_src_t` and released by
 `src_close`. It must not reserve `MAX_DLC` descriptors when the first add-on is seen: the
