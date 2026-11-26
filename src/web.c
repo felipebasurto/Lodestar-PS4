@@ -238,7 +238,7 @@ int web_route_worker_safe(const char *path, int post) {
         if (!strcmp(path, "/api/log") || !strcmp(path, "/api/drive") || !strcmp(path, "/api/links") ||
             !strcmp(path, "/api/uploads") || !strcmp(path, "/api/dests") || !strcmp(path, "/api/storage") ||
             !strcmp(path, "/api/nas/scan") ||
-            (!post && !strcmp(path, "/api/config")) ||
+            (!post && (!strcmp(path, "/api/config") || !strcmp(path, "/api/games"))) ||
             (post && !strncmp(path, "/api/check", 10) && (path[10] == 0 || path[10] == '?')))
             return 1;
         if (post && !strcmp(path, "/api/nas/shares"))

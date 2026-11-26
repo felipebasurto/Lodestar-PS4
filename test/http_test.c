@@ -419,13 +419,10 @@ int main(void) {
             setsockopt(c, SOL_SOCKET, SO_RCVBUF, &small, sizeof(small));
             send_req_close_write(c, "GET /api/games HTTP/1.1\r\n\r\n");
             web_serve(ls);
+            size_t bytes = drain_response_close(c); /* direct worker transmission can wait for this reader */
             web_pool_idle_wait();
-            CHECK(web_owner_pending() == 1);
-            web_owner_pump();
-            CHECK(web_write_busy()); /* the owner finished; transmission is writer work now */
-            size_t bytes = drain_response_close(c);
-            web_pool_idle_wait();
-            CHECK(!web_write_busy());
+            CHECK(web_owner_pending() == 0);
+            CHECK(!web_write_busy()); /* no owner capture/writer handoff is needed for games */
             CHECK(bytes > (size_t)g_stub_games_pad);
         }
         g_stub_games_pad = 0;

@@ -72,7 +72,7 @@ worker never takes the catalog lock that a scan may hold while pumping events.
 Only routes whose state is static or internally synchronized may complete in a worker in
 this first matrix: the two HTML pages, `/api/log`, Drive status/actions, links
 status/actions, `/api/upload`, `/api/uploads`, `/api/rescan`, `/api/dests`, `/api/storage`,
-GET `/api/config`, POST `/api/check`, `/api/nas/scan`, `/api/nas/shares` and `/api/nas/reload`. `/api/rescan` is worker-safe only because its cache/marker invalidation
+GET `/api/games`, GET `/api/config`, POST `/api/check`, `/api/nas/scan`, `/api/nas/shares` and `/api/nas/reload`. `/api/rescan` is worker-safe only because its cache/marker invalidation
 is part of the synchronized scan intent consumed later by the owner epoch. `/api/nas/reload`
 keeps its synchronous BinLoader answer but is serialized with the automatic reload attempt;
 the owner uses a non-blocking trylock and skips its retry while a worker holds that reload,
@@ -88,20 +88,22 @@ mutex; that status copy never starts an adopted-mount control conversation. `/ap
 also worker-safe: it publishes only a one-way atomic stop intent, so the request is not
 stranded behind a long scan. `/api/storage` copies only the managed-game identities it
 needs under a short mutex, then measures filesystem trees outside that mutex through a
-bounded iterative traversal. Games/icons/pics, mounts, restore,
+bounded iterative traversal. Icons/pics, mounts, restore,
 configuration changes and `/api/app/close` remain owner routes because they read or mutate library/mount/configuration
 state or call process-control services of the system. Unknown routes are worker safe because
 they produce only the fixed 404 response.
 
-`/api/games` is deliberately still an owner route. Its moving pieces are now synchronized
-small state (configuration snapshot, setup flag, restart membership, running titles and
-per-call response buffers), but the game rows still depend on two coupled owners: the live
-grouped catalog and the title cache. A worker-side version must preserve on-demand pkg
-reading after a cache miss, not only a fingerprint snapshot. That means the catalog epoch
-snapshot must carry enough grouped game/update/add-on paths and identities to open the
-same pkg sources without `g_cat_lock`, and title information must be copied under the
-title-cache mutex without exposing its add-on pool pointers. Publishing only title IDs or
-using a cached fingerprint would change freshness and is not a valid migration.
+`/api/games` is worker-safe only because every library owner it reads has an immutable or
+copied boundary. In-place rows come from a refcounted catalog epoch snapshot carrying the
+grouped game/update/add-on paths and content identities needed for both fingerprints and
+cache-miss pkg opening; workers never take `g_cat_lock`. The scan owner still uses its live
+catalog. Title-cache lookup preserves on-demand pkg reading after a cache miss, and the
+result is deep-copied under the title-cache mutex, including add-on descriptors, so neither
+a cache entry nor its add-on pool pointer escapes into the response. Configuration, setup,
+restart membership, running titles, notifications, activity and response buffers all use
+their synchronized snapshot, atomic or per-call forms. Publishing only title IDs or using a
+cached fingerprint without the cache-miss path would change freshness and is not a valid
+migration.
 
 An owner route transfers both the connected fd and the parsed request object exactly once
 to the owner queue. The main loop executes it through the same dispatcher, preserving the
