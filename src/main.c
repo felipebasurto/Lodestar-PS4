@@ -1500,9 +1500,9 @@ static void info_from_src(const title_src_t *t, title_info_t *e) {
     }
 }
 
-/* Cache reads/mutations are serialized at this boundary. The scan owner can keep using
- * the returned entry; panel snapshots will use the same mutex rather than reading entries
- * while a scan rewrites them. */
+/* Cache reads/mutations are serialized at this boundary. A fill stays inside it because
+ * the scan owner and panel workers share the same evidence (TCACHE-4); every consumer receives
+ * an owned copy, so no cache pointer escapes while a later scan rewrites entries. */
 static pthread_mutex_t g_titlecache_mu = PTHREAD_MUTEX_INITIALIZER;
 
 /* What tid is, read from its pkgs only when its files changed since the last look (or it

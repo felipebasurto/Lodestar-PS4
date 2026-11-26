@@ -35,3 +35,17 @@ the cache removes stale index state.
 Check: test (large input space and lookup behavior). Test: `test/titlecache_test.c` existing
 cache lookup/eviction cases.
 Source: scan algorithmic audit 2026-11-25.
+
+### TCACHE-4: cache fills are serialized because the fill is shared scan evidence
+A cache miss may open the bounded pkg set of one title while holding the cache mutex. This is
+intentional ownership, not an oversight: the scan owner and panel workers need the same evidence,
+so the first consumer that reaches a miss performs the read every consumer would otherwise have
+to perform, and later consumers hit the same entry. Moving that read outside the mutex without a
+singleflight design would duplicate expensive USB/NAS reads between the scan owner and the two
+bounded panel workers. A future singleflight design must preserve invalidation ordering (a hard
+scan must not be overwritten by an older in-flight fill), LRU/eviction ownership, add-on pool
+lifetime, and load/save boundaries before it can replace this serialization. The mutex boundary
+remains limited to one title's bounded pkg set or one cache metadata operation; enumeration,
+fingerprinting and response assembly stay outside it.
+Check: read for the ownership invariant and its interaction with scan invalidation.
+Source: worker cache-miss architecture review 2026-11-25.
