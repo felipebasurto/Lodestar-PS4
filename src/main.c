@@ -1284,9 +1284,14 @@ static void info_from_src(const title_src_t *t, title_info_t *e) {
     }
 }
 
+/* Cache reads/mutations are serialized at this boundary. The scan owner can keep using
+ * the returned entry; panel snapshots will use the same mutex rather than reading entries
+ * while a scan rewrites them. */
+static pthread_mutex_t g_titlecache_mu = PTHREAD_MUTEX_INITIALIZER;
+
 /* What tid is, read from its pkgs only when its files changed since the last look (or it
  * was never looked at). NULL when the drive has no such game. */
-static const title_info_t *title_info_fp(const char *root, const char *tid, uint64_t fp) {
+static const title_info_t *title_info_fp_impl(const char *root, const char *tid, uint64_t fp) {
     if (!fp)
         return NULL;
     /* the games are kept per drive, not per path: a share mounted under another name in
@@ -1304,6 +1309,13 @@ static const title_info_t *title_info_fp(const char *root, const char *tid, uint
         info_from_src(&src, e);
     src_close(&src);
     return e;
+}
+
+static const title_info_t *title_info_fp(const char *root, const char *tid, uint64_t fp) {
+    pthread_mutex_lock(&g_titlecache_mu);
+    const title_info_t *t = title_info_fp_impl(root, tid, fp);
+    pthread_mutex_unlock(&g_titlecache_mu);
+    return t;
 }
 
 static const title_info_t *title_info(const char *root, const char *tid, const config_t *cfg) {
@@ -4230,13 +4242,17 @@ static void titles_file_load(int i, const char *root) {
     g_titles_loaded[i] = 1;
     char p[PATH_MAX];
     titles_file_name(root, p, sizeof(p));
+    pthread_mutex_lock(&g_titlecache_mu);
     title_cache_load(p);
+    pthread_mutex_unlock(&g_titlecache_mu);
 }
 
 static void titles_file_save(const char *root) {
     char p[PATH_MAX], key[64];
     titles_file_name(root, p, sizeof(p));
+    pthread_mutex_lock(&g_titlecache_mu);
     title_cache_save(p, root_id(root, key, sizeof(key)));
+    pthread_mutex_unlock(&g_titlecache_mu);
 }
 
 /* --- emulators ---
@@ -5053,7 +5069,9 @@ void app_rescan(void) { scan_request(1); }
 /* Owner-side invalidation of a hard scan epoch: every pkg is read again, even when its file
  * kept the same size and time (a share that replaces a pkg in place looks unchanged otherwise). */
 static void rescan_invalidate(void) {
+    pthread_mutex_lock(&g_titlecache_mu);
     title_cache_forget();
+    pthread_mutex_unlock(&g_titlecache_mu);
     /* the updates left out are tried again, too */
     DIR *d = opendir(STATE_DIR);
     struct dirent *e;
