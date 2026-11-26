@@ -185,6 +185,35 @@ Uncharted add-on that timed out during the PR #11 hardware run. A `.ps4mount-pru
 7.4 GB of test residue. These facts motivate validation and cleanup audits, but the implementation must remain
 drive-agnostic.
 
+## CUSA23827 external-streaming evidence (2026-11-26)
+
+Hardware-verified facts from firmware 14.00 with the Toshiba USB 3.0 exFAT drive:
+
+- `patch.pkg` is 55,208,181,760 bytes (51.42 GiB) and remains the shared Call of Duty HQ core package.
+- The MW3 executable `cod23-cod.elf` mounts exactly `CODMW3CONTENT003/004/005/006`; the initial launcher
+  separately mounts seven add-ons, including MW3 campaign and BO6 packages that the MW3 executable does not.
+- In a controlled reversible experiment, those four MW3 runtime add-ons were temporarily present as complete
+  internal copies while `patch.pkg` remained on USB. The user estimated only a 35-40% improvement: launch,
+  match entry, texture streaming and minimap population were still slow.
+- The launcher took about 101 seconds after its initial process appeared before `cod23-cod.elf` appeared;
+  the later mount of the four MW3 runtime packages took only about 2.6 seconds.
+- The temporary internal copies were removed only after the external mount was restored and all twelve
+  add-on labels were visible again. Internal free space then measured 159,144,509,440 bytes.
+- Package modification times were mostly sequential, not massively overlapping. They are not evidence of
+  fragmentation or of contiguous placement.
+- An FTP range-read comparison measured about 5.5-5.9 MB/s from both USB and an internal file. This is
+  invalid as a disk benchmark because the FTP/network path saturates first; it must not be used as evidence
+  that USB and internal storage perform equally.
+
+Inference, not proof: the dominant remaining cost is consistent with mechanical-drive seek and interleaved
+read behavior across the 51.42 GiB core package and large add-ons. Nullfs/path indirection alone is not a
+proven explanation, and no console-side sequential/random benchmark exists yet.
+
+Unknowns that still require console proof: physical exFAT allocation and fragmentation, direct USB sequential
+and random throughput without FTP, PFSC/PFS read amplification, PlayGo locus semantics, the effect of the
+repeated `/mnt/sandbox/download1/CUSA23827` `0x809f8500` error, and whether a USB SSD changes the same test
+materially.
+
 ## Open questions requiring console proof
 
 - Whether any safe interface can make BGFT ingest launch tasks without reboot.
