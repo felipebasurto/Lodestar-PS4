@@ -90,6 +90,21 @@ int jv_get(jv_t v, const char *key, jv_t *out) {
     }
 }
 
+int jv_array_next(jv_t *cursor, jv_t *out) {
+    jv_t v = trimmed(*cursor);
+    if (!v.n || (v.p[0] != '[' && v.p[0] != ','))
+        return -1;
+    size_t start = skip_ws(v.p, 1, v.n), end = skip_value(v.p, start, v.n);
+    if (end <= start || end >= v.n)
+        return -1;
+    size_t next = skip_ws(v.p, end, v.n);
+    if (next >= v.n || (v.p[next] != ',' && v.p[next] != ']'))
+        return -1;
+    *out = jv_of(v.p + start, end - start);
+    *cursor = jv_of(v.p + next, v.n - next);
+    return 0;
+}
+
 int jv_index(jv_t v, int idx, jv_t *out) {
     v = trimmed(v);
     if (!v.n || v.p[0] != '[' || idx < 0)

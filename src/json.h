@@ -16,6 +16,8 @@ jv_t jv_of(const char *text, size_t n);
 int jv_get(jv_t v, const char *key, jv_t *out);
 /* Element i of array v. 0 when found. */
 int jv_index(jv_t v, int i, jv_t *out);
+/* Consume one array element and advance the cursor. Initialize it with an array value. */
+int jv_array_next(jv_t *cursor, jv_t *out);
 /* The string v decoded into out (truncated to n - 1 bytes). 0 when v is a string. */
 int jv_string(jv_t v, char *out, size_t n);
 /* The number v (also a number in a string); dflt otherwise. */

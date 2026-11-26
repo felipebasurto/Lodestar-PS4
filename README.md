@@ -93,9 +93,17 @@ La consola solo prepara algunos juegos nuevos al arrancar. Cuando Lodestar regis
 - **La parrilla**: una carátula por juego. Al pulsarla se abre su ficha: versión, DLC, firmware que necesita, dónde están sus pkgs y las acciones (quitar o añadir a la biblioteca, restaurar sus archivos originales).
 - **Ajustes**: biblioteca (carpetas, organizar, memoria interna, grupos), DLC, consola (idioma, AutoRun, log del sistema), lo que Lodestar ocupa en la consola y restaurar archivos originales.
 
-En la app de la consola se maneja con el mando: flechas para moverse, X para abrir, círculo para volver.
+### App nativa de PS4
 
-#### API para agentes y scripts
+La compilación de desarrollo incluye `lodestar-panel.pkg` con la interfaz nativa. Instálalo desde el instalador de paquetes de GoldHEN, carga el payload y abre **Lodestar** en la pantalla de inicio. La app usa la API local del payload. Las versiones publicadas hasta la 3.0.0 incluyen el acceso al panel mediante el navegador de la consola.
+
+- **Flechas** para moverte entre la barra lateral y las carátulas. **X** abre la ficha, **△** abre el teclado para buscar, **□** vuelve a escanear y **○** vuelve o sale.
+- Desde la barra lateral puedes encolar un enlace, consultar el progreso y abrir los ajustes de biblioteca, DLC y consola.
+- **Enviar juegos** muestra la dirección del panel para abrirlo desde otro equipo. Allí se envían archivos del móvil o PC y se gestionan descargas y ajustes avanzados.
+
+La compilación y las pruebas de host están verificadas. La [validación en una PS4 real](https://github.com/felipebasurto/Lodestar-PS4/issues/13) sigue pendiente.
+
+### API para agentes y scripts
 
 El panel es también una API HTTP en el puerto **8770**. `GET /api/agent` devuelve el manifiesto completo de rutas, cabeceras y límites de seguridad en JSON; `GET /api/status` devuelve un estado ligero sin enumerar la biblioteca. Las peticiones que escriben necesitan la cabecera `X-Lodestar: 1` (`X-PS4Mount: 1` se acepta como alias legacy) y solo se aceptan desde la red local. La tabla completa está en [AI-WORKFLOW.md](AI-WORKFLOW.md).
 
@@ -146,7 +154,7 @@ Al borrar un juego añadido por Lodestar desde la pantalla de inicio, Lodestar b
 
 ## Rendimiento: disco duro mecánico o SSD
 
-Lodestar lee los juegos directamente de los pkgs del USB, así que la velocidad depende del disco. Con un **SSD** no hay problema. Con un **disco duro mecánico**, los juegos que leen a la vez su actualización y varios DLC pueden cargar lento: cada cambio de archivo mueve el cabezal, y si los archivos están lejos unos de otros en el plato, ese movimiento es casi todo el disco.
+Lodestar lee los juegos directamente de los pkgs del USB, así que la velocidad depende del disco. Un **SSD** evita los desplazamientos del cabezal. Las cifras de abajo se midieron solo en el HDD. Con un **disco duro mecánico**, los juegos que leen a la vez su actualización y varios DLC pueden cargar lento: cada cambio de archivo mueve el cabezal, y si los archivos están lejos unos de otros en el plato, ese movimiento es casi todo el disco.
 
 Medido en la consola con un disco duro de 2.5" lleno al 91 %, donde la actualización y los DLC de un juego quedaron a 400-450 GB unos de otros ([#1](https://github.com/felipebasurto/Lodestar-PS4/issues/1)):
 
@@ -157,7 +165,7 @@ Medido en la consola con un disco duro de 2.5" lleno al 91 %, donde la actualiza
 
 Lodestar no puede cambiar dónde están los archivos en el disco. Qué puedes hacer:
 
-1. **Usar un SSD USB.** Es la solución.
+1. **Usar un SSD USB** para reducir la latencia al alternar entre archivos.
 2. Con un disco duro: copia cada juego **con su actualización y sus DLC juntos y seguidos**, en un disco con mucho espacio libre (mejor recién formateado). No llenes el disco hasta el final.
 3. Para ver cómo están los archivos de un juego en tu disco, conéctalo a un Mac o Linux, desmóntalo y ejecuta `sudo python3 tools/exfatmap.py /dev/rdiskN <ruta del pkg>...` (solo lee).
 
@@ -205,7 +213,7 @@ bash test/sdkcheck.sh
 | --- | --- |
 | `src/` | El payload en C (escaneo, registro, montajes, panel HTTP, descargas) |
 | `web/` | El panel: `index.html`, `legacy.html` (navegador de la PS4) y las traducciones |
-| `panel-app/` | La app de la consola que abre el panel |
+| `panel-app/` | App nativa de PS4 (OpenOrbis, VideoOut y cliente de la API) |
 | `extension/` | La extensión del navegador |
 | `specs/` | Las reglas de comportamiento, por área |
 | `test/` | Pruebas en el PC (C, Python y el panel en jsdom) |
@@ -288,9 +296,17 @@ The console prepares some new games only during boot. When Lodestar registers a 
 - **The grid**: one artwork per game. Choosing it opens its details: version, add-ons, required firmware, where its pkgs are, and its actions (remove from or add to the library, restore its original files).
 - **Settings**: library (folders, organize, internal storage, groups), add-ons, console (language, AutoRun, system log), what Lodestar keeps on the console, and restoring original files.
 
-In the console app it works with the controller: arrows to move, X to open, circle to go back.
+### Native PS4 app
 
-#### Agent and script API
+Development builds include `lodestar-panel.pkg` with the native interface. Install it with GoldHEN’s Package Installer, load the payload, then open **Lodestar** from the home screen. The app uses the payload’s local API. Releases through 3.0.0 use the console browser to open the panel.
+
+- Use the **D-pad** to move between the sidebar and the game grid. **Cross** opens details, **Triangle** opens the search keyboard, **Square** scans again, and **Circle** goes back or exits.
+- From the sidebar you can queue a download link, check its progress, and open the library, add-on and console settings.
+- **Send games** shows the panel address to open on another device. Use that panel to upload files from your phone or PC and manage advanced download options and settings.
+
+The package builds and the host checks pass. [PS4 hardware validation](https://github.com/felipebasurto/Lodestar-PS4/issues/13) is still pending.
+
+### Agent and script API
 
 The panel is also an HTTP API on port **8770**. `GET /api/agent` returns the complete route, header and safety manifest as JSON; `GET /api/status` returns a lightweight state without listing the library. Write requests need the `X-Lodestar: 1` header (`X-PS4Mount: 1` is accepted as a legacy alias) and are accepted only from the local network. The full route table is in [AI-WORKFLOW.md](AI-WORKFLOW.md).
 
@@ -337,7 +353,7 @@ Deleting a Lodestar-added game from the home screen also deletes its library pkg
 
 ## Performance: hard drive or SSD
 
-Lodestar reads games straight from the pkgs on the drive, so speed depends on the drive. With an **SSD** there is no problem. With a **spinning hard drive**, games that read their update and several add-ons at once can load slowly: every switch between files moves the head, and when the files are far apart on the platter that move crosses almost the whole disk.
+Lodestar reads games straight from the pkgs on the drive, so speed depends on the drive. An **SSD** removes mechanical seek time. The figures below were measured on the HDD only. With a **spinning hard drive**, games that read their update and several add-ons at once can load slowly: every switch between files moves the head, and when the files are far apart on the platter that move crosses almost the whole disk.
 
 Measured on the console with a 2.5" hard drive 91% full, where a game's update and add-ons ended up 400-450 GB apart ([#1](https://github.com/felipebasurto/Lodestar-PS4/issues/1)):
 
@@ -348,7 +364,7 @@ Measured on the console with a 2.5" hard drive 91% full, where a game's update a
 
 Lodestar cannot change where files sit on the disk. What you can do:
 
-1. **Use a USB SSD.** That is the fix.
+1. **Use a USB SSD** to reduce latency when reads switch between files.
 2. With a hard drive: copy each game **with its update and add-ons together, one after the other**, onto a drive with plenty of free space (freshly formatted is best). Do not fill the drive to the end.
 3. To see where a game's files are on your drive, connect it to a Mac or Linux machine, unmount it and run `sudo python3 tools/exfatmap.py /dev/rdiskN <pkg path>...` (read only).
 
@@ -394,7 +410,7 @@ bash test/sdkcheck.sh
 | --- | --- |
 | `src/` | The payload in C (scan, registration, mounts, HTTP panel, downloads) |
 | `web/` | The panel: `index.html`, `legacy.html` (the PS4's browser) and translations |
-| `panel-app/` | The console app that opens the panel |
+| `panel-app/` | Native PS4 app (OpenOrbis, VideoOut and the API client) |
 | `extension/` | The browser extension |
 | `specs/` | Behavior rules, by area |
 | `test/` | Host tests (C, Python and the panel in jsdom) |
