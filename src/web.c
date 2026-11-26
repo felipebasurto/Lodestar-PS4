@@ -237,7 +237,8 @@ int web_route_worker_safe(const char *path, int post) {
     if (!strncmp(path, "/api/", 5)) {
         if (!strcmp(path, "/api/log") || !strcmp(path, "/api/drive") || !strcmp(path, "/api/links") ||
             !strcmp(path, "/api/uploads") || !strcmp(path, "/api/dests") || !strcmp(path, "/api/nas/scan") ||
-            (!post && !strcmp(path, "/api/config")))
+            (!post && !strcmp(path, "/api/config")) ||
+            (post && !strncmp(path, "/api/check", 10) && (path[10] == 0 || path[10] == '?')))
             return 1;
         if (post && !strcmp(path, "/api/nas/shares"))
             return 1;
@@ -918,8 +919,9 @@ static int web_read_request(int fd, web_req_t *r) {
     return 0;
 }
 
-/* Reads a bounded check body in the network worker. On success body_owned, its quota and fd
- * move as one owner intent; on a short read only the proven fact of incompleteness is queued. */
+/* Reads a bounded check body in the network worker (or in the synchronous fallback). On
+ * success body_owned and its quota move with the request; on a short read only the proven
+ * fact of incompleteness reaches dispatch. */
 static int web_prepare_check_body(int fd, web_req_t *r) {
     if (!r->post || strncmp(r->path, "/api/check", 10) || (r->path[10] && r->path[10] != '?') ||
         !r->length || r->length > CHECK_MAX)
@@ -965,10 +967,17 @@ static void web_handle_connection(int fd, int queue_owner) {
         return;
     }
     if (!queue_owner || web_route_worker_safe(r.path, r.post)) {
+        if (web_prepare_check_body(fd, &r)) {
+            owner_body_free(&r);
+            reply(fd, "503 Service Unavailable", "text/plain", "panel busy\n", 11);
+            close(fd);
+            return;
+        }
         web_dispatch(fd, &r);
+        owner_body_free(&r);
         return;
     }
-    if (web_prepare_check_body(fd, &r) || web_owner_enqueue(fd, &r)) {
+    if (web_owner_enqueue(fd, &r)) {
         owner_body_free(&r);
         reply(fd, "503 Service Unavailable", "text/plain", "panel busy\n", 11);
         close(fd);
@@ -1061,7 +1070,7 @@ static void web_dispatch(int fd, web_req_t *r) {
             json_msg(fd, 0, TR("send the first MB of the pkg (at most 16 MB)", "envía el primer MB del pkg (como máximo 16 MB)"));
         else if (r->body_incomplete)
             json_msg(fd, 0, TR("the pkg start did not arrive whole", "el comienzo del pkg no llegó entero"));
-        else if (!data && !(data = read_body(fd, body, have, (size_t)length, deadline)))
+        else if (!data) /* preparation always runs first: valid bodies are owned or proven incomplete */
             json_msg(fd, 0, TR("the pkg start did not arrive whole", "el comienzo del pkg no llegó entero"));
         else {
             buf_t b = {0};
@@ -1069,8 +1078,6 @@ static void web_dispatch(int fd, web_req_t *r) {
             reply(fd, "200 OK", "application/json; charset=utf-8", b.data, b.len);
             buf_free(&b);
         }
-        if (data != r->body_owned)
-            mem_free(data);
     } else if (post && !strncmp(path, "/api/upload", 11) && (path[11] == 0 || path[11] == '?')) {
         if (!length)
             json_msg(fd, 0, TR("nothing was sent", "no se envió nada"));

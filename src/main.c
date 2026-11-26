@@ -659,6 +659,46 @@ static int g_cat_loaded[NROOTS]; /* the saved catalog was read since the drive a
 static time_t g_cat_walked[NROOTS]; /* when the drive was last searched for pkgs */
 static pthread_mutex_t g_cat_lock = PTHREAD_MUTEX_INITIALIZER;
 
+/* Lightweight completed-epoch presence mirror for panel workers. The catalog itself stays
+ * owner/Drive state behind g_cat_lock because a scan can hold that lock while pumping events;
+ * copying only title IDs here gives read-only routes a consistent epoch without re-entering it. */
+static pthread_mutex_t g_cat_presence_mu = PTHREAD_MUTEX_INITIALIZER;
+static char g_cat_presence[NROOTS][MAX_TITLES][10];
+static int g_cat_npresence[NROOTS];
+
+static int root_index(const char *root) {
+    char r[PATH_MAX];
+    for (int i = 0; i < NROOTS; i++) {
+        root_path(i, r, sizeof(r));
+        if (!strcmp(r, root))
+            return i;
+    }
+    return -1;
+}
+
+/* g_cat_lock held: the grouped catalogs of one completed epoch become the visible snapshot. */
+static void catalog_presence_publish_locked(void) {
+    pthread_mutex_lock(&g_cat_presence_mu);
+    for (int i = 0; i < NROOTS; i++) {
+        int n = g_cat[i].ngames < MAX_TITLES ? g_cat[i].ngames : MAX_TITLES;
+        for (int j = 0; j < n; j++)
+            snprintf(g_cat_presence[i][j], sizeof(g_cat_presence[i][j]), "%s", g_cat[i].games[j].title_id);
+        g_cat_npresence[i] = n;
+    }
+    pthread_mutex_unlock(&g_cat_presence_mu);
+}
+
+static int catalog_presence_has(const char *root, const char *tid) {
+    int idx = root_index(root), found = 0;
+    if (idx < 0)
+        return 0;
+    pthread_mutex_lock(&g_cat_presence_mu);
+    for (int i = 0; i < g_cat_npresence[idx] && !found; i++)
+        found = !strcmp(g_cat_presence[idx][i], tid);
+    pthread_mutex_unlock(&g_cat_presence_mu);
+    return found;
+}
+
 static catalog_t *drive_catalog(const char *root) {
     char r[PATH_MAX];
     for (int i = 0; i < NROOTS; i++) {
@@ -4356,6 +4396,7 @@ static int scan_all(int hard) {
         /* Games are grouped per drive: an update or add-on of another drive is not used,
          * so unplugging one drive never breaks a game of another. */
         catalog_link(g_cat, NROOTS, NULL, 0);
+        catalog_presence_publish_locked();
         pthread_mutex_unlock(&g_cat_lock);
         for (int i = 0; i < NROOTS; i++) {
             root_path(i, root, sizeof(root));
@@ -4386,6 +4427,7 @@ static int scan_all(int hard) {
                 g_cat_loaded[i] = 0;
                 g_cat_walked[i] = 0;
             }
+            catalog_presence_publish_locked();
             pthread_mutex_unlock(&g_cat_lock);
         }
         for (int i = 0; i < NROOTS; i++) {
@@ -4920,16 +4962,21 @@ static void json_str(buf_t *b, const char *s) {
 }
 
 /* Finds the drive tid is served from: the ps4/<TID> folder of older versions, or the
- * game the catalog found where it is. */
-static int find_root(const char *tid, char *root, size_t n) {
+ * game the catalog found where it is. Panel workers use the completed-epoch presence
+ * snapshot; owner actions keep the live catalog they already serialize with the scan. */
+static int find_root_impl(const char *tid, char *root, size_t n, int presence_snapshot) {
     for (int i = 0; i < NROOTS; i++) {
         char r[PATH_MAX], p[PATH_MAX];
         root_path(i, r, sizeof(r));
         if (!root_present(r))
             continue;
         if (in_place(r)) {
-            const catalog_t *c = drive_catalog(r);
-            if (c && catalog_game(c, tid)) {
+            int found = presence_snapshot ? catalog_presence_has(r, tid) : 0;
+            if (!presence_snapshot) {
+                const catalog_t *c = drive_catalog(r);
+                found = c && catalog_game(c, tid);
+            }
+            if (found) {
                 snprintf(root, n, "%s", r);
                 return 0;
             }
@@ -4943,6 +4990,10 @@ static int find_root(const char *tid, char *root, size_t n) {
     }
     return -1;
 }
+
+static int find_root(const char *tid, char *root, size_t n) { return find_root_impl(tid, root, n, 0); }
+
+static int find_root_snapshot(const char *tid, char *root, size_t n) { return find_root_impl(tid, root, n, 1); }
 
 void app_games_json(buf_t *out) {
     if (g_setup)
@@ -6445,9 +6496,15 @@ static void check_problem(const pkg_check_t *c, uint64_t size, char *problem, si
                  c->title_id);
 }
 
+static unsigned g_check_tmp_seq;
+
 void app_check(const void *data, size_t len, uint64_t size, buf_t *out) {
-    static const char *tmp = STATE_DIR "/check.part";
+    char tmp[PATH_MAX];
+    unsigned seq = __atomic_add_fetch(&g_check_tmp_seq, 1, __ATOMIC_RELAXED);
+    snprintf(tmp, sizeof(tmp), STATE_DIR "/check.%08x.part", seq);
     pkg_check_t c;
+    config_t cfg;
+    cfg_snapshot(&cfg);
     mkdirs(STATE_DIR, 0777);
     int rc = write_file(tmp, data, len, 0666) ? -1 : pkg_check(tmp, g_fw, &c);
     unlink(tmp);
@@ -6460,15 +6517,15 @@ void app_check(const void *data, size_t len, uint64_t size, buf_t *out) {
     check_problem(&c, size, problem, sizeof(problem));
     if (c.warning[0])
         snprintf(notes[nnotes++], sizeof(notes[0]), "%s", c.warning);
-    if (c.kind == PKG_KIND_ADDON && !g_cfg.dlc)
+    if (c.kind == PKG_KIND_ADDON && !cfg.dlc)
         snprintf(notes[nnotes++], sizeof(notes[0]), "%s",
                  TR("add-ons are turned off in the settings: it will wait in the folder",
                     "los DLC están desactivados en los ajustes: esperará en la carpeta"));
-    if (c.kind == PKG_KIND_UPDATE && find_root(c.title_id, where, sizeof(where)) && !db_is_registered(c.title_id))
+    if (c.kind == PKG_KIND_UPDATE && find_root_snapshot(c.title_id, where, sizeof(where)) && !db_is_registered(c.title_id))
         snprintf(notes[nnotes++], sizeof(notes[0]), "%s",
                  TR("the game of this update is not on a drive yet: send it too",
                     "el juego de esta actualización aún no está en ninguna unidad: envíalo también"));
-    if (c.kind == PKG_KIND_GAME && !find_root(c.title_id, where, sizeof(where)))
+    if (c.kind == PKG_KIND_GAME && !find_root_snapshot(c.title_id, where, sizeof(where)))
         snprintf(notes[nnotes++], sizeof(notes[0]),
                  TR("%s already has a game in %s: this copy will be left where it is",
                     "%s ya tiene un juego en %s: esta copia se dejará donde está"),
@@ -6500,6 +6557,24 @@ void app_check(const void *data, size_t len, uint64_t size, buf_t *out) {
     buf_printf(out, "],\"dests\":");
     dests_json(out, c.pkg_size);
     buf_printf(out, "}");
+}
+
+/* Leftovers of a load that stopped mid-check. Names are unique per request now; all of
+ * them are PS4Mount-owned bounded copies of bytes already sent by the panel client. */
+static void check_temp_cleanup(void) {
+    unlink(STATE_DIR "/check.part"); /* the fixed name older versions used */
+    DIR *d = opendir(STATE_DIR);
+    struct dirent *e;
+    while (d && (e = readdir(d))) {
+        size_t n = strlen(e->d_name);
+        if (n > 10 && !strncmp(e->d_name, "check.", 6) && !strcmp(e->d_name + n - 5, ".part")) {
+            char p[PATH_MAX];
+            snprintf(p, sizeof(p), STATE_DIR "/%s", e->d_name);
+            unlink(p);
+        }
+    }
+    if (d)
+        closedir(d);
 }
 
 static void upload_done(const char *path) {
@@ -7716,7 +7791,7 @@ int main(void) {
     /* no Media tab shortcut: it is a PS5 web app (param.json); the panel is opened from
      * a browser */
     /* left behind if an earlier load stopped mid-check: removed before the panel can ask for one */
-    unlink(STATE_DIR "/check.part");
+    check_temp_cleanup();
     g_web = web_listen();
     drive_begin();
     links_begin();

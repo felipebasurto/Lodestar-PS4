@@ -9,7 +9,7 @@ for moving panel work out of the main loop. Source: panel/API architecture audit
 Reading sockets, HTTP framing, Content-Length validation and bounded body acquisition are the
 network boundary. Route decisions and calls into application state are the application boundary.
 A request object must own the bytes passed between them; application dispatch must not read the
-socket again except for explicitly assigned streaming routes (`/api/check`, `/api/upload`, links).
+socket again except for explicitly assigned streaming routes (`/api/upload` and links).
 Check: test through the existing real-socket HTTP harness (`test/http_test.c`); read for the
 ownership split. Source: panel/API architecture audit.
 
@@ -55,22 +55,24 @@ Source: existing Drive/links host callback audit.
 
 ### WEBAPI-6: bounded network workers never execute owner routes
 At most two persistent network workers parse accepted connections. The accept queue is
-bounded to eight connected fds, the owner queue to four parsed requests, and owner-bound
+bounded to eight connected fds, the owner queue to four parsed requests, and
 `/api/check` bodies to 16 MiB in total; beyond those bounds a new connection is closed or
 answered `503`, never allowed to consume unbounded memory. If no worker can be created,
 `web_serve` falls back to the historical synchronous path rather than dropping the panel.
 
-`/api/check` remains an owner route because its answer depends on library/configuration
-state and uses one shared temporary path. Its declared body is nevertheless bounded, so a
-worker reads that body completely before queueing the request. The allocated body, its byte
-quota and the fd move as one owner intent. If the body arrives short the owner still produces
-the historical "did not arrive whole" answer, but it never waits on the socket itself; if the
-body quota cannot be reserved the request is answered `503` without entering the owner queue.
+`/api/check` is a worker route. Its declared body is bounded, so the worker reads that body
+completely before dispatching the request; the owner never waits on the socket. If the body
+arrives short the route still produces the historical "did not arrive whole" answer without
+calling the application check; if the body quota cannot be reserved the request is answered
+`503`. Validation writes to a per-request temporary name, never the historical shared
+`check.part`, and reads configuration through a snapshot. In-place game presence comes from
+a lightweight title-to-root snapshot published only when a catalog epoch is complete; a
+worker never takes the catalog lock that a scan may hold while pumping events.
 
 Only routes whose state is static or internally synchronized may complete in a worker in
 this first matrix: the two HTML pages, `/api/log`, Drive status/actions, links
 status/actions, `/api/upload`, `/api/uploads`, `/api/rescan`, `/api/dests`,
-GET `/api/config`, `/api/nas/scan`, `/api/nas/shares` and `/api/nas/reload`. `/api/rescan` is worker-safe only because its cache/marker invalidation
+GET `/api/config`, POST `/api/check`, `/api/nas/scan`, `/api/nas/shares` and `/api/nas/reload`. `/api/rescan` is worker-safe only because its cache/marker invalidation
 is part of the synchronized scan intent consumed later by the owner epoch. `/api/nas/reload`
 keeps its synchronous BinLoader answer but is serialized with the automatic reload attempt;
 the owner uses a non-blocking trylock and skips its retry while a worker holds that reload,
@@ -84,7 +86,7 @@ wait in workers rather than in the owner. GET `/api/config` reads a whole-config
 copied under the configuration mutex and a NAS status snapshot copied under a small snapshot
 mutex; that status copy never starts an adopted-mount control conversation. `/api/stop` is
 also worker-safe: it publishes only a one-way atomic stop intent, so the request is not
-stranded behind a long scan. `/api/check`, games/icons/pics, storage, mounts, restore,
+stranded behind a long scan. Games/icons/pics, storage, mounts, restore,
 configuration changes and `/api/app/close` remain owner routes because they read or mutate library/mount/configuration
 state or call process-control services of the system. Unknown routes are worker safe because
 they produce only the fixed 404 response.

@@ -446,9 +446,8 @@ int main(void) {
             send_req_len_close_write(c, check_req, (size_t)head_len + check_len);
             web_serve(ls);
             web_pool_idle_wait();
-            CHECK(web_owner_pending() == 1);
-            web_owner_pump();
-            CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "check"));
+            CHECK(web_owner_pending() == 0);
+            CHECK(g_stub_calls == before + 1 && !strcmp(g_stub_call, "check")); /* complete in the worker */
             CHECK(!strcmp(g_stub_arg, "9000 9999") && g_stub_check_first == 'A' && g_stub_check_last == 'Z');
             read_response_close(c, resp, sizeof(resp));
             CHECK(status(resp, "200"));
@@ -461,9 +460,8 @@ int main(void) {
         send_req_close_write(c, "POST /api/check HTTP/1.1\r\nX-PS4Mount: 1\r\nContent-Length: 32\r\n\r\nabc");
         web_serve(ls);
         web_pool_idle_wait();
-        CHECK(web_owner_pending() == 1);
-        web_owner_pump();
-        CHECK(g_stub_calls == before); /* short body: the historical error, without app_check */
+        CHECK(web_owner_pending() == 0);
+        CHECK(g_stub_calls == before); /* short body: the historical error, without app_check or owner work */
         read_response_close(c, resp, sizeof(resp));
         CHECK(status(resp, "400"));
 
