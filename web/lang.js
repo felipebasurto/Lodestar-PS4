@@ -5,7 +5,6 @@
 var LANGS = {
   es: {
     /* fixed texts of the pages */
-    'external game library control for PlayStation 4': 'control de la biblioteca externa de juegos para PlayStation 4',
     'Search game or CUSA': 'Buscar juego o CUSA',
     'Scan for games': 'Buscar juegos',
     'Send games': 'Enviar juegos',
@@ -39,8 +38,8 @@ var LANGS = {
     'Smaller groups are gentler on the system when many games are added at once.':
       'Los grupos pequeños cargan menos el sistema cuando se añaden muchos juegos a la vez.',
     'Organize pkgs into the ps4 folder': 'Organizar los pkgs en la carpeta ps4',
-    'On (the default): the .pkg files are moved into ps4/<title ID>/ on the drive, so the console\'s own installer does not find them again. Off: they are used where they are, anywhere on the drive, and are not renamed or moved.':
-      'Activado (por defecto): los .pkg se mueven a ps4/<ID del título>/ en la unidad, así el instalador de la consola no los encuentra otra vez. Desactivado: se usan donde están, en cualquier parte de la unidad, sin renombrarlos ni moverlos.',
+    'Moves each .pkg into ps4/<title ID>/ on its drive, so the console\'s installer does not pick it up. Off: pkgs stay where they are, with their names.':
+      'Mueve cada .pkg a ps4/<ID del título>/ en su unidad, para que el instalador de la consola no lo encuentre. Desactivado: los pkgs se quedan donde están, con su nombre.',
     'Add-ons (DLC)': 'DLC',
     'Mount from the source drive': 'Montar desde la unidad de origen',
     'Console storage (installs add-ons, up to 256 MB)': 'Memoria de la consola (instala los DLC, hasta 256 MB)',
@@ -51,11 +50,9 @@ var LANGS = {
       'Los pkgs enviados a la memoria de la consola se añaden desde ahí, sin esperar una instalación. Ocupan espacio interno.',
     "Console storage: turn on \"Also use pkgs in the console's /data/PS4Mount\" in Settings":
       'Memoria de la consola: activa "Usar también los pkgs de /data/PS4Mount de la consola" en Ajustes',
-    'External mode mounts add-on packages from the source drive. Console storage installs add-ons up to 256 MB each, or any size with the big-add-ons option. Off disables add-ons managed by Lodestar.':
-      'El modo externo monta los paquetes de DLC desde la unidad de origen. El modo interno instala DLC de hasta 256 MB cada uno, o de cualquier tamaño con la opción de DLC grandes. Apagado desactiva los DLC gestionados por Lodestar.',
     "Read the console's log (game start and stop)": 'Leer el log de la consola (inicio y fin de juego)',
-    "On by default. Turn it off to leave the log to another payload: AnyPad needs it to tell its virtual pad apart, and only one payload can read it. Games in play are then noticed a few seconds later, from their mount.":
-      'Activado por defecto. Desactivalo para dejarle el log a otro payload: AnyPad lo necesita para distinguir su pad virtual, y solo un payload puede leerlo. Los juegos en marcha se notan unos segundos más tarde, por su montaje.',
+    'Only one payload can read it. Turn it off if another one needs it, such as AnyPad. Lodestar then notices a running game a few seconds later.':
+      'Solo un payload puede leerlo. Desactívalo si otro lo necesita, como AnyPad. Lodestar notará entonces un juego en marcha unos segundos más tarde.',
     'Remove several': 'Quitar varios',
     'Remove games from the library': 'Quitar juegos de la biblioteca',
     "The chosen games leave the console's home screen. Their pkgs stay where they are: nothing is deleted, and Add to library brings each one back.":
@@ -66,8 +63,8 @@ var LANGS = {
     '{0} removed; not removed: {1}': '{0} quitado(s); sin quitar: {1}',
     '{0} game(s) removed from the library': '{0} juego(s) quitado(s) de la biblioteca',
     'Removing {0} of {1}…': 'Quitando {0} de {1}…',
-    'First start: check the settings (which folders, games per group, add-ons) and press Save in Settings. While this page is open no game is added; closed for 2 minutes without saving, the default settings are used.':
-      'Primera vez: revisa los ajustes (qué carpetas, juegos por grupo, DLC) y pulsa Guardar en Ajustes. Mientras esta página esté abierta no se añade ningún juego; si se cierra 2 minutos sin guardar, se usan los ajustes por defecto.',
+    'First start: review Settings and press Save. No game is added while this page is open. If it stays closed for 2 minutes, the default settings are used.':
+      'Primer arranque: revisa los Ajustes y pulsa Guardar. Mientras esta página esté abierta no se añade ningún juego. Si queda cerrada 2 minutos, se usan los ajustes por defecto.',
     'Language': 'Idioma',
     'Restore original files': 'Restaurar archivos originales',
     'Takes games off the console and puts their pkgs (game, update and add-ons) back where they were, with the names they had. Nothing is deleted. The open game is closed first.':
@@ -93,8 +90,8 @@ var LANGS = {
     'Games removed from the library per group (1 to': 'Juegos que salen de la biblioteca por grupo (1 a',
     'Select all': 'Elegir todos',
     'Game': 'Juego',
-    'Pick the pkgs on this computer. Each one is checked first (it takes a second): only pkgs this console can use are sent, so no transfer ends in a game that does not start. They are added to the library when they arrive.':
-      'Elige los pkgs de este equipo. Cada uno se comprueba antes (tarda un segundo): solo se envían los que esta consola puede usar, así ningún envío acaba en un juego que no arranca. Se añaden a la biblioteca al llegar.',
+    'Each pkg is checked first: only pkgs this console can use are sent. They are added to the library when they arrive.':
+      'Cada pkg se comprueba antes: solo se envían los que esta consola puede usar. Se añaden a la biblioteca al llegar.',
     'Drop .pkg files here, or click to pick them': 'Suelta aquí los .pkg, o pulsa para elegirlos',
     'Send to': 'Enviar a',
     'Cancel transfer': 'Cancelar el envío',
@@ -118,9 +115,8 @@ var LANGS = {
     'PS4 games': 'Juegos de PS4',
     'Classics': 'Clásicos',
     'Homebrew': 'Homebrew',
-    "What Lodestar keeps on the console's drive": 'Lo que Lodestar guarda en el disco de la consola',
-    'Read only: this list measures, it deletes nothing. Lodestar cleans its own temporary files by itself and writes each one to the log.':
-      'Solo lectura: esta lista mide, no borra nada. Lodestar limpia solo sus archivos temporales y deja cada uno en el log.',
+    'On the console\'s drive':
+      'En el disco de la consola',
     'Pkgs sent to install (deleted once installed)': 'Pkgs enviados para instalar (se borran al instalarse)',
     'Lodestar settings and records': 'Ajustes y registros de Lodestar',
     "Records of the library's games": 'Registros de los juegos de la biblioteca',
@@ -205,12 +201,12 @@ var LANGS = {
       '¿Detener Lodestar? Los juegos no se podrán abrir hasta que se vuelva a cargar.',
     /* downloads from links */
     'Download links': 'Descargar enlaces',
-    'The console downloads them itself (you can close this page): a pkg, a ZIP or a RAR, also in parts. Paste the direct links, the ones that start the download, one per line; all the parts of a RAR (name.part1.rar, name.part2.rar...) become one download. Its pkgs are added to the library when they arrive.':
-      'La consola los descarga sola (puedes cerrar esta página): un pkg, un ZIP o un RAR, también en partes. Pega los enlaces directos, los que empiezan la descarga, uno por línea; todas las partes de un RAR (nombre.part1.rar, nombre.part2.rar...) son una sola descarga. Sus pkgs se añaden a la biblioteca al llegar.',
+    'Paste direct links to a pkg, ZIP or RAR, one per line. The parts of a RAR become one download. The console downloads them itself, so you can close this page.':
+      'Pega enlaces directos a un pkg, ZIP o RAR, uno por línea. Las partes de un RAR son una sola descarga. La consola las descarga sola, así que puedes cerrar esta página.',
     'A link with no file name in it: add | and its name.': 'Un enlace sin nombre de archivo: añade | y su nombre.',
     'Password (if the archive has one)': 'Contraseña (si el archivo la tiene)',
-    'Not needed for one that opened another download, nor for the site in brackets at the start of the name ([SITE]-game): those are tried by themselves.':
-      'No hace falta si ya abrió otra descarga, ni si es el sitio entre corchetes al principio del nombre ([SITIO]-juego): esas se prueban solas.',
+    'Passwords that opened an earlier download, and the [SITE] at the start of a name, are tried without asking.':
+      'Las contraseñas que abrieron una descarga anterior, y el [SITIO] al principio de un nombre, se prueban sin preguntar.',
     'The password of the archive:': 'La contraseña del archivo comprimido:',
     'Save to': 'Guardar en',
     'Checking the links of {0}…': 'Comprobando los enlaces de {0}…',

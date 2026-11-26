@@ -133,7 +133,7 @@ function tKeys(file) {
   let { w, d, reqs } = p;
   await tick();
   ok(p.nav.length === 0, 'index with <dialog> stays');
-  ok(d.querySelector('h1').textContent === 'Lodestar' && d.querySelector('.tagline').textContent.includes('PlayStation 4'), 'the brand header names Lodestar and what it is');
+  ok(d.querySelector('h1').textContent === 'Lodestar', 'the brand header names Lodestar');
   ok(d.querySelector('.brand-mark') !== null && fs.readFileSync(W + 'index.html', 'utf8').includes('image/svg+xml'), 'the compass-star brand mark and favicon');
   ok(d.getElementById('mc-ver').textContent === 'Lodestar test' && d.getElementById('mc-dot').className === 'dot ok', 'the header status pill follows the version the console reports');
   ok(d.querySelectorAll('.card').length === 6, 'six game cards');
@@ -530,7 +530,7 @@ function tKeys(file) {
   await tick();
   ok(d.documentElement.lang === 'es', 'the page takes the language the console reports');
   ok(d.getElementById('rescan').textContent === 'Buscar juegos' && d.getElementById('settingsbtn').textContent === 'Ajustes', 'fixed texts in Spanish');
-  ok(d.querySelector('.tagline').textContent === 'control de la biblioteca externa de juegos para PlayStation 4', 'the tagline in Spanish');
+  ok(d.getElementById('setupnote').textContent.startsWith('Primer arranque'), 'a long fixed text in Spanish');
   ok(d.getElementById('q').placeholder === 'Buscar juego o CUSA', 'placeholders in Spanish');
   { const c = d.querySelector('[data-g="CUSA34284"]'); c.click();
     ok(c.querySelector('.badge').textContent === 'Reinicia para jugar', 'states in Spanish');

@@ -20,9 +20,7 @@ a{color:var(--focus)}
 header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;padding:10px max(24px,calc((100% - 1320px)/2));background:rgba(7,15,29,.97);border-bottom:1px solid var(--line-strong)}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}
 .brand-mark{width:36px;height:36px;flex:none}
-.brand-t{display:flex;flex-direction:column;min-width:0}
 h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.06em;line-height:1.1}
-.tagline{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .bar.center{justify-content:center}
 .mc-status{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;margin-right:4px;border:1px solid var(--line);border-radius:999px;background:var(--bg-deep);color:var(--muted);font-size:12px;white-space:nowrap}
@@ -161,7 +159,6 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
 .tv .library-heading{font-size:16px}
 .tv .grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:24px 18px}
 .tv .card .art:focus .cover{transform:scale(1.03)}
-@media(max-width:860px){.tagline{display:none}}
 @media(max-width:620px){header{position:relative;padding:10px 14px}.bar{width:100%}.mc-status{display:none}.toolbar-more{position:static;margin-left:auto}.toolbar-menu{right:14px;top:calc(100% - 3px)}main{padding:18px 14px}.libbar input[type=search]{width:100%}.storage{margin-left:0}}
 @media (prefers-contrast:more){:root{--muted:#c2d3ea;--line:#33538a;--line-strong:#4a70a8}.cover{border-color:#4a70a8}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-property:opacity,background-color,border-color,color!important}button:active:not(:disabled){transform:none!important}.tv .card .art:focus .cover{transform:none!important}#toast,.notifpop,dialog[open]{transform:none!important}}
@@ -174,10 +171,7 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
 <header>
   <div class="brand">
     <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="23" fill="none" stroke="#1d3252" stroke-width="2"/><path d="M32 9l4.6 18.4L55 32l-18.4 4.6L32 55l-4.6-18.4L9 32l18.4-4.6z" fill="#22d3ee"/><path d="M32 9l4.6 18.4L32 32l-4.6-4.6z" fill="#f0a227"/><circle cx="32" cy="32" r="4" fill="#f0a227"/></svg>
-    <div class="brand-t">
-      <h1>Lodestar</h1>
-      <span class="tagline">external game library control for PlayStation 4</span>
-    </div>
+    <h1>Lodestar</h1>
   </div>
   <div class="bar">
     <span class="mc-status" id="mc-status"><span class="dot" id="mc-dot"></span><span id="mc-ver"></span></span>
@@ -205,7 +199,7 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
     <div class="rb-main" id="rb-main"></div>
     <button type="button" id="restart-filter" class="small"></button>
   </div>
-  <div class="warn" id="setupnote" hidden>First start: check the settings (which folders, games per group, add-ons) and press Save in Settings. While this page is open no game is added; closed for 2 minutes without saving, the default settings are used.</div>
+  <div class="warn" id="setupnote" hidden>First start: review Settings and press Save. No game is added while this page is open. If it stays closed for 2 minutes, the default settings are used.</div>
   <div class="libbar">
     <h2 class="library-heading">Library</h2>
     <input id="q" type="search" placeholder="Search game or CUSA" aria-label="Search game or CUSA">
@@ -233,8 +227,7 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
       <span class="hint">/ is the root of the drive. The ps4 folder holds organized games, so it cannot be used here.</span>
     </label>
     <label class="check"><input type="checkbox" id="s-organize"> Organize pkgs into the ps4 folder</label>
-    <span class="hint">On (the default): the .pkg files are moved into ps4/&lt;title ID&gt;/ on the drive, so the console's
-      own installer does not find them again. Off: they are used where they are, anywhere on the drive, and are not renamed or moved.</span>
+    <span class="hint">Moves each .pkg into ps4/&lt;title ID&gt;/ on its drive, so the console's installer does not pick it up. Off: pkgs stay where they are, with their names.</span>
     <label class="check"><input type="checkbox" id="s-internal"> Also use pkgs in the console's /data/PS4Mount</label>
     <span class="hint">Pkgs sent to the console's storage are added from there, with no install to wait for. They still take internal space.</span>
     <label class="check"><input type="checkbox" id="s-batch"> Add new games in groups</label>
@@ -250,8 +243,6 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
       <option value="off">Off</option>
     </select>
     <label class="check" id="s-dlcbig-row" hidden><input type="checkbox" id="s-dlcbig"> Also install big add-ons (over 256 MB)</label>
-    <span class="hint">External mode mounts add-on packages from the source drive. Console storage
-      installs add-ons up to 256 MB each, or any size with the big-add-ons option. Off disables add-ons managed by Lodestar.</span>
   </fieldset>
   <fieldset><legend>Console</legend>
     <label>Language
@@ -260,13 +251,11 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
     <label class="check"><input type="checkbox" id="s-autorun"> Start with the console (GoldHEN AutoRun)</label>
     <span class="hint" id="autorun-hint"></span>
     <label class="check"><input type="checkbox" id="s-klog"> Read the console's log (game start and stop)</label>
-    <span class="hint">On by default. Turn it off to leave the log to another payload: AnyPad needs it to tell its virtual
-      pad apart, and only one payload can read it. Games in play are then noticed a few seconds later, from their mount.</span>
+    <span class="hint">Only one payload can read it. Turn it off if another one needs it, such as AnyPad. Lodestar then notices a running game a few seconds later.</span>
   </fieldset>
-  <fieldset id="storagebox"><legend>What Lodestar keeps on the console's drive</legend>
+  <fieldset id="storagebox"><legend>On the console's drive</legend>
     <span class="hint" id="st-free"></span>
     <div id="st-rows"></div>
-    <span class="hint">Read only: this list measures, it deletes nothing. Lodestar cleans its own temporary files by itself and writes each one to the log.</span>
   </fieldset>
   <fieldset><legend>Restore original files</legend>
     <span class="hint">Takes games off the console and puts their pkgs (game, update and add-ons) back where they were, with the
@@ -303,9 +292,7 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
   <button type="button" id="r-cancel">Cancel</button><button type="button" class="danger" id="r-go" disabled>Remove the chosen ones</button>
 </div></dialog>
 <dialog id="senddlg"><h3>Send games</h3>
-<div class="hint lead">Pick the pkgs on this computer. Each one is
-  checked first (it takes a second): only pkgs this console can use are sent, so no transfer ends in a game that does not
-  start. They are added to the library when they arrive.</div>
+<div class="hint lead">Each pkg is checked first: only pkgs this console can use are sent. They are added to the library when they arrive.</div>
 <div class="drop" id="drop">Drop .pkg files here, or click to pick them<input type="file" id="files" accept=".pkg" multiple hidden></div>
 <div class="queue" id="queue"></div>
 <div class="sendbar">
@@ -319,13 +306,11 @@ progress{width:100%;height:10px;margin-top:8px;accent-color:var(--accent-hover)}
 <form method="dialog" class="dlg-foot"><button>Close</button></form></dialog>
 <dialog id="linkdlg"><h3>Download links</h3>
 <form class="settings" id="l-form">
-  <div class="hint">The console downloads them itself (you can close this page): a pkg, a ZIP
-    or a RAR, also in parts. Paste the direct links, the ones that start the download, one per line; all the parts of a RAR
-    (name.part1.rar, name.part2.rar...) become one download. Its pkgs are added to the library when they arrive.</div>
+  <div class="hint">Paste direct links to a pkg, ZIP or RAR, one per line. The parts of a RAR become one download. The console downloads them itself, so you can close this page.</div>
   <textarea id="l-text" spellcheck="false" placeholder="https://example.com/game.part1.rar&#10;https://example.com/game.part2.rar&#10;https://example.com/file?id=123 | name.pkg"></textarea>
   <div class="meta">A link with no file name in it: add | and its name.</div>
   <label>Password (if the archive has one) <input id="l-pw" type="text" autocomplete="off" spellcheck="false"></label>
-  <div class="meta">Not needed for one that opened another download, nor for the site in brackets at the start of the name ([SITE]-game): those are tried by themselves.</div>
+  <div class="meta">Passwords that opened an earlier download, and the [SITE] at the start of a name, are tried without asking.</div>
   <div class="sendbar"><label>Save to <select id="l-dest"></select></label>
     <button type="submit" class="primary" id="l-go">Download</button></div>
 </form>
