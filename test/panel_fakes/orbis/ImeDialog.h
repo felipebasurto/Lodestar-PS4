@@ -47,6 +47,8 @@ typedef struct {
     void *arg;
 } OrbisImeDialogSetting;
 
+typedef int OrbisDialogStatus;
+
 typedef struct {
     int32_t endstatus;
 } OrbisDialogResult;
@@ -54,4 +56,5 @@ typedef struct {
 int sceImeDialogInit(OrbisImeDialogSetting *param, void *extended);
 int sceImeDialogGetStatus(void);
 int sceImeDialogGetResult(OrbisDialogResult *result);
+int sceImeDialogAbort(void);
 int sceImeDialogTerm(void);

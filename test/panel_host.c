@@ -23,31 +23,39 @@
 /* ---------------- Metrics & Virtual Clock ---------------- */
 
 static panel_metrics_t g_metrics;
+static render_stats g_base_render;
+static draw_stats g_base_draw;
 static int g_in_loop;
 static int64_t g_clock_ms = 1000;
+static panel_host_snapshot_t g_last_snap;
+static uint32_t g_last_buttons;
 
-void panel_metrics_reset(void) { memset(&g_metrics, 0, sizeof(g_metrics)); }
-panel_metrics_t panel_metrics_get(void) { return g_metrics; }
-void panel_metrics_on_full_frame_copy(size_t bytes) {
-    (void)bytes;
-    g_metrics.full_frame_copies++;
+static void metrics_on_flip(void) { g_metrics.flips_submitted++; }
+
+void panel_metrics_reset(void) {
+    memset(&g_metrics, 0, sizeof(g_metrics));
+    g_base_render = g_last_snap.render;
+    g_base_draw = g_last_snap.draw;
 }
-void panel_metrics_on_full_frame_shade(void) { g_metrics.full_frame_shades++; }
-void panel_metrics_on_fb_write(size_t bytes) { g_metrics.fb_bytes_written += bytes; }
-void panel_metrics_on_redraw(void) { g_metrics.redraws++; }
-void panel_metrics_on_input(void) { g_metrics.inputs++; }
-void panel_metrics_on_flip(void) { g_metrics.flips_submitted++; }
-void panel_metrics_on_text_raster(int drawing) {
-    g_metrics.text_rasterizations++;
-    if (!drawing)
-        g_metrics.text_rasterizations_measure++;
+
+panel_metrics_t panel_metrics_get(void) {
+    panel_metrics_t m = g_metrics;
+    const render_stats *r = &g_last_snap.render;
+    const draw_stats *d = &g_last_snap.draw;
+    m.full_frame_copies = r->fb_full_copies - g_base_render.fb_full_copies;
+    m.fb_bytes_written = r->fb_bytes_written - g_base_render.fb_bytes_written;
+    m.redraws = (r->shadow_full_redraws + r->shadow_partial_redraws) -
+                (g_base_render.shadow_full_redraws + g_base_render.shadow_partial_redraws);
+    m.text_rasterizations = d->glyph_rasterizations - g_base_draw.glyph_rasterizations;
+    m.art_scalings = d->art_scales - g_base_draw.art_scales;
+    return m;
 }
-void panel_metrics_on_art_scale(int size) {
-    g_metrics.art_scalings++;
-    g_metrics.art_scaled_pixels += (uint64_t)size * (uint64_t)size;
-}
-void panel_metrics_on_blocking_call(int kind) {
-    if (!g_in_loop)
+
+static pthread_t g_main_thread;
+
+/* A call only blocks the loop when the loop itself makes it: the worker may take its time. */
+static void metrics_on_blocking_call(int kind) {
+    if (!g_in_loop || !pthread_equal(pthread_self(), g_main_thread))
         return;
     g_metrics.blocking_loop_calls++;
     if (kind == PANEL_BLOCK_NETCTL)
@@ -63,14 +71,14 @@ void panel_host_set_clock_ms(int64_t ms) { g_clock_ms = ms; }
 void panel_host_advance_clock_ms(int64_t delta_ms) { g_clock_ms += delta_ms; }
 
 int panel_host_usleep(unsigned usec) {
-    panel_metrics_on_blocking_call(PANEL_BLOCK_USLEEP);
+    metrics_on_blocking_call(PANEL_BLOCK_USLEEP);
     int64_t ms = (int64_t)((usec + 999u) / 1000u);
     g_clock_ms += ms;
     return 0;
 }
 
 void panel_host_set_in_loop(int in_loop) { g_in_loop = in_loop; }
-void panel_host_on_worker_reply(void) {}
+pthread_cond_t panel_host_reply_cond = PTHREAD_COND_INITIALIZER;
 
 /* ---------------- Fake FreeType ---------------- */
 
@@ -167,7 +175,6 @@ static panel_tick_fn g_tick_fn;
 static void *g_tick_ctx;
 static int g_force_quit;
 static int g_tick_count;
-static panel_host_snapshot_t g_last_snap;
 
 /* IME fake state */
 static int g_ime_init_rc = 0;
@@ -260,6 +267,9 @@ int scePadReadState(int32_t handle, OrbisPadData *data) {
     if (!data)
         return -1;
     *data = g_pad_next;
+    if (data->buttons && data->buttons != g_last_buttons)
+        g_metrics.inputs++;
+    g_last_buttons = data->buttons;
     return 0;
 }
 int scePadClose(int32_t handle) {
@@ -313,7 +323,7 @@ int sceVideoOutSubmitFlip(int32_t handle, int32_t bufferIndex, uint32_t flipMode
     (void)bufferIndex;
     (void)flipMode;
     (void)flipArg;
-    panel_metrics_on_flip();
+    metrics_on_flip();
     g_flip_pending_ticks = g_flip_delay;
     return 0;
 }
@@ -355,6 +365,18 @@ int sceKernelMapDirectMemory(void **addr, size_t len, int prot, int flags, off_t
     *addr = p;
     return 0;
 }
+int sceKernelMunmap(void *addr, size_t len) {
+    g_life.munmaps++;
+    return munmap(addr, len);
+}
+int sceKernelUsleep(unsigned int microseconds) { return panel_host_usleep(microseconds); }
+int sceSystemServiceLoadExec(const char *path, char *const argv[]) {
+    (void)path;
+    (void)argv;
+    g_life.load_exec_calls++;
+    return 0;
+}
+int sceSystemServiceNavigateToGoHome(void) { return 0; }
 int sceKernelReleaseDirectMemory(off_t start, size_t len) {
     (void)start;
     (void)len;
@@ -364,7 +386,7 @@ int sceKernelReleaseDirectMemory(off_t start, size_t len) {
 
 int sceImeDialogInit(OrbisImeDialogSetting *param, void *extended) {
     (void)extended;
-    panel_metrics_on_blocking_call(PANEL_BLOCK_IME);
+    metrics_on_blocking_call(PANEL_BLOCK_IME);
     if (g_ime_init_rc < 0)
         return g_ime_init_rc;
     g_life.ime_inits++;
@@ -395,8 +417,13 @@ int sceImeDialogGetResult(OrbisDialogResult *result) {
     }
     return 0;
 }
+int sceImeDialogAbort(void) {
+    g_life.ime_aborts++;
+    g_ime_frames_left = 0;
+    return 0;
+}
 int sceImeDialogTerm(void) {
-    panel_metrics_on_blocking_call(PANEL_BLOCK_IME);
+    metrics_on_blocking_call(PANEL_BLOCK_IME);
     if (g_ime_open) {
         g_ime_open = 0;
         g_life.ime_terms++;
@@ -405,21 +432,21 @@ int sceImeDialogTerm(void) {
 }
 
 int sceNetCtlInit(void) {
-    panel_metrics_on_blocking_call(PANEL_BLOCK_NETCTL);
+    metrics_on_blocking_call(PANEL_BLOCK_NETCTL);
     g_life.netctl_init_calls++;
     if (!g_life.sysmod_netctl)
         g_life.netctl_without_sysmodule++;
     return 0;
 }
 int sceNetCtlGetInfo(int code, OrbisNetCtlInfo *info) {
-    panel_metrics_on_blocking_call(PANEL_BLOCK_NETCTL);
+    metrics_on_blocking_call(PANEL_BLOCK_NETCTL);
     if (code == ORBIS_NET_CTL_INFO_IP_ADDRESS && info) {
         snprintf(info->ip_address, sizeof(info->ip_address), "%s", g_ip);
         return 0;
     }
     return -1;
 }
-void sceNetCtlTerm(void) { panel_metrics_on_blocking_call(PANEL_BLOCK_NETCTL); }
+void sceNetCtlTerm(void) { metrics_on_blocking_call(PANEL_BLOCK_NETCTL); }
 
 void panel_host_on_loop_tick(const panel_host_snapshot_t *snap) {
     g_last_snap = *snap;
@@ -441,8 +468,9 @@ int panel_host_should_force_quit(void) { return g_force_quit; }
 
 int panel_host_run(panel_tick_fn fn, void *ctx, panel_host_snapshot_t *final_snap, panel_metrics_t *out_metrics,
                    panel_lifecycle_t *out_life) {
-    panel_host_reset_app_globals();
     panel_metrics_reset();
+    g_main_thread = pthread_self();
+    g_last_buttons = 0;
     g_tick_fn = fn;
     g_tick_ctx = ctx;
     g_force_quit = 0;

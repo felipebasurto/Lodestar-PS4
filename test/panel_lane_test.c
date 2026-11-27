@@ -9,7 +9,7 @@
  *    full/short/cancelled holds, empty catalog, network errors & recovery, concurrent
  *    refresh mid-hold, and clean exit with flip drain
  *  - Bounded deterministic input fuzzing with per-tick state invariants
- *  - Objective performance metrics benchmark (main vs fix/panel-app-rescue comparison) */
+ *  - Objective performance metrics benchmark (printed, not asserted) */
 #include "../panel-app/lane.h"
 #include "panel_host.h"
 
@@ -88,7 +88,9 @@ static void check_lifecycle(const panel_lifecycle_t *l, const char *name) {
           l->video_unreg);
     CHECK(l->dm_allocs == 1 && l->dm_releases == 1, "%s: balanced direct memory (%d/%d)", name, l->dm_allocs,
           l->dm_releases);
+    CHECK(l->munmaps == 1, "%s: the direct memory mapping is unmapped (%d)", name, l->munmaps);
     CHECK(l->ime_inits == l->ime_terms, "%s: balanced IME init/term (%d/%d)", name, l->ime_inits, l->ime_terms);
+    CHECK(l->load_exec_calls > 0, "%s: the title leaves through sceSystemServiceLoadExec", name);
     CHECK(l->splash_hidden == 1, "%s: splash screen hidden", name);
 }
 
@@ -325,6 +327,7 @@ static void scenario_nav_sections_wheel(const panel_host_snapshot_t *snap, Orbis
 typedef struct {
     int step;
     int hold_frames;
+    int64_t hold_since; /* a held button is timed on the virtual clock: the loop sleeps 8 ms per frame while holding */
     int saw_short_no_action;
     int saw_cancel_wheel_no_action;
     int saw_full_remove;
@@ -391,7 +394,7 @@ static void scenario_holds_and_concurrent_refresh(const panel_host_snapshot_t *s
         panel_host_server_wait_games_arrived();
         /* Press and hold Cross on CUSA00001 while refresh is in-flight */
         pad->buttons = ORBIS_PAD_BUTTON_CROSS;
-        c->hold_frames = 0;
+        c->hold_since = panel_host_clock_ms();
         c->step++;
         break;
     case 7:
@@ -401,13 +404,12 @@ static void scenario_holds_and_concurrent_refresh(const panel_host_snapshot_t *s
         panel_host_server_release_games_barrier(k_catalog_shifted);
         panel_host_wait_worker_reply();
         pad->buttons = ORBIS_PAD_BUTTON_CROSS; /* keep holding across reply */
-        c->hold_frames = 0;
+        c->hold_since = panel_host_clock_ms();
         c->step++;
         break;
     case 8:
         /* Keep holding for > 700ms after catalog shifted to verify hold stays dropped! */
-        c->hold_frames++;
-        if (c->hold_frames < 50) {
+        if (panel_host_clock_ms() - c->hold_since < 800) {
             pad->buttons = ORBIS_PAD_BUTTON_CROSS;
         } else {
             CHECK(!strcmp(snap->focused_id, "CUSA00006"), "focused shifted to CUSA00006");
@@ -421,12 +423,11 @@ static void scenario_holds_and_concurrent_refresh(const panel_host_snapshot_t *s
     case 9:
         /* Now perform a clean FULL hold (>700ms) on CUSA00006 (READY -> REMOVE) */
         pad->buttons = ORBIS_PAD_BUTTON_CROSS;
-        c->hold_frames = 0;
+        c->hold_since = panel_host_clock_ms();
         c->step++;
         break;
     case 10:
-        c->hold_frames++;
-        if (c->hold_frames < 50) {
+        if (panel_host_clock_ms() - c->hold_since < 800) {
             pad->buttons = ORBIS_PAD_BUTTON_CROSS;
         } else {
             pad->buttons = 0;
@@ -444,12 +445,11 @@ static void scenario_holds_and_concurrent_refresh(const panel_host_snapshot_t *s
     case 12:
         CHECK(!strcmp(snap->focused_id, "CUSA00002"), "moved to CUSA00002");
         pad->buttons = ORBIS_PAD_BUTTON_CROSS;
-        c->hold_frames = 0;
+        c->hold_since = panel_host_clock_ms();
         c->step++;
         break;
     case 13:
-        c->hold_frames++;
-        if (c->hold_frames < 50) {
+        if (panel_host_clock_ms() - c->hold_since < 800) {
             pad->buttons = ORBIS_PAD_BUTTON_CROSS;
         } else {
             pad->buttons = 0;
@@ -511,6 +511,7 @@ static void scenario_ime_settings_downloads(const panel_host_snapshot_t *snap, O
         CHECK(!strcmp(snap->query, "Charlie") && snap->visible_count == 1,
               "IME search filtered to Charlie (query='%s' visible=%d)", snap->query, snap->visible_count);
         c->saw_search_filter = 1;
+        panel_host_advance_clock_ms(250); /* the pad is ignored for 220 ms after the keyboard closes */
         /* Test IME CANCELED preserves existing query */
         panel_host_set_ime_script(0, 1, ORBIS_DIALOG_CANCELED, L"Ignored");
         pad->buttons = ORBIS_PAD_BUTTON_L2;
@@ -531,6 +532,7 @@ static void scenario_ime_settings_downloads(const panel_host_snapshot_t *snap, O
             return;
         CHECK(!strcmp(snap->query, "Charlie"), "canceled IME kept query='%s'", snap->query);
         c->saw_ime_cancel = 1;
+        panel_host_advance_clock_ms(250);
         /* Circle clears query (does NOT quit!) */
         pad->buttons = ORBIS_PAD_BUTTON_CIRCLE;
         c->step++;
@@ -623,12 +625,18 @@ static void scenario_ime_settings_downloads(const panel_host_snapshot_t *snap, O
         /* Script bad URL (non-HTTP) via IME */
         panel_host_set_ime_script(0, 1, ORBIS_DIALOG_OK, L"ftp://bad.example/file.pkg");
         pad->buttons = ORBIS_PAD_BUTTON_CROSS;
+        c->sub = 0;
         c->step++;
         break;
     case 21:
         pad->buttons = 0; /* release CROSS */
-        if (snap->ime || !snap->dest_ready)
+        if (snap->ime) {
+            c->sub = 1;
             return;
+        }
+        if (!c->sub || !snap->dest_ready)
+            return;
+        panel_host_advance_clock_ms(250);
         pad->buttons = ORBIS_PAD_BUTTON_CROSS; /* try enqueue bad URL */
         c->step++;
         break;
@@ -638,12 +646,18 @@ static void scenario_ime_settings_downloads(const panel_host_snapshot_t *snap, O
         /* Script valid HTTPS URL via Triangle */
         panel_host_set_ime_script(0, 1, ORBIS_DIALOG_OK, L"https://example.test/game.pkg");
         pad->buttons = ORBIS_PAD_BUTTON_TRIANGLE;
+        c->sub = 0;
         c->step++;
         break;
     case 23:
         pad->buttons = 0;
-        if (snap->ime || !snap->dest_ready)
+        if (snap->ime) {
+            c->sub = 1;
             return;
+        }
+        if (!c->sub || !snap->dest_ready)
+            return;
+        panel_host_advance_clock_ms(250);
         pad->buttons = ORBIS_PAD_BUTTON_CROSS; /* enqueue valid URL */
         c->step++;
         break;
@@ -669,6 +683,8 @@ static void scenario_ime_settings_downloads(const panel_host_snapshot_t *snap, O
         c->step++;
         break;
     case 27:
+        if (snap->page != PHONE || !*snap->local_url)
+            return; /* the address comes from the worker */
         CHECK(snap->page == PHONE && strstr(snap->local_url, "192.168.1.42") != NULL,
               "Phone page resolved IP: '%s'", snap->local_url);
         c->saw_phone_ip = 1;
@@ -1003,6 +1019,8 @@ int main(void) {
               isc.saw_url_rejected && isc.saw_url_enqueued && isc.saw_phone_ip,
           "all IME/settings/downloads/phone milestones reached");
     CHECK(life.netctl_init_calls > 0, "Phone page called sceNetCtlInit");
+    CHECK(m.blocking_netctl_calls == 0, "the phone address is read by the worker, never by the frame loop (%llu)",
+          (unsigned long long)m.blocking_netctl_calls);
     if (life.netctl_without_sysmodule > 0)
         printf("  [repro rc.3] sceNetCtlInit called %d time(s) without sceSysmoduleLoadModule(ORBIS_SYSMODULE_NET_CTL)\n",
                life.netctl_without_sysmodule);
@@ -1055,13 +1073,12 @@ int main(void) {
     check_lifecycle(&life, "bench");
 
     double redraws_per_input = m.inputs ? (double)m.redraws / (double)m.inputs : 0.0;
-    printf("  PANEL_METRICS_BENCH full_frame_copies=%llu full_frame_shades=%llu fb_bytes_written=%llu (%.1f MiB) "
-           "redraws=%llu inputs=%llu redraws_per_input=%.2f text_rasters=%llu (measure_only=%llu) "
+    printf("  PANEL_METRICS_BENCH full_frame_copies=%llu fb_bytes_written=%llu (%.1f MiB) "
+           "redraws=%llu inputs=%llu redraws_per_input=%.2f text_rasters=%llu "
            "art_scalings=%llu blocking_loop=%llu (netctl=%llu usleep=%llu ime=%llu) netctl_no_sysmod=%d\n",
-           (unsigned long long)m.full_frame_copies, (unsigned long long)m.full_frame_shades,
-           (unsigned long long)m.fb_bytes_written, (double)m.fb_bytes_written / (1024.0 * 1024.0),
-           (unsigned long long)m.redraws, (unsigned long long)m.inputs, redraws_per_input,
-           (unsigned long long)m.text_rasterizations, (unsigned long long)m.text_rasterizations_measure,
+           (unsigned long long)m.full_frame_copies, (unsigned long long)m.fb_bytes_written,
+           (double)m.fb_bytes_written / (1024.0 * 1024.0), (unsigned long long)m.redraws,
+           (unsigned long long)m.inputs, redraws_per_input, (unsigned long long)m.text_rasterizations,
            (unsigned long long)m.art_scalings, (unsigned long long)m.blocking_loop_calls,
            (unsigned long long)m.blocking_netctl_calls, (unsigned long long)m.blocking_usleep_calls,
            (unsigned long long)m.blocking_ime_calls, life.netctl_without_sysmodule);

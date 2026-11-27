@@ -31,7 +31,8 @@ typedef struct {
     int video_opens, video_closes;
     int video_reg, video_unreg;
     int dm_allocs, dm_releases;
-    int ime_inits, ime_terms;
+    int ime_inits, ime_terms, ime_aborts;
+    int munmaps, load_exec_calls;
     int splash_hidden;
     int sysmod_freetype, sysmod_ime, sysmod_netctl;
     int netctl_init_calls;

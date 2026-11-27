@@ -54,6 +54,18 @@ static response json(const char *text) {
     return (response){.status = 200, .size = strlen(text), .body = (char *)text};
 }
 
+typedef struct {
+    int fd;
+    int stop;
+    response res;
+} abort_args;
+
+static void *run_abortable_exchange(void *arg) {
+    abort_args *a = arg;
+    a->res = api_exchange_ex(a->fd, "/api/games", NULL, 4096, 10000, &a->stop);
+    return NULL;
+}
+
 int main(void) {
     response r = exchange("HTTP/1.1 200 OK\r\nContent-Length: 33\r\nConnection: close\r\n\r\n"
                           "{\"ok\":true,\"message\":\"All saved\"}", 512);
@@ -107,6 +119,28 @@ int main(void) {
              "{\"id\":\"internal\",\"label\":\"Console\"}]}");
     assert(!api_destinations(&r, &targets) && targets.count == 2);
     assert(!strcmp(targets.items[0].id, "usb0") && !strcmp(targets.items[1].label, "Console"));
+
+    /* PANEL-10: cooperative stop aborts an in-flight blocked HTTP read promptly. */
+    {
+        int fd[2];
+        assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, fd));
+        abort_args a = {.fd = fd[0], .stop = 0};
+        pthread_t client;
+        assert(!pthread_create(&client, NULL, run_abortable_exchange, &a));
+        char req[256] = {0};
+        size_t used = 0;
+        while (!strstr(req, "\r\n\r\n")) {
+            ssize_t n = read(fd[1], req + used, sizeof(req) - used - 1);
+            assert(n > 0);
+            used += (size_t)n;
+        }
+        /* Server received request and is now silent. Signal cooperative abort. */
+        __atomic_store_n(&a.stop, 1, __ATOMIC_RELEASE);
+        assert(!pthread_join(client, NULL));
+        assert(!a.res.body && !a.res.status);
+        close(fd[0]);
+        close(fd[1]);
+    }
     puts("PANEL-5 native HTTP client and API responses hold");
     return 0;
 }

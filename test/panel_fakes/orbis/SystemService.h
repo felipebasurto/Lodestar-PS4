@@ -8,3 +8,5 @@ enum {
 
 int sceSystemServiceParamGetInt(int32_t paramId, int32_t *value);
 int sceSystemServiceHideSplashScreen(void);
+int sceSystemServiceLoadExec(const char *path, char *const argv[]);
+int sceSystemServiceNavigateToGoHome(void);

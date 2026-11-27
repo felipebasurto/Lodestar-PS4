@@ -39,7 +39,9 @@ typedef struct {
 enum { API_PORT = 8780 };
 /* fd is an already connected stream. It stays owned by the caller. */
 response api_exchange(int fd, const char *path, const char *form, size_t limit, int timeout_ms);
+response api_exchange_ex(int fd, const char *path, const char *form, size_t limit, int timeout_ms, const int *stop);
 response api_request(const char *path, const char *form, size_t limit, int timeout_ms);
+response api_request_ex(const char *path, const char *form, size_t limit, int timeout_ms, const int *stop);
 int api_library(const response *res, library *out);
 int api_settings(const response *res, settings *out);
 int api_result(const response *res, char *message, size_t size);

@@ -6,14 +6,23 @@
 #include <string.h>
 
 /* One column of games (PANEL-1); dark ground, orange for what is chosen (PANEL-7). */
-enum { LEFT = 80, RIGHT = 1840, LIST_TOP = 196, LIST_BOTTOM = 1000, ROW = 92, OPEN_ROW = 240, EDGE = 24 };
+enum {
+    LEFT = PANEL_LEFT, RIGHT = PANEL_RIGHT, LIST_TOP = PANEL_LIST_TOP, LIST_BOTTOM = PANEL_LIST_BOTTOM,
+    ROW = PANEL_ROW, OPEN_ROW = PANEL_OPEN_ROW, EDGE = PANEL_EDGE,
+};
 enum { WHITE = 0xf3f4f5, TEXT = 0xc9cdd3, MUTED = 0x9aa0a8, ORANGE = 0xff6a13, GOLD = 0xffcb47, GREEN = 0x9bd65a,
        RED = 0xff6b5c, INK = 0x0a0b0d, RULE = 0x343941 };
 enum glyph { PLAIN, CROSS, SQUARE, TRIANGLE, CIRCLE, KEY };
 
+static const int wheel_pos[WHEEL_ITEMS][2] = {
+    {960, 220}, {1410, 380}, {1410, 700}, {960, 860}, {510, 700}, {510, 380},
+};
+
 static const char *tr(const panel_view *v, const char *en, const char *es) { return v->spanish ? es : en; }
 
 static const artwork *view_art(const panel_view *v, const char *id) {
+    if (!v->art || !id || !*id)
+        return NULL;
     for (int i = 0; i < ART_SLOTS; i++)
         if (!strcmp(id, v->art[i].id))
             return &v->art[i];
@@ -65,8 +74,9 @@ static const char *action_name(const panel_view *v, enum action action) {
 }
 
 static void centred(canvas c, int cx, int y, int size, uint32_t color, const char *label, int heavy) {
-    int width = text_width(size, label) + (heavy ? size : 0);
-    (heavy ? bold : text)(c, cx - text_width(size, label) / 2, y, width + size, size, color, label);
+    int base_w = text_width(size, label);
+    int width = base_w + (heavy ? size : 0);
+    (heavy ? bold : text)(c, cx - base_w / 2, y, width + size, size, color, label);
 }
 
 static void right_aligned(canvas c, int right, int y, int size, uint32_t color, const char *label) {
@@ -131,8 +141,9 @@ static int legend(canvas c, const hint *hints, int count) {
 static void header(const panel_view *v, canvas c) {
     brand(c, LEFT, 36);
     const char *version = v->catalog ? v->catalog->version : "Lodestar";
-    right_aligned(c, RIGHT, 78, 26, MUTED, version);
-    fill(c, RIGHT - text_width(26, version) - 22, 65, 10, 10, v->online ? GREEN : GOLD);
+    int vw = text_width(26, version);
+    text(c, RIGHT - vw, 78, vw + 26, 26, MUTED, version);
+    fill(c, RIGHT - vw - 22, 65, 10, 10, v->online ? GREEN : GOLD);
 }
 
 static void heading(canvas c, const char *label) { bold(c, LEFT, 164, 1500, 56, WHITE, label); }
@@ -141,7 +152,7 @@ static void cover(const panel_view *v, canvas c, const game *g, int x, int y, in
     fill(c, x, y, size, size, 0x16191e);
     const artwork *a = view_art(v, g->id);
     if (a && a->pixels) {
-        image(c, x, y, size, a->pixels);
+        image_art(c, x, y, size, a->pixels, a->thumb64, a->opaque, a->gen);
     } else {
         ring(c, x + size / 2, y + size / 2, size / 5, 2, RULE);
     }
@@ -201,10 +212,34 @@ static void open_row(const panel_view *v, canvas c, const game *g, int y) {
         fill(c, LEFT - EDGE, y + OPEN_ROW - 8, (RIGHT - LEFT + 2 * EDGE) * v->held / 1000, 8, ORANGE);
 }
 
+static void library_list(const panel_view *v, canvas c) {
+    if (!v->online || !v->catalog || !v->visible_count)
+        return;
+    /* The focus rests on the third line and the list moves under it. */
+    int first = v->selected > 2 ? v->selected - 2 : 0;
+    for (int i = first, y = LIST_TOP; i < v->visible_count; i++) {
+        const game *g = &v->catalog->games[v->indices[i]];
+        int height = i == v->selected ? OPEN_ROW : ROW;
+        if (y + height > LIST_BOTTOM)
+            break;
+        if (y + height > c.clip_y0 && y < c.clip_y1) {
+            if (i == v->selected) {
+                open_row(v, c, g, y);
+            } else {
+                cover(v, c, g, LEFT, y + 14, 64);
+                text(c, 176, y + 60, 1200, 40, TEXT, *g->name ? g->name : g->id);
+                if (g->state != READY)
+                    right_aligned(c, RIGHT, y + 58, 28, state_color(g->state), game_state_label(v, g->state));
+            }
+        }
+        y += height;
+    }
+}
+
 static void show_library(const panel_view *v, canvas c) {
     char buffer[256];
     header(v, c);
-    if (!v->online) {
+    if (!v->online || !v->catalog) {
         message(c, v->catalog ? tr(v, "Connection lost", "Conexión perdida") :
                 v->loading_library ? tr(v, "Connecting to Lodestar…", "Conectando con Lodestar…") :
                 tr(v, "Lodestar is not running", "Lodestar no está en marcha"),
@@ -257,23 +292,7 @@ static void show_library(const panel_view *v, canvas c) {
                        "Pon tus paquetes en la carpeta Lodestar de un USB, mantén L2 y busca juegos."));
         return;
     }
-    /* The focus rests on the third line and the list moves under it. */
-    int first = v->selected > 2 ? v->selected - 2 : 0;
-    for (int i = first, y = LIST_TOP; i < v->visible_count; i++) {
-        const game *g = &v->catalog->games[v->indices[i]];
-        int height = i == v->selected ? OPEN_ROW : ROW;
-        if (y + height > LIST_BOTTOM)
-            break;
-        if (i == v->selected) {
-            open_row(v, c, g, y);
-        } else {
-            cover(v, c, g, LEFT, y + 14, 64);
-            text(c, 176, y + 60, 1200, 40, TEXT, *g->name ? g->name : g->id);
-            if (g->state != READY)
-                right_aligned(c, RIGHT, y + 58, 28, state_color(g->state), game_state_label(v, g->state));
-        }
-        y += height;
-    }
+    library_list(v, c);
 }
 
 static void info_row(canvas c, int y, const char *label, const char *value) {
@@ -353,6 +372,46 @@ static const char *setting_text(const panel_view *v, const setting *f, int value
     return temp;
 }
 
+static void draw_setting_row(const panel_view *v, canvas c, int i, int count) {
+    if (i == count) {
+        int y = 256 + 60 * count;
+        int save = !v->in_sidebar && v->setting_row == count;
+        if (save)
+            fill(c, 424, y, 800, 54, ORANGE);
+        (save ? bold : text)(c, 440, y + 39, 760, 36, save ? INK : ORANGE, tr(v, "Save settings", "Guardar ajustes"));
+        return;
+    }
+    const setting *f = &fields[setting_start[v->category] + i];
+    int y = 232 + 60 * i;
+    int focused = !v->in_sidebar && v->setting_row == i;
+    char temp[24];
+    if (focused)
+        fill(c, 424, y, 800, 54, ORANGE);
+    (focused ? bold : text)(c, 440, y + 39, 540, 34, focused ? INK : WHITE, v->spanish ? f->es : f->en);
+    const char *value = setting_text(v, f, *(const int *)((const char *)v->config + f->offset), temp, sizeof(temp));
+    int width = text_width(30, value);
+    width = width > 220 ? 220 : width;
+    text(c, 1208 - width, y + 38, width + 12, 30, focused ? INK : ORANGE, value);
+}
+
+static void draw_setting_help(const panel_view *v, canvas c, int count) {
+    if (!v->in_sidebar && v->setting_row < count) {
+        const setting *f = &fields[setting_start[v->category] + v->setting_row];
+        const char *help = v->spanish ? f->help_es : f->help_en;
+        char first[64];
+        size_t split = strlen(help);
+        if (split > 46) {
+            split = 46;
+            while (split && help[split] != ' ')
+                split--;
+        }
+        snprintf(first, sizeof(first), "%.*s", (int)split, help);
+        text(c, 1280, 271, 560, 28, MUTED, first);
+        if (help[split])
+            text(c, 1280, 309, 560, 28, MUTED, help + split + 1);
+    }
+}
+
 static void show_settings(const panel_view *v, canvas c) {
     header(v, c);
     heading(c, tr(v, "Settings", "Ajustes"));
@@ -372,39 +431,9 @@ static void show_settings(const panel_view *v, canvas c) {
                                          focused ? INK : i == v->category ? WHITE : MUTED, sections[i]);
     }
     int count = setting_start[v->category + 1] - setting_start[v->category];
-    for (int i = 0; i < count; i++) {
-        const setting *f = &fields[setting_start[v->category] + i];
-        int y = 232 + 60 * i;
-        int focused = !v->in_sidebar && v->setting_row == i;
-        char temp[24];
-        if (focused)
-            fill(c, 424, y, 800, 54, ORANGE);
-        (focused ? bold : text)(c, 440, y + 39, 540, 34, focused ? INK : WHITE, v->spanish ? f->es : f->en);
-        const char *value = setting_text(v, f, *(const int *)((const char *)v->config + f->offset), temp, sizeof(temp));
-        int width = text_width(30, value);
-        width = width > 220 ? 220 : width;
-        text(c, 1208 - width, y + 38, width + 12, 30, focused ? INK : ORANGE, value);
-    }
-    int y = 256 + 60 * count;
-    int save = !v->in_sidebar && v->setting_row == count;
-    if (save)
-        fill(c, 424, y, 800, 54, ORANGE);
-    (save ? bold : text)(c, 440, y + 39, 760, 36, save ? INK : ORANGE, tr(v, "Save settings", "Guardar ajustes"));
-    if (!v->in_sidebar && v->setting_row < count) {
-        const setting *f = &fields[setting_start[v->category] + v->setting_row];
-        const char *help = v->spanish ? f->help_es : f->help_en;
-        char first[64];
-        size_t split = strlen(help);
-        if (split > 46) {
-            split = 46;
-            while (split && help[split] != ' ')
-                split--;
-        }
-        snprintf(first, sizeof(first), "%.*s", (int)split, help);
-        text(c, 1280, 271, 560, 28, MUTED, first);
-        if (help[split])
-            text(c, 1280, 309, 560, 28, MUTED, help + split + 1);
-    }
+    for (int i = 0; i <= count; i++)
+        draw_setting_row(v, c, i, count);
+    draw_setting_help(v, c, count);
 }
 
 static void show_phone(const panel_view *v, canvas c) {
@@ -441,11 +470,12 @@ static void show_downloads(const panel_view *v, canvas c) {
         return;
     }
     if (*v->entered_url) {
+        int d = v->dests && v->dests->count ? (v->dest >= 0 && v->dest < v->dests->count ? v->dest : 0) : 0;
         text(c, LEFT, 260, RIGHT - LEFT, 34, WHITE, v->entered_url);
         text(c, LEFT, 310, 1300, 32, ORANGE,
-             v->dests->count ? v->dests->items[v->dest].label : !v->dest_ready && (v->loading_destinations) ?
+             v->dests && v->dests->count ? v->dests->items[d].label : !v->dest_ready && (v->loading_destinations) ?
              tr(v, "Reading destinations…", "Leyendo destinos…") : tr(v, "No destination selected", "Sin destino seleccionado"));
-        if (v->dests->count > 1)
+        if (v->dests && v->dests->count > 1)
             text(c, LEFT, 352, 1200, 26, MUTED, tr(v, "Left / Right to change drive", "Izquierda / derecha para cambiar de unidad"));
     } else {
         text(c, LEFT, 270, 1350, 34, TEXT,
@@ -484,20 +514,26 @@ static void show_downloads(const panel_view *v, canvas c) {
         text(c, LEFT, 925, 1600, 26, MUTED, tr(v, "Open the web panel to see all downloads.", "Abre el panel web para ver todas las descargas."));
 }
 
-/* The app-wide actions around a circle, over whatever was on screen (PANEL-2). */
-static void show_wheel(const panel_view *v, canvas c) {
-    static const int at[WHEEL_ITEMS][2] = {{960, 220}, {1410, 380}, {1410, 700}, {960, 860}, {510, 700}, {510, 380}};
-    const char *names[WHEEL_ITEMS] = {
-        tr(v, "Scan for games", "Buscar juegos"), tr(v, "Send packages", "Enviar paquetes"),
-        tr(v, "Transfers", "Transferencias"), tr(v, "Settings", "Ajustes"),
-        tr(v, "Search by name", "Buscar por nombre"), tr(v, "Exit", "Salir")};
-    shade(c, 0, 0, WIDTH, HEIGHT, INK, 240);
-    for (int i = 0; i < WHEEL_ITEMS; i++) {
-        int chosen = v->wheel_at == i;
-        if (chosen)
-            fill(c, at[i][0] - 190, at[i][1] - 48, 380, 96, ORANGE);
-        centred(c, at[i][0], at[i][1] + 14, 40, chosen ? INK : WHITE, names[i], chosen);
+static const char *wheel_name(const panel_view *v, int i) {
+    switch (i) {
+    case 0: return tr(v, "Scan for games", "Buscar juegos");
+    case 1: return tr(v, "Send packages", "Enviar paquetes");
+    case 2: return tr(v, "Transfers", "Transferencias");
+    case 3: return tr(v, "Settings", "Ajustes");
+    case 4: return tr(v, "Search by name", "Buscar por nombre");
+    default: return tr(v, "Exit", "Salir");
     }
+}
+
+static void draw_wheel_pill_content(const panel_view *v, canvas c, int i) {
+    int chosen = v->wheel_at == i;
+    if (chosen)
+        fill(c, wheel_pos[i][0] - PANEL_WHEEL_W / 2, wheel_pos[i][1] - PANEL_WHEEL_H / 2,
+             PANEL_WHEEL_W, PANEL_WHEEL_H, ORANGE);
+    centred(c, wheel_pos[i][0], wheel_pos[i][1] + 14, 40, chosen ? INK : WHITE, wheel_name(v, i), chosen);
+}
+
+static void draw_wheel_drives(const panel_view *v, canvas c) {
     /* The drives sit in the hub: free space is a glance away without a place on every screen. */
     int n = v->catalog ? v->catalog->drive_count : 0;
     n = n > 6 ? 6 : n;
@@ -508,6 +544,14 @@ static void show_wheel(const panel_view *v, canvas c) {
                  d->free_bytes / 1073741824.0);
         centred(c, 960, 550 - n * 22 + i * 44, 30, MUTED, buffer, 0);
     }
+}
+
+/* The app-wide actions around a circle, over whatever was on screen (PANEL-2). */
+static void show_wheel(const panel_view *v, canvas c) {
+    shade(c, 0, 0, WIDTH, HEIGHT, INK, 240);
+    for (int i = 0; i < WHEEL_ITEMS; i++)
+        draw_wheel_pill_content(v, c, i);
+    draw_wheel_drives(v, c);
 }
 
 static void footer(const panel_view *v, canvas c) {
@@ -562,4 +606,219 @@ void panel_draw(const panel_view *v, canvas c) {
     if (v->wheel)
         show_wheel(v, c);
     footer(v, c);
+}
+
+rect panel_header_rect(void) { return (rect){0, 0, WIDTH, PANEL_HEADER_BOTTOM}; }
+rect panel_footer_rect(void) { return (rect){0, LIST_BOTTOM, WIDTH, HEIGHT - LIST_BOTTOM}; }
+rect panel_list_rect(void) { return (rect){LEFT - EDGE, LIST_TOP, RIGHT - LEFT + 2 * EDGE, LIST_BOTTOM - LIST_TOP}; }
+
+rect panel_wheel_pill_rect(int idx) {
+    if (idx < 0 || idx >= WHEEL_ITEMS)
+        return (rect){0, 0, 0, 0};
+    return (rect){wheel_pos[idx][0] - PANEL_WHEEL_W / 2, wheel_pos[idx][1] - PANEL_WHEEL_H / 2,
+                  PANEL_WHEEL_W, PANEL_WHEEL_H};
+}
+
+int panel_open_row_y(const panel_view *v) {
+    if (!v || v->page != LIBRARY || !v->online || !v->catalog || !v->visible_count ||
+        v->selected < 0 || v->selected >= v->visible_count)
+        return -1;
+    int first = v->selected > 2 ? v->selected - 2 : 0;
+    int y = LIST_TOP + (v->selected - first) * ROW;
+    return y + OPEN_ROW <= LIST_BOTTOM ? y : -1;
+}
+
+rect panel_open_row_rect(const panel_view *v) {
+    int y = panel_open_row_y(v);
+    if (y < 0)
+        return (rect){0, 0, 0, 0};
+    return (rect){LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW};
+}
+
+rect panel_hold_bar_rect(const panel_view *v) {
+    if (!v)
+        return (rect){0, 0, 0, 0};
+    if (v->page == LIBRARY) {
+        int y = panel_open_row_y(v);
+        if (y < 0)
+            return (rect){0, 0, 0, 0};
+        return (rect){LEFT - EDGE, y + OPEN_ROW - 8, RIGHT - LEFT + 2 * EDGE, 8};
+    }
+    if (v->page == DETAIL && v->focused)
+        return (rect){548, 860, 700, 8};
+    return (rect){0, 0, 0, 0};
+}
+
+rect panel_detail_verbs_rect(void) { return (rect){540, 680, 720, 200}; }
+
+rect panel_settings_row_rect(int row, int count) {
+    if (row == count)
+        return (rect){424, 256 + 60 * count, 800, 54};
+    return (rect){424, 232 + 60 * row, 800, 54};
+}
+
+rect panel_settings_help_rect(void) { return (rect){1264, 232, 600, 120}; }
+
+int panel_find_cover_rect(const panel_view *v, const char *id, rect *out) {
+    if (!v || !id || !*id || !out || v->wheel)
+        return 0;
+    if (v->page == DETAIL) {
+        if (v->focused && !strcmp(v->focused->id, id)) {
+            *out = (rect){LEFT, 156, 420, 420};
+            return 1;
+        }
+        return 0;
+    }
+    if (v->page != LIBRARY || !v->online || !v->catalog || !v->visible_count)
+        return 0;
+    int first = v->selected > 2 ? v->selected - 2 : 0;
+    for (int i = first, y = LIST_TOP; i < v->visible_count; i++) {
+        const game *g = &v->catalog->games[v->indices[i]];
+        int height = i == v->selected ? OPEN_ROW : ROW;
+        if (y + height > LIST_BOTTOM)
+            break;
+        if (!strcmp(g->id, id)) {
+            if (i == v->selected)
+                *out = (rect){LEFT, y + 28, 184, 184};
+            else
+                *out = (rect){LEFT, y + 14, 64, 64};
+            return 1;
+        }
+        y += height;
+    }
+    return 0;
+}
+
+void panel_draw_header_region(const panel_view *v, canvas c) {
+    rect r = panel_header_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    header(v, sub);
+}
+
+void panel_draw_footer_region(const panel_view *v, canvas c) {
+    rect r = panel_footer_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    if (v->wheel)
+        shade(sub, r.x, r.y, r.w, r.h, INK, 240);
+    footer(v, sub);
+}
+
+void panel_draw_library_list_region(const panel_view *v, canvas c, rect clip) {
+    canvas sub = canvas_clip(c.pixels, clip);
+    background(sub);
+    library_list(v, sub);
+}
+
+void panel_draw_open_row_region(const panel_view *v, canvas c) {
+    rect r = panel_open_row_rect(v);
+    if (r.w <= 0 || !v->focused)
+        return;
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    open_row(v, sub, v->focused, r.y);
+}
+
+void panel_draw_hold_bar_delta(const panel_view *v, canvas c, int prev_held, rect *out_damage) {
+    rect bar = panel_hold_bar_rect(v);
+    if (bar.w <= 0 || !v->holding) {
+        if (out_damage)
+            *out_damage = (rect){0, 0, 0, 0};
+        return;
+    }
+    int prev_w = prev_held > 0 ? bar.w * prev_held / 1000 : 0;
+    int cur_w = v->held > 0 ? bar.w * v->held / 1000 : 0;
+    if (cur_w <= prev_w) {
+        if (out_damage)
+            *out_damage = (rect){0, 0, 0, 0};
+        return;
+    }
+    rect delta = {bar.x + prev_w, bar.y, cur_w - prev_w, bar.h};
+    fill(canvas_clip(c.pixels, delta), delta.x, delta.y, delta.w, delta.h, ORANGE);
+    if (out_damage)
+        *out_damage = delta;
+}
+
+void panel_draw_cover_region(const panel_view *v, canvas c, const char *id, rect r) {
+    if (!v || !v->catalog || !id || r.w <= 0)
+        return;
+    const game *found = NULL;
+    if (v->focused && !strcmp(v->focused->id, id)) {
+        found = v->focused;
+    } else {
+        for (int i = 0; i < v->catalog->count; i++) {
+            if (!strcmp(v->catalog->games[i].id, id)) {
+                found = &v->catalog->games[i];
+                break;
+            }
+        }
+    }
+    if (!found)
+        return;
+    canvas sub = canvas_clip(c.pixels, r);
+    cover(v, sub, found, r.x, r.y, r.w);
+}
+
+void panel_draw_wheel_open(const panel_view *v, canvas c, uint32_t *pill_bg[WHEEL_ITEMS]) {
+    /* Clear the old footer strip to ground before dimming so old footer text does not bleed through. */
+    rect f = panel_footer_rect();
+    background_rect(c, f.x, f.y, f.w, f.h);
+    shade(c, 0, 0, WIDTH, HEIGHT, INK, 240);
+    for (int i = 0; i < WHEEL_ITEMS; i++) {
+        if (!pill_bg[i])
+            continue;
+        rect p = panel_wheel_pill_rect(i);
+        size_t row_bytes = (size_t)p.w * sizeof(*c.pixels);
+        for (int row = 0; row < p.h; row++)
+            memcpy(pill_bg[i] + (size_t)row * (size_t)p.w,
+                   c.pixels + (size_t)(p.y + row) * WIDTH + p.x, row_bytes);
+    }
+    for (int i = 0; i < WHEEL_ITEMS; i++)
+        draw_wheel_pill_content(v, c, i);
+    draw_wheel_drives(v, c);
+    footer(v, c);
+}
+
+void panel_draw_wheel_pill(const panel_view *v, canvas c, int idx, const uint32_t *pill_bg) {
+    if (idx < 0 || idx >= WHEEL_ITEMS)
+        return;
+    rect p = panel_wheel_pill_rect(idx);
+    canvas sub = canvas_clip(c.pixels, p);
+    if (v->wheel_at != idx && pill_bg) {
+        size_t row_bytes = (size_t)p.w * sizeof(*c.pixels);
+        for (int row = 0; row < p.h; row++)
+            memcpy(c.pixels + (size_t)(p.y + row) * WIDTH + p.x,
+                   pill_bg + (size_t)row * (size_t)p.w, row_bytes);
+    }
+    draw_wheel_pill_content(v, sub, idx);
+}
+
+void panel_draw_detail_verbs_region(const panel_view *v, canvas c) {
+    if (!v->focused)
+        return;
+    rect r = panel_detail_verbs_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    verbs(v, sub, v->focused, 548, 710, 700, 0);
+    if (v->holding)
+        fill(sub, 548, 860, 700 * v->held / 1000, 8, ORANGE);
+}
+
+void panel_draw_settings_row_region(const panel_view *v, canvas c, int row) {
+    int count = setting_start[v->category + 1] - setting_start[v->category];
+    if (row < 0 || row > count)
+        return;
+    rect r = panel_settings_row_rect(row, count);
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    draw_setting_row(v, sub, row, count);
+}
+
+void panel_draw_settings_help_region(const panel_view *v, canvas c) {
+    int count = setting_start[v->category + 1] - setting_start[v->category];
+    rect r = panel_settings_help_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    draw_setting_help(v, sub, count);
 }
