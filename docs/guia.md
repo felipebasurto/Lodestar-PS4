@@ -2,7 +2,7 @@
 
 [English](guide.md) · [Volver al README](../README.md)
 
-Esta guía describe **Lodestar 3.1.0-rc.3**, la versión de la rama `main`. La última release publicada es la **3.1.0-rc.2**: su app de PS4 tiene la interfaz anterior, con otros controles. Mientras no haya release de la rc.3, los archivos de `main` están en el artefacto `lodestar-ps4` de la última ejecución de [Build and release](https://github.com/felipebasurto/Lodestar-PS4/actions/workflows/build.yml). Los controles nuevos aún no se han probado en una PS4 real.
+Esta guía describe **Lodestar 3.1.0-rc.3**, una [versión de prueba](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.3): los controles nuevos aún no se han probado en una PS4 real.
 
 - [Qué es cada pieza](#qué-es-cada-pieza)
 - [Primera vez, paso a paso](#primera-vez-paso-a-paso)

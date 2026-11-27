@@ -2,7 +2,7 @@
 
 [Español](guia.md) · [Back to the README](../README.md)
 
-This guide describes **Lodestar 3.1.0-rc.3**, the version on the `main` branch. The latest published release is **3.1.0-rc.2**: its PS4 app has the previous interface, with other controls. Until rc.3 is released, the files built from `main` are in the `lodestar-ps4` artifact of the latest [Build and release](https://github.com/felipebasurto/Lodestar-PS4/actions/workflows/build.yml) run. The new controls have not been tested on a real PS4 yet.
+This guide describes **Lodestar 3.1.0-rc.3**, a [test release](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.3): the new controls have not been tried on a real PS4 yet.
 
 - [The pieces](#the-pieces)
 - [First time, step by step](#first-time-step-by-step)

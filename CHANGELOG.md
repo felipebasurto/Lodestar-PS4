@@ -4,27 +4,43 @@ Lodestar (PS4Mount PS4 before 2.0.0) began as a PS4-only port of [PS4Mount](http
 
 ## 3.1.0-rc.3
 
+**Test release.** Host tests, the SDK compile check and the panel tests pass, but **the new controls, the app and these notices have not been tried on a real PS4 yet**. Keep a version that works for you.
+
+1. Load `lodestar-ps4.bin` with GoldHEN (use the `.elf` if your loader takes ELF).
+2. Install `lodestar-panel.pkg` with GoldHEN's Package Installer.
+3. Open **Lodestar** on the PS4, or the address in the startup notification on a network you trust. [User guide](https://github.com/felipebasurto/Lodestar-PS4/blob/v3.1.0-rc.3/docs/guide.md).
+
+> **Coming from 3.1.0-rc.2 or earlier:** Lodestar now has its own identity on the console. First turn off **Start with GoldHEN** in the old version and restart the console, so that only the new one loads. The USB folder is now `Lodestar` (it was `PS4Mount`), the web panel is on port **8780**, the app is a new tile (`LODS00001`) and settings are not carried over. State, folders and AutoRun entries of the old identity are left as they are. Packages already organized in `<USB>/ps4/<title ID>/` are still found.
+
 **New look.** A new flat mark (a flying wing under the star it steers by) and wordmark, and a light menu style inspired by Black Ops II in the web panel, the PS4 app and the browser extension: dark neutral grounds, orange selection and condensed type.
 
-**Clearer states and notices.** The web panel and the PS4 app give each game state the same name, and opening a game that needs attention says what to do. While a game waits for a restart, both say so above the library; the app did not before. The restart notices say that rest mode does not count and, without AutoRun, to load Lodestar again. Warnings say what to do next.
+**A one-column library.** Games are listed one per row in title order, and the chosen row grows. In the PS4 app, Up and Down walk the list, Left and Right jump by initial, L1 and R1 change section, holding Cross adds or removes, holding Square restores the original files, Triangle shows the details, and holding L2 opens a wheel with the other actions.
 
-**A one-column library.** Games are listed one per row in title order, and the chosen row grows. In the PS4 app, Up and Down walk the list, Left and Right jump by initial, L1 and R1 change section, holding Cross adds or removes, holding Square restores the original files, Triangle shows the details, and holding L2 opens a wheel with the other actions. Install `lodestar-panel.pkg` again to get the new app. The new [user guide](docs/guide.md) explains every screen and button.
+**Clearer states and notices.** The web panel and the PS4 app give each game state the same name, and opening a game that needs attention says what to do. While a game waits for a restart, both say so above the library. The restart notices say that rest mode does not count and, without AutoRun, to load Lodestar again.
 
-**Aspecto nuevo.** Logo y logotipo nuevos, planos (un ala volante bajo la estrella que sigue), y un estilo de menús ligero inspirado en Black Ops II en el panel web, la app de PS4 y la extensión del navegador: fondos neutros oscuros, selección naranja y letra condensada.
+**Fix.** The PS4 app waits for the pending screen flip and its background worker before it exits.
 
-**Estados y avisos más claros.** El panel web y la app de PS4 llaman igual a cada estado, y al abrir un juego que necesita atención se explica qué hacer. Mientras un juego espera un reinicio, los dos lo avisan encima de la biblioteca; antes la app no lo hacía. Los avisos de reinicio aclaran que el modo reposo no vale y, sin AutoRun, piden volver a cargar Lodestar. Las advertencias dicen qué hacer a continuación.
-
-**Biblioteca en una columna.** Los juegos aparecen uno por fila, ordenados por título, y la fila elegida crece. En la app de PS4, arriba y abajo recorren la lista, izquierda y derecha saltan por inicial, L1 y R1 cambian de sección, mantener Cruz añade o quita, mantener Cuadrado restaura los archivos originales, Triángulo muestra la ficha y mantener L2 abre una rueda con el resto de acciones. Instala de nuevo `lodestar-panel.pkg` para tener la app nueva. La nueva [guía de uso](docs/guia.md) explica cada pantalla y cada botón.
-
-**Side-by-side identity test build.** Lodestar now uses its own console identity so it can be tested next to PS4Mount-PS4 without adopting or deleting that installation: state in `/data/lodestar`, hold files in `/system_data/lodestar`, USB scan folder `Lodestar`, internal packages in `/data/Lodestar`, web panel port 8780, helper relay port 8781 and native panel title `LODS00001`.
-
-PS4Mount's `/data/ps4mount`, `/system_data/ps4mount`, `PS4Mount` scan folder, `PSMT00001` panel and `ps4mount-ps4` AutoRun entries are foreign and are preserved. The organized package bytes already present in `<USB>/ps4/<TID>` remain reusable library data. Only one mount daemon can run at a time: the loopback lock on port 9032 is deliberately shared as a safety interlock, so stop PS4Mount before loading Lodestar.
+**Side-by-side identity.** Lodestar uses `/data/lodestar` for state, `/system_data/lodestar` for mount files, `/data/Lodestar` for internal packages and port 8781 for the helper relay, so it can sit next to PS4Mount-PS4 without adopting or deleting that installation. Only one mount daemon can run at a time (the lock on port 9032 is shared on purpose), so stop PS4Mount before loading Lodestar.
 
 **Español**
 
-**Build de prueba con identidad separada.** Lodestar ya usa identidad propia para probarse junto a PS4Mount-PS4 sin adoptar ni borrar esa instalación: estado en `/data/lodestar`, archivos de montaje en `/system_data/lodestar`, carpeta USB `Lodestar`, paquetes internos en `/data/Lodestar`, panel web en el puerto 8780, relay en 8781 y app nativa `LODS00001`.
+**Versión de prueba.** Pasan las pruebas de host, la compilación contra el SDK y las del panel, pero **los controles nuevos, la app y estos avisos aún no se han probado en una PS4 real**. Guarda una versión que te funcione.
 
-`/data/ps4mount`, `/system_data/ps4mount`, la carpeta `PS4Mount`, la app `PSMT00001` y las entradas AutoRun `ps4mount-ps4` son ajenos y se conservan. Los pkgs ya organizados en `<USB>/ps4/<TID>` siguen siendo biblioteca reutilizable. Solo puede ejecutarse un gestor de montaje cada vez: el bloqueo loopback del puerto 9032 se comparte a propósito como protección, así que detén PS4Mount antes de cargar Lodestar.
+1. Carga `lodestar-ps4.bin` con GoldHEN (usa el `.elf` si tu cargador trabaja con ELF).
+2. Instala `lodestar-panel.pkg` con el instalador de paquetes de GoldHEN.
+3. Abre **Lodestar** en la PS4, o la dirección del aviso de arranque desde una red de confianza. [Guía de uso](https://github.com/felipebasurto/Lodestar-PS4/blob/v3.1.0-rc.3/docs/guia.md).
+
+> **Si vienes de la 3.1.0-rc.2 o anterior:** Lodestar tiene ahora identidad propia en la consola. Antes desactiva **Arrancar con GoldHEN** en la versión anterior y reinicia la consola, para que solo se cargue la nueva. La carpeta del USB es `Lodestar` (antes `PS4Mount`), el panel web está en el puerto **8780**, la app es un icono nuevo (`LODS00001`) y los ajustes no se traspasan. El estado, las carpetas y las entradas AutoRun de la identidad anterior se dejan como están. Los pkgs ya organizados en `<USB>/ps4/<ID>/` se siguen encontrando.
+
+**Aspecto nuevo.** Logo y logotipo nuevos, planos (un ala volante bajo la estrella que sigue), y un estilo de menús ligero inspirado en Black Ops II en el panel web, la app de PS4 y la extensión del navegador.
+
+**Biblioteca en una columna.** Los juegos aparecen uno por fila, ordenados por título, y la fila elegida crece. En la app, arriba y abajo recorren la lista, izquierda y derecha saltan por inicial, L1 y R1 cambian de sección, mantener Cruz añade o quita, mantener Cuadrado restaura los archivos originales, Triángulo muestra la ficha y mantener L2 abre una rueda con el resto de acciones.
+
+**Estados y avisos más claros.** El panel web y la app llaman igual a cada estado, y al abrir un juego que necesita atención se explica qué hacer. Mientras un juego espera un reinicio, los dos lo avisan encima de la biblioteca. Los avisos de reinicio aclaran que el modo reposo no vale y, sin AutoRun, piden volver a cargar Lodestar.
+
+**Arreglo.** La app de PS4 espera al cambio de imagen pendiente y a su tarea en segundo plano antes de cerrarse.
+
+**Identidad separada.** Lodestar usa `/data/lodestar` para el estado, `/system_data/lodestar` para los archivos de montaje, `/data/Lodestar` para los paquetes internos y el puerto 8781 para el relay, así que puede convivir con PS4Mount-PS4 sin adoptar ni borrar esa instalación. Solo puede ejecutarse un gestor de montaje a la vez (el bloqueo del puerto 9032 se comparte a propósito), así que detén PS4Mount antes de cargar Lodestar.
 
 ## 3.1.0-rc.2
 

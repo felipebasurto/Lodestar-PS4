@@ -5,11 +5,11 @@
 **Organiza y monta tus paquetes locales de PS4 desde USB o el almacenamiento de la consola.**
 **Organize and mount your local PS4 packages from USB or console storage.**
 
-**[Empezar](#uso) · [Guía completa](docs/guia.md) · [Getting started](#use) · [User guide](docs/guide.md) · [Descargas / Downloads](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.2)**
+**[Empezar](#uso) · [Guía completa](docs/guia.md) · [Getting started](#use) · [User guide](docs/guide.md) · [Descargas / Downloads](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.3)**
 
 > [!NOTE]
-> Este README describe la **3.1.0-rc.3** (rama `main`, aún sin release). La última publicada es la `3.1.0-rc.2`, cuya app de PS4 tiene la interfaz y los controles anteriores. Las compilaciones de `main` están en el artefacto `lodestar-ps4` de [Build and release](https://github.com/felipebasurto/Lodestar-PS4/actions/workflows/build.yml).
-> This README describes **3.1.0-rc.3** (the `main` branch, not released yet). The latest published build is `3.1.0-rc.2`, whose PS4 app has the previous interface and controls. Builds of `main` are in the `lodestar-ps4` artifact of [Build and release](https://github.com/felipebasurto/Lodestar-PS4/actions/workflows/build.yml).
+> La **3.1.0-rc.3** es una versión de prueba: sus controles nuevos aún no se han probado en una PS4 real. Si vienes de la rc.2, lee antes las [notas de la versión](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.3): cambian la carpeta del USB y el puerto del panel.
+> **3.1.0-rc.3** is a test release: its new controls have not been tried on a real PS4 yet. Coming from rc.2, read the [release notes](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.3) first: the USB folder and the panel port change.
 
 Lodestar es un proyecto independiente para PS4, publicado como [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
 Lodestar is an independent PS4 project, published as [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
@@ -78,7 +78,7 @@ La explicación completa, con capturas de cada pantalla, está en la **[guía de
 
 ### Primera vez
 
-1. **Descarga** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-ps4.bin) y cópialo en **`/data/payloads/`** de la consola.
+1. **Descarga** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.3/lodestar-ps4.bin) y cópialo en **`/data/payloads/`** de la consola.
 2. **Carga Lodestar.** Aparece una notificación con `Lodestar <versión> en marcha` y la dirección del panel. Hay que repetirlo **después de cada arranque**, salvo que actives **Arrancar con GoldHEN**.
 3. **Abre la app o el panel** (`http://<IP de la PS4>:8780`), elige los ajustes y **guarda**. Hasta entonces no se añade ningún juego; si nadie los abre en 2 minutos, se usan los ajustes por defecto.
 4. **Pon los juegos** (con su actualización y sus DLC):
@@ -93,7 +93,7 @@ La explicación completa, con capturas de cada pantalla, está en la **[guía de
 
 ### La app de PS4
 
-La app se instala sola cuando hay una release de la versión y la consola tiene internet. Si no, instala [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) con el instalador de paquetes de GoldHEN. Usa `LODS00001` y aparece como un icono separado llamado **Lodestar**; no reemplaza la app `PSMT00001` de PS4Mount. Necesita el payload cargado.
+La app se instala sola cuando hay una release de la versión y la consola tiene internet. Si no, instala [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.3/lodestar-panel.pkg) con el instalador de paquetes de GoldHEN. Usa `LODS00001` y aparece como un icono separado llamado **Lodestar**; no reemplaza la app `PSMT00001` de PS4Mount. Necesita el payload cargado.
 
 ![La app de PS4](docs/app-library-es.png)
 
@@ -301,7 +301,7 @@ The full explanation, with a screenshot of every screen, is in the **[user guide
 
 ### First time
 
-1. **Download** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-ps4.bin) and copy it to **`/data/payloads/`** on the console.
+1. **Download** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.3/lodestar-ps4.bin) and copy it to **`/data/payloads/`** on the console.
 2. **Load Lodestar.** A notification shows `Lodestar <version> running` and the panel address. Do it again **after every boot**, unless you turn on **Start with GoldHEN**.
 3. **Open the app or the panel** (`http://<PS4 IP>:8780`), choose the settings and **save**. No game is added until then; if nobody opens either for 2 minutes, the default settings are used.
 4. **Add games** (with their update and add-ons):
@@ -316,7 +316,7 @@ The full explanation, with a screenshot of every screen, is in the **[user guide
 
 ### The PS4 app
 
-The app installs itself when there is a release for the version and the console has internet. Otherwise install [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) with GoldHEN’s Package Installer. It uses `LODS00001` and appears as a separate tile named **Lodestar**; it does not replace PS4Mount’s `PSMT00001` app. It needs the payload loaded.
+The app installs itself when there is a release for the version and the console has internet. Otherwise install [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.3/lodestar-panel.pkg) with GoldHEN’s Package Installer. It uses `LODS00001` and appears as a separate tile named **Lodestar**; it does not replace PS4Mount’s `PSMT00001` app. It needs the payload loaded.
 
 ![The PS4 app](docs/app-library-en.png)
 
