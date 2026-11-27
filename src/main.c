@@ -53,6 +53,7 @@
 #include "crypto.h"
 #include "db.h"
 #include "delete.h"
+#include "durable.h"
 #include "dlcvec.h"
 #include "links.h"
 #include "fw.h"
@@ -426,22 +427,9 @@ static void mkdirs(const char *path, mode_t mode) {
     mkdir(tmp, mode);
 }
 
+/* SYS-2: the previous file stays in place until the new bytes are complete. */
 static int write_file(const char *path, const void *data, size_t len, mode_t mode) {
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
-    if (fd < 0)
-        return -1;
-    const uint8_t *p = data;
-    while (len) {
-        ssize_t n = write(fd, p, len);
-        if (n <= 0) {
-            close(fd);
-            return -1;
-        }
-        p += n;
-        len -= (size_t)n;
-    }
-    close(fd);
-    return 0;
+    return durable_replace(path, data, len, mode);
 }
 
 static int mounted_from(const char *mountpoint, char *from, size_t n) {

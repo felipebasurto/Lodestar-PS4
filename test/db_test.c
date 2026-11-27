@@ -152,6 +152,23 @@ int main(void) {
     exec(w, "ROLLBACK;");
     next_second();
     CHECK(db_is_registered("CUSA00001"));
+
+    /* SYS-1: a writer still holding app.db-journal must not prove a title gone. */
+    printf("SYS-1: a shrink while app.db-journal exists is not absence\n");
+    exec(w, "BEGIN EXCLUSIVE; DELETE FROM tbl_appinfo WHERE titleId='CUSA00002';");
+    next_second();
+    CHECK(exists(APP_DB "-journal"));
+    CHECK(!db_confirms_unregistered("CUSA00002"));
+    CHECK(!db_confirms_unregistered("CUSA00001"));
+    CHECK(db_is_registered("CUSA00001"));
+    exec(w, "ROLLBACK;");
+    next_second();
+    CHECK(db_confirms_registered("CUSA00002"));
+    exec(w, "DELETE FROM tbl_appinfo WHERE titleId='CUSA00002';");
+    next_second();
+    CHECK(!exists(APP_DB "-journal"));
+    CHECK(db_confirms_unregistered("CUSA00002"));
+    CHECK(db_confirms_registered("CUSA00001"));
     sqlite3_close(w);
 
     printf("a damaged database\n");

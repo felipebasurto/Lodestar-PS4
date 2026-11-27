@@ -9,8 +9,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 
+#include "dbsnap.h"
 #include "sqlite3.h"
 
 #ifndef APP_DB
@@ -30,6 +32,7 @@ static const title_row_t **g_index;
 static int g_ntitles, g_cap, g_next_cap, g_index_cap, g_index_valid;
 static time_t g_read_at;
 static int g_read_ok, g_read_valid;
+static int g_have_trusted, g_trusted_n, g_shrink_logged;
 /* the panel thread and the scan ask: one reader at a time */
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
 
@@ -119,17 +122,30 @@ static void refresh(void) {
         }
     }
     sqlite3_close(db);
-    if (ok) { /* a read that met a write in progress keeps the last list */
-        title_row_t *prev = g_titles;
-        int prev_cap = g_cap;
-        g_titles = g_next;
-        g_cap = g_next_cap;
-        g_next = prev;
-        g_next_cap = prev_cap;
-        g_ntitles = n;
-        index_titles();
-        g_read_ok = g_read_valid = 1;
+    if (!ok)
+        return; /* a failed read keeps the last list and does not prove absence */
+    struct stat jst;
+    int journal = stat(APP_DB "-journal", &jst) == 0;
+    /* SYS-1: a hot journal plus a smaller (or first) list is not the catalog. */
+    if (!db_snapshot_publish(g_have_trusted, g_trusted_n, n, journal)) {
+        if (!g_shrink_logged) {
+            g_shrink_logged = 1;
+            printf("[db] %s: journal present; not using a smaller or first title list as the catalog\n", APP_DB);
+        }
+        return;
     }
+    g_shrink_logged = 0;
+    title_row_t *prev = g_titles;
+    int prev_cap = g_cap;
+    g_titles = g_next;
+    g_cap = g_next_cap;
+    g_next = prev;
+    g_next_cap = prev_cap;
+    g_ntitles = n;
+    g_trusted_n = n;
+    g_have_trusted = 1;
+    index_titles();
+    g_read_ok = g_read_valid = 1;
 }
 
 static const title_row_t *find_title(const char *title_id) {

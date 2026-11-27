@@ -108,6 +108,10 @@ echo "== system database"
 $CC $FLAGS -Ithird_party/sqlite -DAPP_DB="\"$B/app.db\"" -o "$B/db_test" test/db_test.c src/db.c src/crypto.c src/mem.c src/la_alloc.c "$SQ"
 "$B/db_test"
 
+echo "== system-state interruptions"
+$CC $FLAGS -o "$B/sysstate_test" test/sysstate_test.c src/durable.c
+"$B/sysstate_test"
+
 echo "== web panel server"
 $CC $FLAGS -Itest -o "$B/http_test" test/http_test.c test/stubs.c src/web.c src/lang.c src/build.c src/mem.c src/crypto.c -lpthread
 "$B/http_test"
