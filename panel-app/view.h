@@ -3,11 +3,10 @@
 
 #include "api.h"
 #include "draw.h"
+#include "lane.h"
 
-enum { COLS = 5, PAGE = COLS * 2, ART_SLOTS = PAGE * 2, SETTINGS_COUNT = 9 };
+enum { PAGE = 8, ART_SLOTS = 20, SETTINGS_COUNT = 9 };
 enum page { LIBRARY, DETAIL, SETTINGS, PHONE, DOWNLOADS };
-enum action { NONE, ADD, REMOVE, RESTORE };
-enum filter { ALL, REBOOTS, OPEN };
 
 typedef struct {
     char id[10];
@@ -22,19 +21,19 @@ typedef struct {
 
 extern const setting fields[SETTINGS_COUNT];
 extern const int setting_start[4];
-int available_actions(const game *g, int online, enum action out[2]);
 
 typedef struct {
     enum page page;
-    enum action confirm;
-    enum filter filter;
-    int spanish, online, sidebar, selected, in_sidebar, visible_count;
+    enum section section;
+    int spanish, online, selected, in_sidebar, visible_count;
     const int *indices, *counts;
     const library *catalog;
     const game *focused;
     const artwork *art;
     const settings *config;
-    int config_ready, category, setting_row, action_row;
+    int config_ready, category, setting_row;
+    enum action holding;
+    int held, wheel, wheel_at; /* held: thousandths of the hold; wheel_at: -1 before pointing */
     const downloads *links;
     const destinations *dests;
     int links_ready, dest_ready, dest, link_writing, waiting;

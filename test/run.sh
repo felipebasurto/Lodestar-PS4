@@ -116,6 +116,10 @@ echo "== native panel API (PANEL-5) =="
 $CC $FLAGS -pthread -o "$B/panel_api_test" test/panel_api_test.c panel-app/api.c src/json.c
 "$B/panel_api_test"
 
+echo "== native panel hold to confirm (PANEL-8) =="
+$CC $FLAGS -o "$B/panel_lane_test" test/panel_lane_test.c panel-app/lane.c
+"$B/panel_lane_test"
+
 echo "== pkgs sent from the panel"
 $CC $FLAGS -Itest -o "$B/upload_test" test/upload_test.c src/upload.c src/lang.c src/mem.c src/check.c src/pkg.c src/build.c src/crypto.c -lpthread
 "$B/upload_test"

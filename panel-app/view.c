@@ -5,9 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { LEFT = 96, RIGHT = 1824, GRID_X = 490, COVER = 235 };
-enum { WHITE = 0xeff3ff, TEXT = 0xc4cee8, MUTED = 0xa5b3d5, BLUE = 0xa1b9ff, AMBER = 0xffca72,
-       TEAL = 0x72deb8, RED = 0xffa0b3, BORDER = 0x333f63, NAVY = 0x19274b };
+/* One column of games (PANEL-1); dark ground, orange for what is chosen (PANEL-7). */
+enum { LEFT = 80, RIGHT = 1840, LIST_TOP = 196, LIST_BOTTOM = 1000, ROW = 92, OPEN_ROW = 240, EDGE = 24 };
+enum { WHITE = 0xf3f4f5, TEXT = 0xc9cdd3, MUTED = 0x9aa0a8, ORANGE = 0xff6a13, GOLD = 0xffcb47, GREEN = 0x9bd65a,
+       RED = 0xff6b5c, INK = 0x0a0b0d, RULE = 0x343941 };
+enum glyph { PLAIN, CROSS, SQUARE, TRIANGLE, CIRCLE, KEY };
 
 static const char *tr(const panel_view *v, const char *en, const char *es) { return v->spanish ? es : en; }
 
@@ -17,20 +19,6 @@ static const artwork *view_art(const panel_view *v, const char *id) {
             return &v->art[i];
     return NULL;
 }
-
-int available_actions(const game *g, int online, enum action out[2]) {
-    int count = 0;
-    if (!g || !online)
-        return 0;
-    if (g->state == REMOVED)
-        out[count++] = ADD;
-    if (g->state == READY || g->state == RESTART)
-        out[count++] = REMOVE;
-    if (!g->in_place && (g->state == READY || g->state == RESTART || g->state == REMOVED || g->state == PENDING))
-        out[count++] = RESTORE;
-    return count;
-}
-
 
 static const char *game_state_label(const panel_view *v, enum game_state state) {
     switch (state) {
@@ -47,7 +35,8 @@ static const char *game_state_label(const panel_view *v, enum game_state state) 
 }
 
 static uint32_t state_color(enum game_state state) {
-    return state == RESTART ? AMBER : state == RUNNING ? TEAL : state == OFFLINE ? RED : MUTED;
+    return state == READY ? WHITE : state == RESTART || state == DUPLICATE ? GOLD : state == RUNNING ? GREEN :
+           state == OFFLINE ? RED : MUTED;
 }
 
 static const char *action_name(const panel_view *v, enum action action) {
@@ -59,181 +48,209 @@ static const char *action_name(const panel_view *v, enum action action) {
     }
 }
 
-static void stripe(canvas c, int x, int y, int w, int h, int focused) {
-    if (!focused)
-        return;
-    rounded_fill(c, x, y, w, h, 7, BORDER);
-    rounded_fill(c, x + 1, y + 1, w - 2, h - 2, 6, NAVY);
+static void centred(canvas c, int cx, int y, int size, uint32_t color, const char *label, int heavy) {
+    int width = text_width(size, label) + (heavy ? size : 0);
+    (heavy ? bold : text)(c, cx - text_width(size, label) / 2, y, width + size, size, color, label);
 }
 
-static void star(canvas c, int x, int y, int size, uint32_t color) {
-    int waist = size / 6, spread = size * 9 / 10;
-    for (int dy = -size; dy <= size; dy++) {
-        int rise = abs(dy);
-        int w = rise < waist ? spread - (spread - waist) * rise / waist :
-                waist * (size - rise) / (size - waist);
-        fill(c, x - w, y + dy, w * 2 + 1, 1, color);
-    }
+static void right_aligned(canvas c, int right, int y, int size, uint32_t color, const char *label) {
+    int width = text_width(size, label);
+    text(c, right - width, y, width + size, size, color, label);
 }
 
-static void header(const panel_view *v, canvas c, const char *heading) {
-    star(c, LEFT + 17, 70, 19, 0xd8deff);
-    fill(c, LEFT + 16, 51, 2, 14, AMBER);
-    text(c, LEFT + 48, 78, 168, 19, WHITE, "L O D E S T A R");
-    fill(c, 328, 66, 7, 7, v->online ? TEAL : AMBER);
-    text(c, 347, 77, 500, 18, MUTED, v->catalog ? v->catalog->version : "Lodestar");
-    text(c, LEFT, 195, 1100, 64, WHITE, heading);
-    fill(c, LEFT, 230, RIGHT - LEFT, 1, BORDER);
-}
-
-static void hint(canvas c, int x, int button, const char *name) {
-    int y = 1024;
-    if (button == 0) {
-        line(c, x, y, x + 14, y + 14, BLUE);
-        line(c, x, y + 14, x + 14, y, BLUE);
-    } else if (button == 1) {
-        fill(c, x, y, 15, 15, 0xffa9e3);
-        fill(c, x + 2, y + 2, 11, 11, 0x080a15);
-    } else if (button == 2) {
-        line(c, x + 7, y, x, y + 14, TEAL);
-        line(c, x + 7, y, x + 14, y + 14, TEAL);
-        line(c, x, y + 14, x + 14, y + 14, TEAL);
+/* A face button in its ring, centred on (cx, cy). */
+static void face(canvas c, int cx, int cy, enum glyph button) {
+    uint32_t colour = button == CROSS ? 0x7ea7ff : button == SQUARE ? 0xee8fd0 : button == TRIANGLE ? 0x5fd6a8 : RED;
+    ring(c, cx, cy, 17, 1, colour);
+    if (button == CROSS) {
+        for (int o = 0; o < 2; o++) {
+            line(c, cx - 6 + o, cy - 6, cx + 6 + o, cy + 6, colour);
+            line(c, cx - 6 + o, cy + 6, cx + 6 + o, cy - 6, colour);
+        }
+    } else if (button == SQUARE) {
+        frame(c, cx - 6, cy - 6, 13, 13, 2, colour);
+    } else if (button == TRIANGLE) {
+        line(c, cx, cy - 8, cx - 7, cy + 5, colour);
+        line(c, cx, cy - 8, cx + 7, cy + 5, colour);
+        line(c, cx - 7, cy + 5, cx + 7, cy + 5, colour);
     } else {
-        for (int i = -7; i <= 7; i++)
-            for (int j = -7; j <= 7; j++)
-                if (i * i + j * j >= 31 && i * i + j * j <= 51)
-                    fill(c, x + 7 + i, y + 7 + j, 1, 1, RED);
+        ring(c, cx, cy, 8, 2, colour);
     }
-    text(c, x + 26, y + 15, 208, 23, WHITE, name);
 }
 
-static void footer(const panel_view *v, canvas c) {
-    fill(c, LEFT, 991, RIGHT - LEFT, 1, BORDER);
-    const char *notice = v->feedback;
-    if (v->waiting || v->link_writing)
-        notice = tr(v, "Waiting for Lodestar…", "Esperando a Lodestar…");
-    text(c, LEFT, 1039, v->page == LIBRARY ? 875 : v->page == DOWNLOADS ? 1060 : 1220, 23, WHITE, notice);
-    if (v->page == LIBRARY) {
-        hint(c, 1015, 0, tr(v, "Open", "Abrir"));
-        hint(c, 1180, 1, tr(v, "Scan for games", "Buscar juegos"));
-        hint(c, 1460, 2, tr(v, "Search", "Buscar"));
-    } else if (v->page == DOWNLOADS && !v->link_writing && v->links_ready && v->links->configured) {
-        hint(c, 1210, 0, *v->entered_url ? tr(v, "Queue link", "Poner en cola") : tr(v, "Enter link", "Introducir enlace"));
-        if (*v->entered_url)
-            hint(c, 1460, 2, tr(v, "Edit link", "Editar enlace"));
-    } else if (v->confirm) {
-        hint(c, 1370, 0, tr(v, "Confirm", "Confirmar"));
-    } else if (v->page == SETTINGS || v->page == DETAIL) {
-        hint(c, 1370, 0, v->page == SETTINGS ? tr(v, "Select", "Elegir") : tr(v, "Choose", "Elegir"));
-    }
-    hint(c, 1650, 3, v->page == LIBRARY ? tr(v, "Exit", "Salir") : tr(v, "Back", "Volver"));
+typedef struct {
+    enum glyph glyph;
+    const char *key, *label;
+} hint;
+
+static int hint_width(const hint *h) {
+    int lead = h->glyph == PLAIN ? 0 : h->glyph == KEY ? text_width(24, h->key) + 38 : 48;
+    return lead + text_width(28, h->label);
 }
 
-static void cover(const panel_view *v, canvas c, const game *g, int x, int y, int size, int focused) {
-    if (focused) {
-        rounded_fill(c, x - 7, y - 7, size + 14, size + 14, 15, BLUE);
-        rounded_fill(c, x - 4, y - 4, size + 8, size + 8, 12, 0x14264e);
+/* The controls, right aligned in the bottom strip; returns where they start. */
+static int legend(canvas c, const hint *hints, int count) {
+    int width = (count - 1) * 40;
+    for (int i = 0; i < count; i++)
+        width += hint_width(&hints[i]);
+    int x = RIGHT - width, start = x;
+    for (int i = 0; i < count; i++) {
+        const hint *h = &hints[i];
+        int lead = 0;
+        if (h->glyph == KEY) {
+            int key = text_width(24, h->key);
+            frame(c, x, 1023, key + 28, 34, 1, MUTED);
+            text(c, x + 14, 1048, key + 24, 24, TEXT, h->key);
+            lead = key + 38;
+        } else if (h->glyph != PLAIN) {
+            face(c, x + 18, 1040, h->glyph);
+            lead = 48;
+        }
+        text(c, x + lead, 1050, text_width(28, h->label) + 28, 28, MUTED, h->label);
+        x += hint_width(h) + 40;
     }
-    rounded_fill(c, x, y, size, size, 9, 0x202b44);
+    return start;
+}
+
+static void header(const panel_view *v, canvas c) {
+    brand(c, LEFT, 36);
+    const char *version = v->catalog ? v->catalog->version : "Lodestar";
+    right_aligned(c, RIGHT, 78, 26, MUTED, version);
+    fill(c, RIGHT - text_width(26, version) - 22, 65, 10, 10, v->online ? GREEN : GOLD);
+}
+
+static void heading(canvas c, const char *label) { bold(c, LEFT, 164, 1500, 56, WHITE, label); }
+
+static void cover(const panel_view *v, canvas c, const game *g, int x, int y, int size) {
+    fill(c, x, y, size, size, 0x16191e);
     const artwork *a = view_art(v, g->id);
-    if (a && a->pixels)
-        image(c, x, y, size, 9, a->pixels);
-    else {
-        star(c, x + size / 2, y + size / 2 - 13, size / 5, 0x4c608c);
-        text(c, x + 18, y + size - 19, size - 36, 22, TEXT, g->id);
+    if (a && a->pixels) {
+        image(c, x, y, size, a->pixels);
+    } else {
+        ring(c, x + size / 2, y + size / 2, size / 5, 2, RULE);
     }
 }
 
-static const char *sidebar_name(const panel_view *v, int i) {
-    switch (i) {
-    case 0: return tr(v, "All games", "Todos");
-    case 1: return tr(v, "Restart to play", "Reinicia para jugar");
-    case 2: return tr(v, "Running", "Abiertos");
-    case 3: return tr(v, "Send packages", "Enviar paquetes");
-    case 4: return tr(v, "Transfers", "Transferencias");
-    default: return tr(v, "Settings", "Ajustes");
+/* What the buttons do to this game; the one being held fills and says what it means. */
+static void verbs(const panel_view *v, canvas c, const game *g, int x, int y, int width, int details) {
+    enum action actions[2];
+    int n = available_actions(g, v->online, actions);
+    for (int i = 0; i < n; i++, y += 52) {
+        int chosen = v->holding == actions[i];
+        face(c, x + 18, y - 10, actions[i] == RESTORE ? SQUARE : CROSS);
+        (chosen ? bold : text)(c, x + 48, y, width - 48, 32, chosen ? ORANGE : WHITE, action_name(v, actions[i]));
     }
+    if (!n && g->state == RUNNING) {
+        text(c, x, y, width, 28, MUTED, tr(v, "Close the game to remove it", "Cierra el juego para quitarlo"));
+        y += 52;
+    }
+    if (details) {
+        face(c, x + 18, y - 10, TRIANGLE);
+        text(c, x + 48, y, width - 48, 32, TEXT, tr(v, "Details", "Ficha"));
+        y += 52;
+    }
+    if (v->holding == REMOVE)
+        text(c, x, y, width, 26, MUTED, tr(v, "Keeps your package files.", "Conserva tus paquetes."));
+    else if (v->holding == RESTORE)
+        text(c, x, y, width, 26, MUTED, tr(v, "Moves the packages back.", "Devuelve los paquetes a su sitio."));
+}
+
+static const char *section_name(const panel_view *v, int i) {
+    return i == SECTION_NEEDS ? tr(v, "Needs attention", "Pendientes") :
+           i == SECTION_ALL ? tr(v, "All", "Todos") : tr(v, "Running", "Abiertos");
+}
+
+static void message(canvas c, const char *what, const char *next) {
+    bold(c, LEFT, 360, 1700, 52, WHITE, what);
+    text(c, LEFT, 414, 1700, 32, TEXT, next);
+}
+
+static void open_row(const panel_view *v, canvas c, const game *g, int y) {
+    char buffer[256];
+    shade(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, ORANGE, 22);
+    frame(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, 2, ORANGE);
+    cover(v, c, g, LEFT, y + 28, 184);
+    bold(c, 296, y + 84, 990, 64, WHITE, *g->name ? g->name : g->id);
+    text(c, 296, y + 130, 990, 32, state_color(g->state), game_state_label(v, g->state));
+    if (g->bytes)
+        snprintf(buffer, sizeof(buffer), "%s%s%.1f GB", g->storage, *g->storage ? " · " : "", g->bytes / 1073741824.0);
+    else
+        snprintf(buffer, sizeof(buffer), "%s", g->storage);
+    text(c, 296, y + 170, 990, 28, MUTED, buffer);
+    if (*g->issue)
+        text(c, 296, y + 208, 990, 28, GOLD, g->issue);
+    verbs(v, c, g, 1320, y + 68, 520, 1);
+    if (v->holding)
+        fill(c, LEFT - EDGE, y + OPEN_ROW - 8, (RIGHT - LEFT + 2 * EDGE) * v->held / 1000, 8, ORANGE);
 }
 
 static void show_library(const panel_view *v, canvas c) {
     char buffer[256];
-    header(v, c, tr(v, "Library", "Biblioteca"));
-    snprintf(buffer, sizeof(buffer), tr(v, "%d games", "%d juegos"), v->visible_count);
-    text(c, v->spanish ? 418 : 338, 193, 180, 24, MUTED, buffer);
-    text(c, 1440, 78, 384, 22, *v->query ? WHITE : MUTED,
-         *v->query ? v->query : tr(v, "Search game or title ID", "Busca un juego o su ID"));
-    fill(c, 1440, 90, 384, 1, BORDER);
-
-    for (int i = 0; i < 3; i++) {
-        int y = 259 + i * 53;
-        stripe(c, LEFT, y, 328, 48, (v->in_sidebar && v->sidebar == i) || ((int)v->filter == i && !v->in_sidebar));
-        text(c, LEFT + 17, y + 33, 252, 25, i == REBOOTS ? AMBER : TEXT, sidebar_name(v, i));
-        snprintf(buffer, sizeof(buffer), "%d", v->counts[i]);
-        text(c, LEFT + 274, y + 33, 51, 21, MUTED, buffer);
-    }
-    int y = 457;
-    if (v->catalog && v->catalog->drive_count) {
-        text(c, LEFT + 17, y, 286, 19, MUTED, tr(v, "STORAGE", "UNIDADES"));
-        y += 42;
-        for (int i = 0; i < v->catalog->drive_count && i < 6; i++, y += 40) {
-            const drive *d = &v->catalog->drives[i];
-            snprintf(buffer, sizeof(buffer), tr(v, "%.0f GB free", "%.0f GB libres"), d->free_bytes / 1073741824.0);
-            text(c, LEFT + 17, y, 150, 23, TEXT, d->label);
-            text(c, LEFT + 175, y, 145, 20, MUTED, buffer);
-        }
-    }
-    y += 24;
-    for (int i = 3; i < 6; i++, y += 51) {
-        stripe(c, LEFT, y, 328, 48, v->in_sidebar && v->sidebar == i);
-        text(c, LEFT + 17, y + 32, 294, 25, TEXT, sidebar_name(v, i));
-    }
+    header(v, c);
     if (!v->online) {
-        text(c, GRID_X, 328, 1350, 35, WHITE, v->catalog ? tr(v, "Connection lost", "Conexión perdida") :
-             v->loading_library ? tr(v, "Connecting to Lodestar…", "Conectando con Lodestar…") :
-             tr(v, "Lodestar is not running", "Lodestar no está en marcha"));
-        text(c, GRID_X, 390, 1350, 26, MUTED,
-             tr(v, "Load the Lodestar payload and press Square to reconnect.",
-                "Carga el payload de Lodestar y pulsa cuadrado para volver a conectar."));
+        message(c, v->catalog ? tr(v, "Connection lost", "Conexión perdida") :
+                v->loading_library ? tr(v, "Connecting to Lodestar…", "Conectando con Lodestar…") :
+                tr(v, "Lodestar is not running", "Lodestar no está en marcha"),
+                tr(v, "Load the Lodestar payload and press Cross to reconnect.",
+                   "Carga el payload de Lodestar y pulsa X para volver a conectar."));
         return;
     }
-    if (v->catalog->setup) {
-        text(c, GRID_X, 954, 1310, 22, AMBER,
-             tr(v, "First start: review Settings and save to start scanning.",
-                "Primer inicio: revisa Ajustes y guarda para iniciar la búsqueda."));
+
+    for (int i = 0, x = LEFT; i < SECTIONS; i++) {
+        int chosen = (int)v->section == i;
+        snprintf(buffer, sizeof(buffer), "%s %d", section_name(v, i), v->counts[i]);
+        int width = text_width(36, buffer) + (chosen ? 8 : 0);
+        (chosen ? bold : text)(c, x, 156, width + 36, 36, chosen ? WHITE : MUTED, buffer);
+        if (chosen)
+            fill(c, x, 170, width, 3, ORANGE);
+        x += width + 48;
+    }
+    if (*v->query) {
+        snprintf(buffer, sizeof(buffer), tr(v, "Search: %s", "Búsqueda: %s"), v->query);
+        int width = text_width(32, buffer);
+        text(c, width > 800 ? RIGHT - 800 : RIGHT - width, 156, 832, 32, ORANGE, buffer);
+    } else if (v->catalog->setup) {
+        right_aligned(c, RIGHT, 156, 28, GOLD,
+                      tr(v, "First start: hold L2, open Settings and save.", "Primer inicio: mantén L2, abre Ajustes y guarda."));
     } else if (v->catalog->overflow) {
-        text(c, GRID_X, 954, 1310, 22, AMBER, tr(v, "Library limit reached", "Se alcanzó el límite de la biblioteca"));
+        right_aligned(c, RIGHT, 156, 28, GOLD, tr(v, "Library limit reached", "Se alcanzó el límite de la biblioteca"));
     }
+
     if (!v->visible_count) {
-        text(c, GRID_X, 328, 1360, 36, WHITE, v->counts[ALL] || *v->query ? tr(v, "No matching games", "No hay coincidencias") :
-             tr(v, "No games found", "No se encontraron juegos"));
-        text(c, GRID_X, 377, 1290, 25, MUTED, v->counts[ALL] || *v->query ?
-             tr(v, "Choose another filter or search again.", "Cambia el filtro o vuelve a buscar.") :
-             tr(v, "Connect a USB drive with your packages, then scan for games.",
-                "Conecta un USB con tus paquetes y pulsa Buscar juegos."));
+        if (*v->query)
+            message(c, tr(v, "No matching games", "No hay coincidencias"),
+                    tr(v, "Press Circle to clear the search.", "Pulsa círculo para borrar la búsqueda."));
+        else if (v->counts[SECTION_ALL])
+            message(c, tr(v, "Nothing in this section", "Nada en esta sección"),
+                    tr(v, "L1 and R1 change section.", "L1 y R1 cambian de sección."));
+        else
+            message(c, tr(v, "No games found", "No se encontraron juegos"),
+                    tr(v, "Connect a USB drive with your packages, then hold L2 and scan for games.",
+                       "Conecta un USB con tus paquetes, mantén L2 y busca juegos."));
         return;
     }
-    int first = v->selected / PAGE * PAGE;
-    for (int i = first; i < first + PAGE && i < v->visible_count; i++) {
+    /* The focus rests on the third line and the list moves under it. */
+    int first = v->selected > 2 ? v->selected - 2 : 0;
+    for (int i = first, y = LIST_TOP; i < v->visible_count; i++) {
         const game *g = &v->catalog->games[v->indices[i]];
-        int x = GRID_X + (i - first) % COLS * 274, cy = 260 + (i - first) / COLS * 336;
-        cover(v, c, g, x, cy, COVER, !v->in_sidebar && v->selected == i);
-        text(c, x, cy + COVER + 33, COVER, 23, WHITE, *g->name ? g->name : g->id);
-        if (g->state == READY && *g->storage) {
-            snprintf(buffer, sizeof(buffer), "%s · %.1f GB", g->storage, g->bytes / 1073741824.0);
-            text(c, x, cy + COVER + 59, COVER, 19, MUTED, buffer);
+        int height = i == v->selected ? OPEN_ROW : ROW;
+        if (y + height > LIST_BOTTOM)
+            break;
+        if (i == v->selected) {
+            open_row(v, c, g, y);
         } else {
-            text(c, x, cy + COVER + 59, COVER, 19, state_color(g->state), game_state_label(v, g->state));
+            cover(v, c, g, LEFT, y + 14, 64);
+            text(c, 176, y + 60, 1200, 40, TEXT, *g->name ? g->name : g->id);
+            if (g->state != READY)
+                right_aligned(c, RIGHT, y + 58, 28, state_color(g->state), game_state_label(v, g->state));
         }
-    }
-    if (v->visible_count > PAGE) {
-        snprintf(buffer, sizeof(buffer), "%d / %d", first / PAGE + 1, (v->visible_count + PAGE - 1) / PAGE);
-        text(c, 1700, 954, 124, 21, MUTED, buffer);
+        y += height;
     }
 }
 
 static void info_row(canvas c, int y, const char *label, const char *value) {
-    text(c, 590, y, 230, 24, MUTED, label);
-    text(c, 837, y, RIGHT - 837, 24, TEXT, *value ? value : "—");
+    text(c, 548, y, 240, 30, MUTED, label);
+    text(c, 800, y, RIGHT - 800, 32, WHITE, *value ? value : "—");
 }
 
 static void show_detail(const panel_view *v, canvas c) {
@@ -241,34 +258,24 @@ static void show_detail(const panel_view *v, canvas c) {
     if (!g)
         return;
     char buffer[512];
-    cover(v, c, g, LEFT, 247, 420, 0);
-    text(c, 590, 306, RIGHT - 590, 55, WHITE, *g->name ? g->name : g->id);
-    snprintf(buffer, sizeof(buffer), "%s · %s", g->id, game_state_label(v, g->state));
-    text(c, 590, 352, RIGHT - 590, 26, state_color(g->state), buffer);
-    info_row(c, 414, tr(v, "Version", "Versión"), g->version);
+    header(v, c);
+    cover(v, c, g, LEFT, 156, 420);
+    bold(c, 548, 212, RIGHT - 548, 64, WHITE, *g->name ? g->name : g->id);
+    text(c, 548, 260, RIGHT - 548, 32, state_color(g->state), game_state_label(v, g->state));
+    info_row(c, 330, "ID", g->id);
+    info_row(c, 380, tr(v, "Version", "Versión"), g->version);
     snprintf(buffer, sizeof(buffer), "%lld", g->dlc);
-    info_row(c, 455, "DLC", buffer);
-    info_row(c, 496, "Firmware", g->firmware);
+    info_row(c, 430, "DLC", buffer);
+    info_row(c, 480, "Firmware", g->firmware);
     snprintf(buffer, sizeof(buffer), "%.1f GB", g->bytes / 1073741824.0);
-    info_row(c, 537, tr(v, "Size", "Tamaño"), g->bytes ? buffer : "");
+    info_row(c, 530, tr(v, "Size", "Tamaño"), g->bytes ? buffer : "");
     snprintf(buffer, sizeof(buffer), "%s%s%s", g->storage, *g->storage && *g->source ? " · " : "", g->source);
-    info_row(c, 578, tr(v, "Storage", "Ubicación"), buffer);
+    info_row(c, 580, tr(v, "Storage", "Ubicación"), buffer);
     if (*g->issue)
-        text(c, 590, 622, RIGHT - 590, 23, AMBER, g->issue);
-    enum action actions[2];
-    for (int i = 0, n = available_actions(g, v->online, actions); i < n; i++) {
-        int y = 654 + i * 61;
-        stripe(c, 590, y, 570, 55, i == v->action_row);
-        text(c, 608, y + 36, 534, 26, TEXT, action_name(v, actions[i]));
-    }
-    if (v->confirm) {
-        fill(c, 590, 795, 1130, 145, 0x101b33);
-        text(c, 609, 844, 1088, 29, WHITE, action_name(v, v->confirm));
-        text(c, 609, 892, 1088, 23, TEXT,
-             v->confirm == RESTORE ? tr(v, "Moves the packages back to their original location.",
-                                     "Mueve los paquetes de vuelta a su ubicación original.") :
-                                  tr(v, "Keeps your package files on the drive.", "Conserva tus paquetes en la unidad."));
-    }
+        text(c, 548, 636, RIGHT - 548, 28, GOLD, g->issue);
+    verbs(v, c, g, 548, 710, 700, 0);
+    if (v->holding)
+        fill(c, 548, 860, 700 * v->held / 1000, 8, ORANGE);
 }
 
 #define FIELD(f) #f
@@ -316,36 +323,44 @@ static const char *setting_text(const panel_view *v, const setting *f, int value
 }
 
 static void show_settings(const panel_view *v, canvas c) {
-    header(v, c, tr(v, "Settings", "Ajustes"));
+    header(v, c);
+    heading(c, tr(v, "Settings", "Ajustes"));
     if (!v->config_ready) {
-        text(c, 490, 332, 1050, 32, WHITE, v->loading_config ?
+        text(c, LEFT, 300, 1600, 36, WHITE, v->loading_config ?
              tr(v, "Loading settings…", "Cargando ajustes…") :
              tr(v, "Settings are unavailable", "Ajustes no disponibles"));
         return;
     }
     const char *sections[] = {tr(v, "Library", "Biblioteca"), "DLC", tr(v, "Console", "Consola")};
     for (int i = 0; i < 3; i++) {
-        int y = 260 + i * 54;
-        stripe(c, LEFT, y, 285, 50, i == v->category && v->in_sidebar);
-        text(c, LEFT + 16, y + 34, 246, 25, i == v->category ? WHITE : MUTED, sections[i]);
+        int y = 232 + i * 60;
+        int focused = i == v->category && v->in_sidebar;
+        if (focused)
+            fill(c, LEFT - 16, y, 300, 54, ORANGE);
+        (i == v->category ? bold : text)(c, LEFT, y + 40, 270, 38,
+                                         focused ? INK : i == v->category ? WHITE : MUTED, sections[i]);
     }
-    fill(c, 394, 254, 1, 680, BORDER);
     int count = setting_start[v->category + 1] - setting_start[v->category];
     for (int i = 0; i < count; i++) {
         const setting *f = &fields[setting_start[v->category] + i];
-        int y = 260 + 58 * i;
+        int y = 232 + 60 * i;
+        int focused = !v->in_sidebar && v->setting_row == i;
         char temp[24];
-        stripe(c, 440, y, 780, 50, !v->in_sidebar && v->setting_row == i);
-        text(c, 456, y + 35, 521, 25, WHITE, v->spanish ? f->es : f->en);
-        text(c, 1001, y + 35, 208, 22, TEXT, setting_text(v, f, *(const int *)((const char *)v->config + f->offset), temp, sizeof(temp)));
+        if (focused)
+            fill(c, 424, y, 800, 54, ORANGE);
+        (focused ? bold : text)(c, 440, y + 39, 540, 34, focused ? INK : WHITE, v->spanish ? f->es : f->en);
+        const char *value = setting_text(v, f, *(const int *)((const char *)v->config + f->offset), temp, sizeof(temp));
+        int width = text_width(30, value);
+        width = width > 220 ? 220 : width;
+        text(c, 1208 - width, y + 38, width + 12, 30, focused ? INK : ORANGE, value);
     }
-    int y = 281 + 58 * count;
-    stripe(c, 440, y, 780, 50, !v->in_sidebar && v->setting_row == count);
-    text(c, 456, y + 35, 720, 26, BLUE, tr(v, "Save settings", "Guardar ajustes"));
+    int y = 256 + 60 * count;
+    int save = !v->in_sidebar && v->setting_row == count;
+    if (save)
+        fill(c, 424, y, 800, 54, ORANGE);
+    (save ? bold : text)(c, 440, y + 39, 760, 36, save ? INK : ORANGE, tr(v, "Save settings", "Guardar ajustes"));
     if (!v->in_sidebar && v->setting_row < count) {
         const setting *f = &fields[setting_start[v->category] + v->setting_row];
-        fill(c, 1256, 260, 568, 178, 0x111b34);
-        text(c, 1284, 312, 515, 32, WHITE, v->spanish ? f->es : f->en);
         const char *help = v->spanish ? f->help_es : f->help_en;
         char first[64];
         size_t split = strlen(help);
@@ -355,23 +370,24 @@ static void show_settings(const panel_view *v, canvas c) {
                 split--;
         }
         snprintf(first, sizeof(first), "%.*s", (int)split, help);
-        text(c, 1284, 360, 515, 22, TEXT, first);
+        text(c, 1280, 271, 560, 28, MUTED, first);
         if (help[split])
-            text(c, 1284, 393, 515, 22, TEXT, help + split + 1);
+            text(c, 1280, 309, 560, 28, MUTED, help + split + 1);
     }
 }
 
 static void show_phone(const panel_view *v, canvas c) {
-    header(v, c, tr(v, "Send packages", "Enviar paquetes"));
-    text(c, LEFT, 322, 1400, 34, WHITE,
+    header(v, c);
+    heading(c, tr(v, "Send packages", "Enviar paquetes"));
+    text(c, LEFT, 300, 1500, 40, WHITE,
          tr(v, "Open Lodestar on your phone or computer", "Abre Lodestar en tu móvil u ordenador"));
-    text(c, LEFT, 397, 1500, 45, BLUE, *v->local_url ? v->local_url :
+    bold(c, LEFT, 412, 1700, 76, ORANGE, *v->local_url ? v->local_url :
          tr(v, "http://<PS4 IP>:8780", "http://<IP de la PS4>:8780"));
     if (!*v->local_url)
-        text(c, LEFT, 464, 1500, 28, MUTED,
+        text(c, LEFT, 464, 1500, 32, MUTED,
              tr(v, "Use the address in the Lodestar startup notification.",
                 "Usa la dirección del aviso de inicio de Lodestar."));
-    text(c, LEFT, 512, 1500, 28, MUTED,
+    text(c, LEFT, 524, 1500, 32, TEXT,
          tr(v, "Send packages, manage downloads and open advanced settings.",
             "Envía paquetes, gestiona descargas y abre los ajustes avanzados."));
 }
@@ -385,27 +401,28 @@ static const char *download_state(const panel_view *v, const char *state) {
 }
 
 static void show_downloads(const panel_view *v, canvas c) {
-    header(v, c, tr(v, "Transfers", "Transferencias"));
+    header(v, c);
+    heading(c, tr(v, "Transfers", "Transferencias"));
     if (!v->links_ready || !v->links->configured) {
-        text(c, LEFT, 322, 1450, 34, WHITE, v->loading_links ?
+        text(c, LEFT, 300, 1450, 36, WHITE, v->loading_links ?
              tr(v, "Reading the download queue…", "Leyendo la cola de descargas…") :
              tr(v, "Transfers are unavailable", "Transferencias no disponibles"));
         return;
     }
     if (*v->entered_url) {
-        text(c, LEFT, 304, 1728, 27, WHITE, v->entered_url);
-        text(c, LEFT, 355, 1300, 25, TEXT,
+        text(c, LEFT, 260, RIGHT - LEFT, 34, WHITE, v->entered_url);
+        text(c, LEFT, 310, 1300, 32, ORANGE,
              v->dests->count ? v->dests->items[v->dest].label : !v->dest_ready && (v->loading_destinations) ?
              tr(v, "Reading destinations…", "Leyendo destinos…") : tr(v, "No destination selected", "Sin destino seleccionado"));
         if (v->dests->count > 1)
-            text(c, LEFT, 398, 1200, 22, MUTED, tr(v, "Left / Right to change drive", "Izquierda / derecha para cambiar de unidad"));
+            text(c, LEFT, 352, 1200, 26, MUTED, tr(v, "Left / Right to change drive", "Izquierda / derecha para cambiar de unidad"));
     } else {
-        text(c, LEFT, 316, 1350, 28, TEXT,
+        text(c, LEFT, 270, 1350, 34, TEXT,
              tr(v, "Enter a direct URL to your package or archive", "Introduce la URL directa de tu paquete o archivo"));
     }
     if (v->links->active) {
         char progress[200];
-        text(c, LEFT, 475, 1350, 30, WHITE, v->links->name);
+        bold(c, LEFT, 440, 1350, 40, WHITE, v->links->name);
         const char *phase = !strcmp(v->links->phase, "extracting") ? tr(v, "Extracting", "Extrayendo") :
                             !strcmp(v->links->phase, "probing") ? tr(v, "Checking link", "Comprobando enlace") :
                             !strcmp(v->links->phase, "retrying") ? tr(v, "Retrying", "Reintentando") :
@@ -413,53 +430,105 @@ static void show_downloads(const panel_view *v, canvas c) {
         if (v->links->total > 0) {
             double ratio = (double)v->links->done / (double)v->links->total;
             snprintf(progress, sizeof(progress), "%s · %.0f %%", phase, ratio * 100);
-            fill(c, LEFT, 540, RIGHT - LEFT, 4, BORDER);
-            fill(c, LEFT, 540, (int)((ratio < 0 ? 0 : ratio > 1 ? 1 : ratio) * (RIGHT - LEFT)), 4, TEAL);
+            fill(c, LEFT, 506, RIGHT - LEFT, 8, RULE);
+            fill(c, LEFT, 506, (int)((ratio < 0 ? 0 : ratio > 1 ? 1 : ratio) * (RIGHT - LEFT)), 8, ORANGE);
         } else {
             snprintf(progress, sizeof(progress), "%s · %.0f MB", phase, v->links->done / 1048576.0);
         }
-        text(c, LEFT, 517, 1400, 23, TEAL, progress);
+        text(c, LEFT, 486, 1400, 28, ORANGE, progress);
     } else if (*v->links->message) {
-        text(c, LEFT, 490, 1650, 27, TEXT, v->links->message);
+        text(c, LEFT, 460, 1650, 32, TEXT, v->links->message);
     } else if (!v->links->count) {
-        text(c, LEFT, 490, 1650, 27, MUTED, tr(v, "The download queue is empty", "La cola de descargas está vacía"));
+        text(c, LEFT, 460, 1650, 32, MUTED, tr(v, "The download queue is empty", "La cola de descargas está vacía"));
     }
     int shown = v->links->count < 6 ? v->links->count : 6;
     for (int i = 0; i < shown; i++) {
-        int y = 590 + i * 51;
+        int y = 590 + i * 52;
         const download *job = &v->links->jobs[i];
-        fill(c, LEFT, y - 29, RIGHT - LEFT, 1, BORDER);
-        text(c, LEFT, y + 7, 930, 24, WHITE, job->name);
-        text(c, 1100, y + 7, 132, 22, *job->error ? RED : TEXT, download_state(v, job->state));
-        text(c, 1250, y + 7, 574, 22, MUTED, job->error);
+        text(c, LEFT, y, 930, 30, WHITE, job->name);
+        text(c, 1100, y, 180, 28, *job->error ? RED : ORANGE, download_state(v, job->state));
+        text(c, 1300, y, RIGHT - 1300, 28, MUTED, job->error);
     }
     if (v->links->count > shown)
-        text(c, LEFT, 921, 1600, 23, MUTED, tr(v, "Open the web panel to see all downloads.", "Abre el panel web para ver todas las descargas."));
+        text(c, LEFT, 925, 1600, 26, MUTED, tr(v, "Open the web panel to see all downloads.", "Abre el panel web para ver todas las descargas."));
+}
+
+/* The app-wide actions around a circle, over whatever was on screen (PANEL-2). */
+static void show_wheel(const panel_view *v, canvas c) {
+    static const int at[WHEEL_ITEMS][2] = {{960, 220}, {1410, 380}, {1410, 700}, {960, 860}, {510, 700}, {510, 380}};
+    const char *names[WHEEL_ITEMS] = {
+        tr(v, "Scan for games", "Buscar juegos"), tr(v, "Send packages", "Enviar paquetes"),
+        tr(v, "Transfers", "Transferencias"), tr(v, "Settings", "Ajustes"),
+        tr(v, "Search by name", "Buscar por nombre"), tr(v, "Exit", "Salir")};
+    shade(c, 0, 0, WIDTH, HEIGHT, INK, 240);
+    for (int i = 0; i < WHEEL_ITEMS; i++) {
+        int chosen = v->wheel_at == i;
+        if (chosen)
+            fill(c, at[i][0] - 190, at[i][1] - 48, 380, 96, ORANGE);
+        centred(c, at[i][0], at[i][1] + 14, 40, chosen ? INK : WHITE, names[i], chosen);
+    }
+    /* The drives sit in the hub: free space is a glance away without a place on every screen. */
+    int n = v->catalog ? v->catalog->drive_count : 0;
+    n = n > 6 ? 6 : n;
+    for (int i = 0; i < n; i++) {
+        char buffer[128];
+        const drive *d = &v->catalog->drives[i];
+        snprintf(buffer, sizeof(buffer), tr(v, "%s · %.0f GB free", "%s · %.0f GB libres"), d->label,
+                 d->free_bytes / 1073741824.0);
+        centred(c, 960, 550 - n * 22 + i * 44, 30, MUTED, buffer, 0);
+    }
+}
+
+static void footer(const panel_view *v, canvas c) {
+    hint hints[6];
+    int n = 0;
+    int games = v->page == LIBRARY && v->online && v->visible_count;
+    if (v->wheel) {
+        hints[n++] = (hint){PLAIN, "", tr(v, "Release L2 to choose", "Suelta L2 para elegir")};
+        hints[n++] = (hint){CIRCLE, "", tr(v, "Cancel", "Cancelar")};
+    } else {
+        if (v->page == LIBRARY && !v->online)
+            hints[n++] = (hint){CROSS, "", tr(v, "Reconnect", "Reconectar")};
+        if (games) {
+            hints[n++] = (hint){KEY, "‹ ›", tr(v, "Jump by letter", "Saltar de letra")};
+        }
+        if (v->page == LIBRARY && v->online)
+            hints[n++] = (hint){KEY, "L1 R1", tr(v, "Section", "Sección")};
+        if (games || v->page == DETAIL)
+            hints[n++] = (hint){PLAIN, "", tr(v, "Hold to confirm", "Mantén para confirmar")};
+        if (v->page == SETTINGS)
+            hints[n++] = (hint){CROSS, "", tr(v, "Select", "Elegir")};
+        if (v->page == DOWNLOADS && !v->link_writing && v->links_ready && v->links->configured) {
+            hints[n++] = (hint){CROSS, "", *v->entered_url ? tr(v, "Queue link", "Poner en cola") :
+                                           tr(v, "Enter link", "Introducir enlace")};
+            if (*v->entered_url)
+                hints[n++] = (hint){TRIANGLE, "", tr(v, "Edit link", "Editar enlace")};
+        }
+        hints[n++] = (hint){KEY, "L2", tr(v, "Wheel", "Rueda")};
+        hints[n++] = (hint){CIRCLE, "", v->page != LIBRARY ? tr(v, "Back", "Volver") :
+                                         *v->query ? tr(v, "Clear search", "Borrar búsqueda") : tr(v, "Exit", "Salir")};
+    }
+    shade(c, 0, LIST_BOTTOM, WIDTH, HEIGHT - LIST_BOTTOM, INK, 210);
+    int start = legend(c, hints, n);
+    const char *notice = v->waiting || v->link_writing ? tr(v, "Waiting for Lodestar…", "Esperando a Lodestar…") :
+                                                         v->feedback;
+    if (start - LEFT > 80)
+        text(c, LEFT, 1050, start - LEFT - 40, 28, WHITE, notice);
 }
 
 void panel_draw(const panel_view *v, canvas c) {
-    uint32_t color = 0x18234d;
-    if (v->page == DETAIL) {
-        const game *g = v->focused;
-        const artwork *a = g ? view_art(v, g->id) : NULL;
-        if (a && a->pixels)
-            color = a->accent | 0x101010;
-    }
-    background(c, color);
+    background(c);
     if (v->page == DETAIL)
         show_detail(v, c);
-    else {
-        star(c, 1770, 942, 252, 0x171b2d);
-        fill(c, 1284, 148, 2, 2, 0x52699d);
-        fill(c, 236, 765, 2, 2, 0x52699d);
-        if (v->page == LIBRARY)
-            show_library(v, c);
-        else if (v->page == SETTINGS)
-            show_settings(v, c);
-        else if (v->page == PHONE)
-            show_phone(v, c);
-        else
-            show_downloads(v, c);
-    }
+    else if (v->page == LIBRARY)
+        show_library(v, c);
+    else if (v->page == SETTINGS)
+        show_settings(v, c);
+    else if (v->page == PHONE)
+        show_phone(v, c);
+    else
+        show_downloads(v, c);
+    if (v->wheel)
+        show_wheel(v, c);
     footer(v, c);
 }

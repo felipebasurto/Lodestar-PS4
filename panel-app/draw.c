@@ -6,26 +6,62 @@
 #ifdef __FreeBSD__
 #include <proto-include.h> /* OpenOrbis keeps these library declarations separately. */
 #endif
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static FT_Library ft;
-static FT_Face face;
-static int font_size;
+/* Barlow Condensed for the menus; Roboto covers the scripts it has no glyphs for. */
+enum { MEDIUM, BOLD, FALLBACK, FACES };
 
-int font_open(const char *path) {
+static FT_Library ft;
+static FT_Face faces[FACES];
+static int sizes[FACES];
+static uint32_t *ground, *brand_pixels;
+
+static void paint_ground(uint32_t *pixels);
+
+static uint32_t *load_picture(const char *dir, const char *name, int width, int height) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir, name);
+    FILE *file = fopen(path, "rb");
+    if (!file)
+        return NULL;
+    enum { LIMIT = 4 * 1024 * 1024 };
+    char *body = malloc(LIMIT);
+    size_t size = body ? fread(body, 1, LIMIT, file) : 0;
+    fclose(file);
+    uint32_t *pixels = size && size < LIMIT ? decode_picture(body, size, width, height) : NULL;
+    free(body);
+    return pixels;
+}
+
+int font_open(const char *dir) {
+    static const char *names[FACES] = {"BarlowCondensed-Medium.ttf", "BarlowCondensed-Bold.ttf", "Roboto-Regular.ttf"};
     if (FT_Init_FreeType(&ft))
         return -1;
-    if (FT_New_Face(ft, path, 0, &face)) {
-        FT_Done_FreeType(ft);
-        return -1;
+    for (int i = 0; i < FACES; i++) {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
+        if (FT_New_Face(ft, path, 0, &faces[i])) {
+            font_close();
+            return -1;
+        }
     }
+    /* Both are decoration: without them the menus draw on a flat ground with no mark. */
+    ground = malloc((size_t)WIDTH * HEIGHT * sizeof(*ground));
+    if (ground)
+        paint_ground(ground);
+    brand_pixels = load_picture(dir, "Brand.png", BRAND_WIDTH, BRAND_HEIGHT);
     return 0;
 }
 
 void font_close(void) {
-    FT_Done_Face(face);
-    FT_Done_FreeType(ft);
+    FT_Done_FreeType(ft); /* frees the faces too */
+    memset(faces, 0, sizeof(faces));
+    memset(sizes, 0, sizeof(sizes));
+    free(ground);
+    free(brand_pixels);
+    ground = brand_pixels = NULL;
 }
 
 unsigned utf8_read(const char **text) {
@@ -82,23 +118,32 @@ void fill(canvas c, int x, int y, int w, int h, uint32_t color) {
             c.pixels[y * WIDTH + i] = 0xff000000 | color;
 }
 
-static int corner_inset(int corner_y, int radius) {
-    int inset = radius;
-    while (inset > 0 && (radius - inset + 1) * (radius - inset + 1) + corner_y * corner_y <= radius * radius)
-        inset--;
-    return inset;
+void shade(canvas c, int x, int y, int w, int h, uint32_t color, unsigned alpha) {
+    for (int row = y; row < y + h; row++)
+        for (int col = x; col < x + w; col++)
+            point(c, col, row, color, alpha);
 }
 
-static int row_inset(int row, int height, int radius) {
-    int edge = row < height / 2 ? row : height - row - 1;
-    return edge < radius ? corner_inset(radius - edge, radius) : 0;
+void frame(canvas c, int x, int y, int w, int h, int weight, uint32_t color) {
+    fill(c, x, y, w, weight, color);
+    fill(c, x, y + h - weight, w, weight, color);
+    fill(c, x, y, weight, h, color);
+    fill(c, x + w - weight, y, weight, h, color);
 }
 
-void rounded_fill(canvas c, int x, int y, int w, int h, int radius, uint32_t color) {
-    for (int row = 0; row < h; row++) {
-        int inset = row_inset(row, h, radius);
-        fill(c, x + inset, y + row, w - 2 * inset, 1, color);
-    }
+void ring(canvas c, int cx, int cy, int radius, int weight, uint32_t color) {
+    /* 4x4 samples per pixel, in eighths of a pixel, for a smooth edge. */
+    long long inner = 64LL * (radius - weight) * (radius - weight), outer = 64LL * radius * radius;
+    for (int y = -radius; y <= radius; y++)
+        for (int x = -radius; x <= radius; x++) {
+            unsigned hits = 0;
+            for (int j = -3; j <= 3; j += 2)
+                for (int i = -3; i <= 3; i += 2) {
+                    long long dx = 8 * x + i, dy = 8 * y + j, d = dx * dx + dy * dy;
+                    hits += d <= outer && d > inner;
+                }
+            point(c, cx + x, cy + y, color, hits * 16);
+        }
 }
 
 void line(canvas c, int x1, int y1, int x2, int y2, uint32_t color) {
@@ -114,52 +159,93 @@ void line(canvas c, int x1, int y1, int x2, int y2, uint32_t color) {
     }
 }
 
-void text(canvas c, int x, int y, int width, int size, uint32_t color, const char *label) {
-    if (font_size != size) {
-        if (FT_Set_Pixel_Sizes(face, 0, size))
-            return;
-        font_size = size;
+/* The face that has the glyph, sized; NULL if the size cannot be set. */
+static FT_Face glyph_face(int style, int size, unsigned *cp) {
+    int which = FT_Get_Char_Index(faces[style], *cp) ? style : FALLBACK;
+    if (which == FALLBACK && !FT_Get_Char_Index(faces[FALLBACK], *cp)) {
+        *cp = '?';
+        which = style;
     }
-    int right = x + width;
+    if (sizes[which] != size) {
+        if (FT_Set_Pixel_Sizes(faces[which], 0, size))
+            return NULL;
+        sizes[which] = size;
+    }
+    return faces[which];
+}
+
+/* Draws the label (c.pixels may be NULL to only measure) and returns its width. */
+static int write_label(canvas c, int x, int y, int width, int size, uint32_t color, const char *label, int style) {
+    int start = x, right = x + width;
     while (*label) {
         unsigned cp = utf8_read(&label);
         if (cp < 32)
             cp = ' ';
-        if (!FT_Get_Char_Index(face, cp))
-            cp = '?';
-        if (FT_Load_Char(face, cp, FT_LOAD_RENDER | FT_LOAD_NO_BITMAP))
+        FT_Face face = glyph_face(style, size, &cp);
+        if (!face || FT_Load_Char(face, cp, FT_LOAD_RENDER | FT_LOAD_NO_BITMAP))
             continue;
         FT_GlyphSlot glyph = face->glyph;
         int advance = (int)(glyph->advance.x >> 6);
         if (x + advance > right || (*label && x + advance + size / 2 > right)) {
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; c.pixels && i < 3; i++)
                 fill(c, x + i * (size / 6), y - 3, size / 9, size / 9, color);
-            break;
+            return width;
         }
         FT_Bitmap *b = &glyph->bitmap;
-        for (int row = 0; row < (int)b->rows; row++)
+        for (int row = 0; c.pixels && row < (int)b->rows; row++)
             for (int col = 0; col < (int)b->width; col++)
                 point(c, x + glyph->bitmap_left + (int)col, y - glyph->bitmap_top + (int)row,
                       color, b->buffer[(int)row * b->pitch + (int)col]);
         x += advance;
     }
+    return x - start;
 }
 
-void background(canvas c, uint32_t accent) {
+void text(canvas c, int x, int y, int width, int size, uint32_t color, const char *label) {
+    write_label(c, x, y, width, size, color, label, MEDIUM);
+}
+
+void bold(canvas c, int x, int y, int width, int size, uint32_t color, const char *label) {
+    write_label(c, x, y, width, size, color, label, BOLD);
+}
+
+int text_width(int size, const char *label) {
+    return write_label((canvas){0}, 0, 0, WIDTH, size, 0, label, MEDIUM);
+}
+
+/* A dark ground, a little lighter towards the top right; dithered so it does not band. */
+static void paint_ground(uint32_t *pixels) {
+    static const int dither[4] = {0, 2, 3, 1};
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
-            int light = 188 - abs(x - 1420) / 11 - abs(y - 215 + (x - 1420) / 8) / 5;
-            c.pixels[y * WIDTH + x] = blend(0x080a15, accent, light > 0 ? (unsigned)light : 0);
+            long long dx = (x - 1536) * 1000LL / 2300, dy = (y + 108) * 1000LL / 970;
+            long long light = 360000 - dx * dx - dy * dy;
+            int a = light > 0 ? (int)(light * 1024 / 360000) : 0; /* quarters of an alpha step */
+            pixels[y * WIDTH + x] = blend(0x0a0b0d, 0x252b34, (unsigned)(a + dither[(x & 1) | ((y & 1) << 1)]) / 4);
         }
     }
 }
 
-void image(canvas c, int x, int y, int size, int radius, const uint32_t *pixels) {
+void background(canvas c) {
+    if (ground)
+        memcpy(c.pixels, ground, (size_t)WIDTH * HEIGHT * sizeof(*c.pixels));
+    else
+        fill(c, 0, 0, WIDTH, HEIGHT, 0x0a0b0d);
+}
+
+void brand(canvas c, int x, int y) {
+    for (int row = 0; brand_pixels && row < BRAND_HEIGHT; row++)
+        for (int col = 0; col < BRAND_WIDTH; col++) {
+            uint32_t src = brand_pixels[row * BRAND_WIDTH + col];
+            point(c, x + col, y + row, src, (src >> 24) + ((src >> 24) == 255));
+        }
+}
+
+void image(canvas c, int x, int y, int size, const uint32_t *pixels) {
     if (!pixels)
         return;
     for (int row = 0; row < size; row++) {
-        int inset = row_inset(row, size, radius);
-        for (int col = inset; col < size - inset; col++) {
+        for (int col = 0; col < size; col++) {
             uint32_t src = pixels[(row * ART_SIZE / size) * ART_SIZE + col * ART_SIZE / size];
             point(c, x + col, y + row, src, (src >> 24) + ((src >> 24) == 255));
         }

@@ -13,7 +13,7 @@ function notify(text) {
 
 function badge(basket) {
   api.action.setBadgeText({ text: basket.length ? String(basket.length) : '' });
-  api.action.setBadgeBackgroundColor({ color: '#3b82f6' });
+  api.action.setBadgeBackgroundColor({ color: '#ff6a13' });
 }
 
 /* Whether the download goes to the console (resolves true once it is cancelled here). */

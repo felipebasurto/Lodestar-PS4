@@ -45,11 +45,13 @@ static int quit_worker;
 
 static library *catalog;
 static settings config, original_config;
-static int spanish, online, config_ready, sidebar, selected, in_sidebar, visible_count;
-static int indices[GAME_LIMIT], counts[3], category, setting_row, action_row;
-static enum filter filter;
+static int spanish, online, config_ready, selected, in_sidebar, visible_count;
+static int indices[GAME_LIMIT], counts[SECTIONS], category, setting_row;
+static enum section section = SECTION_ALL;
 static enum page page;
-static enum action confirm;
+static hold held;
+static uint32_t held_button;
+static int wheel, wheel_at = -1;
 static enum task active;
 static request pending;
 static artwork artwork_cache[ART_SLOTS];
@@ -178,16 +180,16 @@ static int title_order(const void *a, const void *b) {
 }
 
 static void rebuild(const char *keep) {
+    int previous = selected;
     visible_count = 0;
     memset(counts, 0, sizeof(counts));
     for (int i = 0; catalog && i < catalog->count; i++) {
         const game *g = &catalog->games[i];
         if (!contains(g->name, query) && !contains(g->id, query))
             continue;
-        counts[ALL]++;
-        counts[REBOOTS] += g->state == RESTART;
-        counts[OPEN] += g->state == RUNNING;
-        if (filter == ALL || (filter == REBOOTS && g->state == RESTART) || (filter == OPEN && g->state == RUNNING))
+        for (int s = 0; s < SECTIONS; s++)
+            counts[s] += lane_in_section(g, (enum section)s);
+        if (lane_in_section(g, section))
             indices[visible_count++] = i;
     }
     qsort(indices, (size_t)visible_count, sizeof(indices[0]), title_order);
@@ -198,6 +200,9 @@ static void rebuild(const char *keep) {
             return;
         }
     }
+    /* The game left this section: stay where the controller was. */
+    if (keep && *keep && visible_count)
+        selected = previous < visible_count ? previous : visible_count - 1;
     if (page == DETAIL)
         page = LIBRARY;
 }
@@ -343,11 +348,15 @@ static void schedule(void) {
         submit((request){.kind = LINKS});
         return;
     }
-    if (!online || (page != LIBRARY && page != DETAIL))
+    if (!online || (page != LIBRARY && page != DETAIL) || !visible_count)
         return;
-    int first = selected / PAGE * PAGE;
-    for (int i = first; i < first + PAGE && i < visible_count; i++) {
-        const game *g = &catalog->games[indices[i]];
+    /* The focused game first, then the rows around it. */
+    int first = selected > 2 ? selected - 2 : 0;
+    for (int i = -1; i < PAGE; i++) {
+        int at = i < 0 ? selected : first + i;
+        if (at >= visible_count)
+            break;
+        const game *g = &catalog->games[indices[at]];
         if (find_art(g->id))
             continue;
         request req = {.kind = ART};
@@ -417,8 +426,8 @@ static void close_keyboard(void) {
                 pending.kind = DESTS;
             }
         } else {
+            selected = 0;
             rebuild(NULL);
-            in_sidebar = !visible_count;
         }
     }
     sceImeDialogTerm();
@@ -459,43 +468,29 @@ static void change_game(enum action action, const game *g) {
     request req = {.kind = CHANGE};
     snprintf(req.path, sizeof(req.path), "/api/%s?title_id=%s", verb, g->id);
     pending = req;
-    confirm = NONE;
+}
+
+/* Cross adds or removes, Square restores; both only after being held (PANEL-8). */
+static void press_action(uint32_t button) {
+    const game *g = focused_game();
+    if (writing() || pending.kind)
+        return;
+    enum action actions[2];
+    for (int i = 0, n = available_actions(g, online, actions); i < n; i++) {
+        if ((button == ORBIS_PAD_BUTTON_SQUARE) == (actions[i] == RESTORE)) {
+            hold_press(&held, actions[i], g, clock_ms());
+            held_button = button;
+        }
+    }
 }
 
 static void detail_input(uint32_t buttons) {
-    const game *g = focused_game();
-    enum action actions[2];
-    int n = available_actions(g, online, actions);
-    if (buttons & ORBIS_PAD_BUTTON_CIRCLE) {
-        if (confirm)
-            confirm = NONE;
-        else
-            page = LIBRARY;
-        return;
-    }
-    if (!n || writing())
-        return;
-    if (action_row >= n)
-        action_row = n - 1;
-    if (confirm) {
-        if (buttons & ORBIS_PAD_BUTTON_CROSS) {
-            for (int i = 0; i < n; i++)
-                if (actions[i] == confirm) {
-                    change_game(confirm, g);
-                    return;
-                }
-            confirm = NONE;
-        }
-    } else if ((buttons & ORBIS_PAD_BUTTON_UP) && action_row > 0) {
-        action_row--;
-    } else if ((buttons & ORBIS_PAD_BUTTON_DOWN) && action_row + 1 < n) {
-        action_row++;
-    } else if (buttons & ORBIS_PAD_BUTTON_CROSS) {
-        if (actions[action_row] == ADD)
-            change_game(ADD, g);
-        else
-            confirm = actions[action_row];
-    }
+    if (buttons & (ORBIS_PAD_BUTTON_CIRCLE | ORBIS_PAD_BUTTON_TRIANGLE))
+        page = LIBRARY;
+    else if (buttons & ORBIS_PAD_BUTTON_CROSS)
+        press_action(ORBIS_PAD_BUTTON_CROSS);
+    else if (buttons & ORBIS_PAD_BUTTON_SQUARE)
+        press_action(ORBIS_PAD_BUTTON_SQUARE);
 }
 
 static void settings_input(uint32_t buttons) {
@@ -503,7 +498,6 @@ static void settings_input(uint32_t buttons) {
         return;
     if (buttons & ORBIS_PAD_BUTTON_CIRCLE) {
         page = LIBRARY;
-        in_sidebar = 1;
         return;
     }
     if (!config_ready) {
@@ -543,81 +537,98 @@ static void settings_input(uint32_t buttons) {
     }
 }
 
-static void library_input(uint32_t buttons, int user_id) {
+static void library_input(uint32_t buttons) {
     if (buttons & ORBIS_PAD_BUTTON_CIRCLE) {
-        quit = 1;
-        return;
-    }
-    if (buttons & ORBIS_PAD_BUTTON_SQUARE) {
-        if (!writing())
-            pending = online ? (request){.kind = SCAN, .path = "/api/rescan"} : (request){.kind = LOAD};
-        return;
-    }
-    if (buttons & ORBIS_PAD_BUTTON_TRIANGLE) {
-        start_keyboard(user_id);
-        return;
-    }
-    if (in_sidebar || !visible_count || !online) {
-        in_sidebar = 1;
-        if ((buttons & ORBIS_PAD_BUTTON_UP) && sidebar > 0)
-            sidebar--;
-        if ((buttons & ORBIS_PAD_BUTTON_DOWN) && sidebar < 5)
-            sidebar++;
-        if (buttons & ORBIS_PAD_BUTTON_CROSS) {
-            if (link_writing && (sidebar == 4 || sidebar == 5))
-                return;
-            if (sidebar == 5) {
-                page = SETTINGS;
-                config_ready = 0;
-                category = 0;
-                pending.kind = CONFIG;
-                return;
-            }
-            if (sidebar == 3) {
-                page = PHONE;
-                OrbisNetCtlInfo info;
-                local_url[0] = 0;
-                if (sceNetCtlInit() >= 0) {
-                    if (sceNetCtlGetInfo(ORBIS_NET_CTL_INFO_IP_ADDRESS, &info) >= 0 && *info.ip_address)
-                        snprintf(local_url, sizeof(local_url), "http://%.15s:%d", info.ip_address, API_PORT);
-                    sceNetCtlTerm();
-                }
-                return;
-            }
-            if (sidebar == 4) {
-                page = DOWNLOADS;
-                links_at = 0;
-                return;
-            }
-            filter = (enum filter)sidebar;
+        if (*query) {
+            *query = 0;
+            selected = 0;
             rebuild(NULL);
-        }
-        if (visible_count && online && (buttons & (ORBIS_PAD_BUTTON_RIGHT | ORBIS_PAD_BUTTON_CROSS)))
-            in_sidebar = 0;
-        return;
-    }
-    if (buttons & ORBIS_PAD_BUTTON_CROSS) {
-        page = DETAIL;
-        confirm = NONE;
-        action_row = 0;
-        return;
-    }
-    if (buttons & ORBIS_PAD_BUTTON_LEFT) {
-        if (selected % COLS == 0) {
-            in_sidebar = 1;
-            sidebar = filter;
         } else {
-            selected--;
+            quit = 1;
         }
+        return;
     }
-    if ((buttons & ORBIS_PAD_BUTTON_RIGHT) && selected + 1 < visible_count)
+    if (!online) {
+        if ((buttons & ORBIS_PAD_BUTTON_CROSS) && !writing())
+            pending = (request){.kind = LOAD};
+        return;
+    }
+    if (buttons & (ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_R1)) {
+        section = (enum section)((section + ((buttons & ORBIS_PAD_BUTTON_R1) ? 1 : SECTIONS - 1)) % SECTIONS);
+        selected = 0;
+        rebuild(NULL);
+        return;
+    }
+    if (!visible_count)
+        return;
+    if ((buttons & ORBIS_PAD_BUTTON_UP) && selected > 0)
+        selected--;
+    if ((buttons & ORBIS_PAD_BUTTON_DOWN) && selected + 1 < visible_count)
         selected++;
-    if ((buttons & ORBIS_PAD_BUTTON_UP) && selected >= COLS)
-        selected -= COLS;
-    if ((buttons & ORBIS_PAD_BUTTON_DOWN) && (selected / COLS + 1) * COLS < visible_count) {
-        selected += COLS;
-        if (selected >= visible_count)
-            selected = visible_count - 1;
+    if (buttons & ORBIS_PAD_BUTTON_LEFT)
+        selected = lane_jump(catalog, indices, visible_count, selected, -1);
+    if (buttons & ORBIS_PAD_BUTTON_RIGHT)
+        selected = lane_jump(catalog, indices, visible_count, selected, 1);
+    if (buttons & ORBIS_PAD_BUTTON_TRIANGLE)
+        page = DETAIL;
+    else if (buttons & ORBIS_PAD_BUTTON_CROSS)
+        press_action(ORBIS_PAD_BUTTON_CROSS);
+    else if (buttons & ORBIS_PAD_BUTTON_SQUARE)
+        press_action(ORBIS_PAD_BUTTON_SQUARE);
+}
+
+static void show_address(void) {
+    page = PHONE;
+    OrbisNetCtlInfo info;
+    local_url[0] = 0;
+    if (sceNetCtlInit() >= 0) {
+        if (sceNetCtlGetInfo(ORBIS_NET_CTL_INFO_IP_ADDRESS, &info) >= 0 && *info.ip_address)
+            snprintf(local_url, sizeof(local_url), "http://%.15s:%d", info.ip_address, API_PORT);
+        sceNetCtlTerm();
+    }
+}
+
+/* The wheel, clockwise from the top: scan, send, transfers, settings, search, exit. */
+static void wheel_run(int user) {
+    int chosen = wheel_at;
+    wheel = 0;
+    wheel_at = -1;
+    dirty = 1;
+    if (writing() && (chosen == 0 || chosen == 2 || chosen == 3))
+        return;
+    if (chosen == 0) {
+        pending = online ? (request){.kind = SCAN, .path = "/api/rescan"} : (request){.kind = LOAD};
+        page = LIBRARY;
+    } else if (chosen == 1) {
+        show_address();
+    } else if (chosen == 2) {
+        page = DOWNLOADS;
+        links_at = 0;
+    } else if (chosen == 3) {
+        page = SETTINGS;
+        config_ready = 0;
+        category = 0;
+        in_sidebar = 1;
+        setting_row = 0;
+        pending.kind = CONFIG;
+    } else if (chosen == 4) {
+        page = LIBRARY;
+        start_keyboard(user);
+    } else if (chosen == 5) {
+        quit = 1;
+    }
+}
+
+static void wheel_input(uint32_t buttons, int user) {
+    if (buttons & ORBIS_PAD_BUTTON_CIRCLE) {
+        wheel = 0;
+        wheel_at = -1;
+    } else if (buttons & (ORBIS_PAD_BUTTON_RIGHT | ORBIS_PAD_BUTTON_DOWN)) {
+        wheel_at = wheel_at < 0 ? 0 : (wheel_at + 1) % WHEEL_ITEMS;
+    } else if (buttons & (ORBIS_PAD_BUTTON_LEFT | ORBIS_PAD_BUTTON_UP)) {
+        wheel_at = wheel_at < 0 ? 0 : (wheel_at + WHEEL_ITEMS - 1) % WHEEL_ITEMS;
+    } else if ((buttons & ORBIS_PAD_BUTTON_CROSS) && wheel_at >= 0) {
+        wheel_run(user);
     }
 }
 
@@ -655,8 +666,18 @@ static void downloads_input(uint32_t buttons, int user) {
 
 static void input(uint32_t buttons, int user) {
     dirty = 1;
+    if (wheel) {
+        wheel_input(buttons, user);
+        return;
+    }
+    if (buttons & ORBIS_PAD_BUTTON_L2) {
+        wheel = 1;
+        wheel_at = -1;
+        held.action = NONE;
+        return;
+    }
     if (page == LIBRARY)
-        library_input(buttons, user);
+        library_input(buttons);
     else if (page == DETAIL)
         detail_input(buttons);
     else if (page == SETTINGS)
@@ -669,11 +690,11 @@ static void input(uint32_t buttons, int user) {
 
 static void draw(canvas c) {
     panel_view view = {
-        .page = page, .confirm = confirm, .filter = filter, .spanish = spanish, .online = online,
-        .sidebar = sidebar, .selected = selected, .in_sidebar = in_sidebar, .visible_count = visible_count,
+        .page = page, .section = section, .spanish = spanish, .online = online,
+        .selected = selected, .in_sidebar = in_sidebar, .visible_count = visible_count,
         .indices = indices, .counts = counts, .catalog = catalog, .focused = focused_game(), .art = artwork_cache,
-        .config = &config, .config_ready = config_ready, .category = category,
-        .setting_row = setting_row, .action_row = action_row,
+        .config = &config, .config_ready = config_ready, .category = category, .setting_row = setting_row,
+        .holding = held.action, .held = hold_progress(&held, clock_ms()), .wheel = wheel, .wheel_at = wheel_at,
         .links = &links, .dests = &dests, .links_ready = links_ready, .dest_ready = dest_ready,
         .dest = dest, .link_writing = link_writing, .waiting = writing(),
         .loading_library = active == LOAD, .loading_links = active == LINKS,
@@ -707,6 +728,20 @@ static void loop(int video, uint32_t *buffers[2], int pad, int user) {
         OrbisPadData state = {0};
         int connected = scePadReadState(pad, &state) >= 0 && state.connected;
         uint32_t buttons = connected ? state.buttons : last;
+        int stick_x = connected ? state.leftStick.x - 128 : 0, stick_y = connected ? state.leftStick.y - 128 : 0;
+        if (wheel) {
+            int at = wheel_point(stick_x, stick_y);
+            if (at < 0 && connected)
+                at = wheel_point(state.rightStick.x - 128, state.rightStick.y - 128);
+            if (at >= 0 && at != wheel_at) {
+                wheel_at = at;
+                dirty = 1;
+            }
+        } else if (connected) {
+            /* The left stick walks the menus like the arrows. */
+            buttons |= (stick_y < -72 ? ORBIS_PAD_BUTTON_UP : 0) | (stick_y > 72 ? ORBIS_PAD_BUTTON_DOWN : 0) |
+                       (stick_x < -96 ? ORBIS_PAD_BUTTON_LEFT : 0) | (stick_x > 96 ? ORBIS_PAD_BUTTON_RIGHT : 0);
+        }
         if (ime) {
             if (sceImeDialogGetStatus() == ORBIS_DIALOG_STATUS_STOPPED)
                 close_keyboard();
@@ -720,8 +755,19 @@ static void loop(int video, uint32_t *buffers[2], int pad, int user) {
             }
             if (pressed)
                 input(pressed, user);
+            if (wheel && !(buttons & ORBIS_PAD_BUTTON_L2))
+                wheel_run(user);
         }
         last = buttons;
+        if (held.action) {
+            /* After accept_reply: a library read just now may have moved another game under the button. */
+            const game *g = focused_game();
+            int down = connected && !ime && !wheel && (page == LIBRARY || page == DETAIL) && (buttons & held_button);
+            enum action due = hold_tick(&held, g, online && !writing(), down, now);
+            if (due)
+                change_game(due, g);
+            dirty = 1;
+        }
         if (submitted >= 0) {
             OrbisVideoOutFlipStatus status = {0};
             if (sceVideoOutGetFlipStatus(video, &status) >= 0 && !status.numFlipPending) {
@@ -791,7 +837,7 @@ int main(void) {
     sceSysmoduleLoadModule(ORBIS_SYSMODULE_FREETYPE_OL);
     sceSysmoduleLoadModule(ORBIS_SYSMODULE_IME_DIALOG);
     if (sceUserServiceGetInitialUser(&user) < 0 ||
-        scePadInit() < 0 || font_open("/app0/Roboto-Regular.ttf"))
+        scePadInit() < 0 || font_open("/app0"))
         return 1;
     int pad = scePadOpen(user, ORBIS_PAD_PORT_TYPE_STANDARD, 0, NULL);
     pthread_t thread;

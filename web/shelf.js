@@ -11,8 +11,22 @@ function bindShelfNavigation(grid, tv, select, back) {
     if (!el) return;
     el.focus();
     var id = el.getAttribute('data-g');
-    if (id) select(id);
+    if (id) { select(id); keepVisible(el); }
   }
+  /* Choosing a row grows it and closes the one before, which moves both: bring it back into view. */
+  function keepVisible(el) {
+    var header = document.querySelector('header');
+    var top = header && window.getComputedStyle(header).position === 'sticky' ? header.getBoundingClientRect().bottom : 0;
+    var box = el.getBoundingClientRect();
+    var under = box.bottom - window.innerHeight, over = box.top - top;
+    if (over < 0) window.scrollBy(0, over);
+    else if (under > 0) window.scrollBy(0, Math.min(under, over));
+  }
+  /* Tab chooses the row it lands on too; a pointer chooses on click, so rows never move under it. */
+  grid.addEventListener('keyup', function (e) {
+    var id = e.keyCode === 9 && e.target.getAttribute('data-g');
+    if (id) { select(id); keepVisible(e.target); }
+  });
   function move(direction) {
     var axis = direction === 'Left' || direction === 'Right' ? 'x' : 'y';
     var sign = direction === 'Left' || direction === 'Up' ? -1 : 1;

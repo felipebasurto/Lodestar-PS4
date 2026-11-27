@@ -4,78 +4,90 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodestar</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050b18'/%3E%3Ccircle cx='32' cy='32' r='23' fill='none' stroke='%231d3252' stroke-width='2'/%3E%3Cpath d='M32 9l4.6 18.4L55 32l-18.4 4.6L32 55l-4.6-18.4L9 32l18.4-4.6z' fill='%2322d3ee'/%3E%3Cpath d='M32 9l4.6 18.4L32 32l-4.6-4.6z' fill='%23f0a227'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23f0a227'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' width='64' height='64'%3E%3Crect width='100%25' height='100%25' fill='%230a0b0d'/%3E%3Cpath fill='%23f3f4f5' fill-rule='evenodd' d='M32.0 13.8L47.6 34.2L62.0 43.5L61.5 48.0L45.8 42.6L40.7 52.2L32.0 46.8L23.3 52.2L18.2 42.6L2.4 48.0L2.0 43.5L16.4 34.2Z'/%3E%3Cpath fill='%23ff6a13' fill-rule='evenodd' d='M32.0 21.6L35.3 30.3L42.2 33.1L35.3 36.0L32.0 44.7L28.7 36.0L21.8 33.1L28.7 30.3Z'/%3E%3C/svg%3E">
 <!-- Panel for the browser of older firmwares (no <dialog>): plain pages instead of dialogs,
      ES5 and XMLHttpRequest only, no CSS variables or grid. -->
 <style>
+/*FONTS*/
 *{box-sizing:border-box}
-body{margin:0;background:#050b18;background-image:linear-gradient(155deg,#081426,#040b18 65%,#030913);background-attachment:fixed;color:#eef4fc;font:15px/1.45 sans-serif}
-header{position:relative;padding:12px 4%;background:#0a1729;border-bottom:1px solid #2f4e7e;min-height:64px}
-header h1{display:inline-block;vertical-align:middle;margin:8px 0 0}
-#legacy-manage{float:right;margin:0}
-#legacy-tools{position:absolute;z-index:4;right:4%;top:calc(100% + 8px);padding:8px;width:210px;background:#0d1c33;border:1px solid #3a5f97;border-radius:8px}
-#legacy-tools button{display:block;width:100%;margin:0 0 4px;text-align:left}
+html{background:#0a0b0d}
+body{margin:0;background:#0a0b0d;background-image:linear-gradient(200deg,#252a32,#0a0b0d 55%);background-attachment:fixed;color:#f3f4f5;font:500 17px/1.35 "Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif;letter-spacing:.012em}
+::selection{background:#ff6a13;color:#0a0b0d}
+header{position:relative;padding:12px 4%;background:#07080a;border-bottom:1px solid #2c3036;min-height:64px}
+header h1{display:inline-block;vertical-align:middle;margin:0;line-height:0}
+.brand-mark{width:44px;height:32px;vertical-align:middle;margin:4px 10px 4px 0}
+.wordmark{height:19px;width:166px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+#legacy-manage{float:right;margin:3px 0 0}
+#legacy-tools{position:absolute;z-index:4;right:4%;top:calc(100% + 8px);padding:6px;width:220px;background:#15181d;border:1px solid #565c66}
+#legacy-tools button{display:block;width:100%;margin:0 0 2px;text-align:left}
 #legacy-tools button:last-child{margin-bottom:0}
-h1{font-size:20px;margin:0 0 8px;font-weight:600}
-h1 small{color:#9fb4d2;font-weight:normal;font-size:13px;margin-left:8px}
-h2{font-size:18px;margin:0 0 12px;font-weight:600}
-h3{font-size:16px;margin:0 0 8px;font-weight:600}
-button{font:inherit;font-weight:500;color:#eef4fc;background:#13233e;border:1px solid #1d3252;border-radius:8px;padding:8px 14px;margin:0 6px 6px 0;cursor:pointer}
-button:focus{border-color:#22d3ee;outline:2px solid #22d3ee;outline-offset:2px}
-button.primary{background:#0e7490;border-color:#0e7490}
-button.danger{background:rgba(224,85,85,.14);border-color:rgba(224,85,85,.55)}
-button[disabled]{opacity:.45}
-input,textarea,select{font:inherit;background:#02060f;color:#eef4fc;border:1px solid #1d3252;border-radius:8px;padding:8px 10px}
+h2{font-size:30px;line-height:1;margin:0 0 14px;font-weight:700;}
+h3{font-size:19px;margin:0 0 8px;font-weight:700;color:#ff6a13}
+button{font:500 17px/1.25 "Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif;color:#f3f4f5;background:#1b1e23;border:1px solid #3a3f47;border-radius:0;padding:8px 14px;margin:0 6px 6px 0;cursor:pointer}
+button:focus{background:#ff6a13;border-color:#ff6a13;color:#0a0b0d;outline:2px solid #ff6a13;outline-offset:2px}
+button.primary{background:#ff6a13;border-color:#ff6a13;color:#0a0b0d}
+button.primary:focus{outline-color:#f3f4f5}
+button.danger{background:#2a1513;border-color:#a8483f;color:#ffb4ab}
+button.danger:focus{background:#ff6b5c;border-color:#ff6b5c;color:#0a0b0d;outline-color:#ff6b5c}
+button[disabled]{opacity:.4}
+input,textarea,select{font:inherit;background:#050607;color:#f3f4f5;border:1px solid #3a3f47;border-radius:0;padding:8px 10px}
 select{max-width:100%}
 label select{display:block;margin-top:4px}
-textarea{width:100%;min-height:90px;font-family:monospace}
+textarea{width:100%;min-height:90px;font-family:monospace;font-size:14px}
 .view{padding:24px 4% 36px;display:none}
 .view.on{display:block}
-.summary span{display:inline-block;padding:4px 0;margin:0 12px 0 0;color:#a9bcd9;font-size:13px}
-body:before{content:"";position:fixed;z-index:-1;pointer-events:none;top:150px;right:-145px;width:520px;height:520px;border:1px solid rgba(34,211,238,.15);border-radius:28%;-webkit-transform:rotate(-32deg);transform:rotate(-32deg);outline:1px solid rgba(34,211,238,.06);outline-offset:24px}
-.library-heading{font-size:24px;letter-spacing:-.03em}
-.card{display:inline-block;vertical-align:top;width:18%;margin:0 1% 10px 0}
-.art{display:block;width:100%;padding:0;margin:0;text-align:left;background:transparent;border:0;border-radius:4px}
-.art[aria-pressed=true] .cover{box-shadow:0 0 0 2px #22d3ee}.art:focus .cover{box-shadow:none}
-.cover,.shelf-art{display:block;background:#081226 center/cover no-repeat}
-.cover{width:100%;padding-top:75%;border-radius:4px}
-.info{display:block;padding:8px 0 4px;min-height:48px;overflow:hidden}
-.name{display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meta{color:#a9bcd9;font-size:13px;word-wrap:break-word}
-.badge{display:block;color:#a9bcd9;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.b-restart,.b-pending{color:#ffd88f}
-.shelf-art{padding-top:56.25%;border-radius:4px}
-#g-name{font-size:26px;line-height:1.2;margin:12px 0 4px;word-wrap:break-word}
+.summary span{display:inline-block;padding:4px 0;margin:0 14px 0 0;color:#a9aeb6;font-size:15px;}
+.library-heading{font-size:36px;border-bottom:1px solid #2c3036;padding-bottom:10px}
+.card{display:block;margin:0 0 2px}
+.art{display:block;width:100%;padding:8px 14px;margin:0;overflow:hidden;text-align:left;background:transparent;border:1px solid transparent}
+.art[aria-pressed=true]{padding:14px;background:#1d140f;border-color:#ff6a13;color:#f3f4f5}
+.art:focus{border-color:#ff6a13}
+.art[aria-pressed=true] .cover{width:132px;height:132px}
+.art[aria-pressed=true] .info{margin-left:156px}
+.art[aria-pressed=true] .name{font-size:32px;font-weight:700;white-space:normal;word-wrap:break-word}
+.art[aria-pressed=true] .more{display:block}
+.art:focus{outline:2px solid #ff6a13;outline-offset:2px}
+.cover,.shelf-art{display:block;background:#111318 center/cover no-repeat}
+.cover{float:left;width:52px;height:52px}
+.info{display:block;margin-left:70px;min-height:52px;padding-top:2px;overflow:hidden}
+.name{display:block;font-size:21px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.more{display:none;color:#a9aeb6;font-size:16px}
+.meta{color:#a9aeb6;font-size:15px;word-wrap:break-word}
+.badge{display:block;color:#a9aeb6;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b-restart,.b-pending{color:#ffcb47}
+.b-offline{color:#ff6b5c}
+.b-running{color:#9bd65a}
+.shelf-art{padding-top:56.25%;border:1px solid #2c3036}
+#g-name{font-size:34px;line-height:1.1;margin:14px 0 6px;word-wrap:break-word}
 #v-game p{margin:6px 0}
 .actions{margin-top:13px}
 .tv button,.tv select{min-height:42px}
-.tv .name{font-size:16px}.tv .badge{font-size:13px}
-.tv :focus{outline:3px solid #22d3ee;outline-offset:3px}
-@media(max-width:850px){.card{width:31%}}
-@media(max-width:580px){.card{width:48%}}
-.warn{color:#ffd88f;font-size:13px;background:rgba(240,162,39,.12);border:1px solid rgba(240,162,39,.45);border-radius:8px;padding:6px 8px;margin-top:4px}
-#restart-banner{border-bottom:1px solid #4a6286;color:#ffd88f;padding:0 0 12px;margin:0 0 24px}
-#restart-banner .rb-main{font-weight:600}
-#actbar{border:1px solid #1d3252;background:#0c1830;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:14px}
-#actbar .db-main{font-weight:600;display:block}
-#actbar .db-sub{color:#9fb4d2;font-size:13px;display:block;margin-top:4px}
-#act-prog{display:block;width:100%;height:10px;margin-top:8px;accent-color:#0e7490}
-.box{border:1px solid #1d3252;border-radius:12px;padding:12px 14px;margin:0 0 14px}
-.box h3{margin:0 0 8px;font-size:16px}
-.hint{color:#9fb4d2;font-size:13px;display:block;margin:4px 0 8px}
-.note{color:#ffd88f;font-size:13px;margin:0 0 10px}
+.tv .name{font-size:24px}.tv .badge{font-size:18px}
+.tv :focus{outline:3px solid #ff6a13;outline-offset:3px}
+@media(max-width:580px){.art[aria-pressed=true] .cover{width:92px;height:92px}.art[aria-pressed=true] .info{margin-left:108px}}
+.warn{color:#ffcb47;font-size:15px;background:#221c0c;border:1px solid #7d6527;padding:6px 8px;margin-top:4px}
+#restart-banner{border-bottom:1px solid #7d6527;color:#ffcb47;padding:0 0 12px;margin:0 0 24px}
+#restart-banner .rb-main{font-weight:500}
+#actbar{border:1px solid #2c3036;background:#121418;padding:10px 14px;margin:0 0 12px;font-size:16px}
+#actbar .db-main{font-weight:500;display:block}
+#actbar .db-sub{color:#a9aeb6;font-size:15px;display:block;margin-top:4px}
+#act-prog{display:block;width:100%;height:8px;margin-top:8px;accent-color:#ff6a13}
+.box{border:1px solid #2c3036;background:#0f1114;padding:12px 14px;margin:0 0 14px}
+.hint{color:#a9aeb6;font-size:15px;display:block;margin:4px 0 8px}
+.note{color:#ffcb47;font-size:15px;margin:0 0 10px}
 label{display:block;margin:0 0 10px}
-table{width:100%;border-collapse:collapse;font-size:14px;margin:0 0 10px}
-th,td{border-bottom:1px solid #1d3252;padding:8px 6px;text-align:left;vertical-align:top}
+table{width:100%;border-collapse:collapse;font-size:16px;margin:0 0 10px}
+th,td{border-bottom:1px solid #2c3036;padding:8px 6px;text-align:left;vertical-align:top}
 td.c,th.c{width:36px;text-align:center}
-pre{white-space:pre-wrap;font-size:12px;background:#02060f;padding:12px;border-radius:8px}
-#msg{display:none;margin:8px 0 0;padding:8px 12px;border:1px solid #1d3252;border-radius:8px;background:#0c1830}
+pre{white-space:pre-wrap;font-size:12px;background:#050607;padding:12px;border:1px solid #2c3036}
+#msg{display:none;margin:8px 0 0;padding:8px 12px;border:1px solid #ff6a13;background:#121418}
 [hidden]{display:none!important}
 </style>
 </head>
 <body>
 <header>
-  <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true" style="vertical-align:middle;margin:6px 8px 0 0"><circle cx="32" cy="32" r="23" fill="none" stroke="#1d3252" stroke-width="2"/><path d="M32 9l4.6 18.4L55 32l-18.4 4.6L32 55l-4.6-18.4L9 32l18.4-4.6z" fill="#22d3ee"/><path d="M32 9l4.6 18.4L32 32l-4.6-4.6z" fill="#f0a227"/><circle cx="32" cy="32" r="4" fill="#f0a227"/></svg><h1>Lodestar</h1>
+  <svg class="brand-mark" viewBox="0 0 200 140" aria-hidden="true"><path fill="#f3f4f5" d="M100.0 7.2L49.0 73.9L2.0 104.3L3.4 119.0L54.9 101.3L71.5 132.7L100.0 115.0Z"/><path fill="#aab1ba" d="M100.0 7.2L150.9 73.9L198.0 104.3L196.5 119.0L145.0 101.3L128.4 132.7L100.0 115.0Z"/><path fill="#ff6a13" d="M100.0 38.6L105.3 65.1L121.5 70.4L105.3 75.8L100.0 99.4L94.6 75.8L78.4 70.4L94.6 65.1Z"/></svg><h1><svg class="wordmark" viewBox="0 0 820 100" aria-hidden="true"><path fill="#f3f4f5" fill-rule="evenodd" d="M0.0 0.0L19.0 0.0L19.0 81.0L76.0 81.0L76.0 100.0L0.0 100.0Z"/><path fill="#f3f4f5" fill-rule="evenodd" d="M93.0 24.0L93.4 19.3L94.8 14.8L97.0 10.6L100.0 7.0L103.6 4.0L107.8 1.8L112.3 0.4L117.0 0.0L165.0 0.0L169.6 0.4L174.1 1.8L178.3 4.0L181.9 7.0L184.9 10.6L187.1 14.8L188.5 19.3L189.0 24.0L189.0 76.0L188.5 80.6L187.1 85.1L184.9 89.3L181.9 92.9L178.3 95.9L174.1 98.1L169.6 99.5L165.0 100.0L117.0 100.0L112.3 99.5L107.8 98.1L103.6 95.9L100.0 92.9L97.0 89.3L94.8 85.1L93.4 80.6L93.0 76.0ZM112.0 27.0L112.1 25.4L112.6 23.9L113.3 22.5L114.3 21.3L115.5 20.3L116.9 19.6L118.4 19.1L120.0 19.0L162.0 19.0L163.5 19.1L165.0 19.6L166.4 20.3L167.6 21.3L168.6 22.5L169.3 23.9L169.8 25.4L170.0 27.0L170.0 73.0L169.8 74.5L169.3 76.0L168.6 77.4L167.6 78.6L166.4 79.6L165.0 80.3L163.5 80.8L162.0 81.0L120.0 81.0L118.4 80.8L116.9 80.3L115.5 79.6L114.3 78.6L113.3 77.4L112.6 76.0L112.1 74.5L112.0 73.0Z"/><path fill="#f3f4f5" fill-rule="evenodd" d="M206.0 0.0L268.0 0.0L273.8 0.5L279.4 2.2L284.6 5.0L289.2 8.7L292.9 13.3L295.7 18.5L297.4 24.1L298.0 30.0L298.0 70.0L297.4 75.8L295.7 81.4L292.9 86.6L289.2 91.2L284.6 94.9L279.4 97.7L273.8 99.4L268.0 100.0L206.0 100.0ZM225.0 19.0L268.0 19.0L270.1 19.2L272.2 19.8L274.1 20.8L275.7 22.2L277.1 23.8L278.1 25.7L278.7 27.8L279.0 30.0L279.0 70.0L278.7 72.1L278.1 74.2L277.1 76.1L275.7 77.7L274.1 79.1L272.2 80.1L270.1 80.7L268.0 81.0L225.0 81.0Z"/><path fill="#f3f4f5" fill-rule="evenodd" d="M315.0 0.0L393.0 0.0L393.0 19.0L334.0 19.0L334.0 41.0L385.0 41.0L385.0 59.0L334.0 59.0L334.0 81.0L393.0 81.0L393.0 100.0L315.0 100.0Z"/><path fill="#f3f4f5" fill-rule="evenodd" d="M496.0 0.0L432.0 0.0L427.7 0.4L423.5 1.6L419.7 3.7L416.4 6.4L413.7 9.7L411.6 13.5L410.4 17.7L410.0 22.0L410.0 37.0L410.4 41.2L411.6 45.4L413.7 49.2L416.4 52.5L419.7 55.2L423.5 57.3L427.7 58.5L432.0 59.0L477.0 59.0L477.0 81.0L410.0 81.0L410.0 100.0L474.0 100.0L478.2 99.5L482.4 98.3L486.2 96.2L489.5 93.5L492.2 90.2L494.3 86.4L495.5 82.2L496.0 78.0L496.0 63.0L495.5 58.7L494.3 54.5L492.2 50.7L489.5 47.4L486.2 44.7L482.4 42.6L478.2 41.4L474.0 41.0L429.0 41.0L429.0 19.0L496.0 19.0Z"/><path fill="#f3f4f5" fill-rule="evenodd" d="M513.0 0.0L595.0 0.0L595.0 19.0L563.5 19.0L563.5 100.0L544.5 100.0L544.5 19.0L513.0 19.0Z"/><path fill="#ff6a13" fill-rule="evenodd" d="M612.0 100.0L651.0 0.0L673.0 0.0L712.0 100.0L691.0 100.0L662.0 25.0L633.0 100.0Z"/><path fill="#f3f4f5" fill-rule="evenodd" d="M729.0 0.0L795.0 0.0L799.6 0.4L804.1 1.8L808.3 4.0L811.9 7.0L814.9 10.6L817.1 14.8L818.5 19.3L819.0 24.0L819.0 40.0L818.5 44.6L817.1 49.1L814.9 53.3L811.9 56.9L808.3 59.9L804.1 62.1L799.6 63.5L795.0 64.0L795.0 64.0L820.0 100.0L797.0 100.0L772.0 64.0L748.0 64.0L748.0 100.0L729.0 100.0ZM748.0 19.0L795.0 19.0L796.1 19.1L797.3 19.4L798.3 20.0L799.2 20.7L799.9 21.6L800.5 22.7L800.8 23.8L801.0 25.0L801.0 39.0L800.8 40.1L800.5 41.3L799.9 42.3L799.2 43.2L798.3 43.9L797.3 44.5L796.1 44.8L795.0 45.0L748.0 45.0Z"/></svg><span class="sr">Lodestar</span></h1>
   <button id="legacy-manage" aria-controls="legacy-tools" aria-expanded="false">Manage</button>
   <div id="legacy-tools" hidden>
     <button id="nav-games">Games</button>
@@ -250,6 +262,7 @@ function render() {
       '"><span class="cover" style="background-image:url(/icon/' + g.title_id + ')"></span><span class="info"><span class="name">' +
       esc(g.name) + '</span>' +
       (g.state !== 'ready' ? '<span class="badge b-' + esc(g.state) + '">' + esc(label(g.state)) + '</span>' : '') +
+      '<span class="more">' + esc([g.storage, g.size ? gb(g.size) : '', g.title_id].filter(Boolean).join(' · ')) + '</span>' +
       '</span></button></div>';
   }
   if (html !== shelfGrid) { $('grid').innerHTML = html; shelfGrid = html; }

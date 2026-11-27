@@ -31,12 +31,14 @@ par() {
 }
 mkdir -p build
 # Embedded data: panel page, playgo record templates.
-# Inline the translations and shared shelf controls so each page is self-contained.
+# Inline the translations, shared shelf controls and fonts so each page is self-contained.
 mkdir -p build/web
 for page in index legacy; do
-    awk -v lang=web/lang.js -v shelf=web/shelf.js '/^<!--LANG-->$/ { print "<script>"; while ((getline l < lang) > 0) print l; close(lang);
-                                              while ((getline l < shelf) > 0) print l; close(shelf);
-                                              print "</script>"; next } { print }' web/$page.html > build/web/$page.html
+    awk -v lang=web/lang.js -v shelf=web/shelf.js -v fonts=web/fonts.css '
+        function inline(file) { while ((getline l < file) > 0) print l; close(file) }
+        /^<!--LANG-->$/ { print "<script>"; inline(lang); inline(shelf); print "</script>"; next }
+        /^\/\*FONTS\*\/$/ { inline(fonts); next }
+        { print }' web/$page.html > build/web/$page.html
 done
 {
     (cd build/web && xxd -i -n index_html index.html)
