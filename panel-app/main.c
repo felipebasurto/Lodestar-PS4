@@ -19,6 +19,16 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef PANEL_HOST_TEST
+#include "panel_host_hooks.h"
+#include "panel_metrics.h"
+#define PANEL_ASSET_DIR "panel-app"
+#define usleep(u) panel_host_usleep((unsigned)(u))
+static pthread_cond_t host_reply_cond = PTHREAD_COND_INITIALIZER;
+#else
+#define PANEL_ASSET_DIR "/app0"
+#endif
+
 enum task { IDLE, LOAD, STATUS, SCAN, CONFIG, SAVE, CHANGE, ART, LINKS, DESTS, ENQUEUE };
 
 typedef struct {
@@ -70,9 +80,13 @@ static int64_t refresh_at, library_at, scan_until, feedback_until;
 static const char *tr(const char *en, const char *es) { return spanish ? es : en; }
 
 static int64_t clock_ms(void) {
+#ifdef PANEL_HOST_TEST
+    return panel_host_clock_ms();
+#else
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (int64_t)t.tv_sec * 1000 + t.tv_nsec / 1000000;
+#endif
 }
 
 static result perform(request req) {
@@ -138,6 +152,10 @@ static void *worker(void *unused) {
         result r = perform(req);
         pthread_mutex_lock(&mutex);
         reply = r;
+#ifdef PANEL_HOST_TEST
+        pthread_cond_broadcast(&host_reply_cond);
+        panel_host_on_worker_reply();
+#endif
     }
     pthread_mutex_unlock(&mutex);
     return NULL;
@@ -665,6 +683,9 @@ static void downloads_input(uint32_t buttons, int user) {
 }
 
 static void input(uint32_t buttons, int user) {
+#ifdef PANEL_HOST_TEST
+    panel_metrics_on_input();
+#endif
     dirty = 1;
     if (wheel) {
         wheel_input(buttons, user);
@@ -689,6 +710,9 @@ static void input(uint32_t buttons, int user) {
 }
 
 static void draw(canvas c) {
+#ifdef PANEL_HOST_TEST
+    panel_metrics_on_redraw();
+#endif
     panel_view view = {
         .page = page, .section = section, .spanish = spanish, .online = online,
         .selected = selected, .in_sidebar = in_sidebar, .visible_count = visible_count,
@@ -717,9 +741,42 @@ static void loop(int video, uint32_t *buffers[2], int pad, int user) {
     int64_t repeat_at = 0;
     const uint32_t arrows = ORBIS_PAD_BUTTON_UP | ORBIS_PAD_BUTTON_DOWN |
                             ORBIS_PAD_BUTTON_LEFT | ORBIS_PAD_BUTTON_RIGHT;
+#ifdef PANEL_HOST_TEST
+    panel_host_set_in_loop(1);
+#endif
     while (!quit) {
         accept_reply();
         schedule();
+#ifdef PANEL_HOST_TEST
+        {
+            panel_host_snapshot_t snap = {
+                .page = (int)page, .section = (int)section, .selected = selected,
+                .visible_count = visible_count, .wheel = wheel, .wheel_at = wheel_at,
+                .held_action = (int)held.action, .online = online, .spanish = spanish,
+                .ime = ime, .config_ready = config_ready, .links_ready = links_ready,
+                .dest_ready = dest_ready, .dest = dest, .link_writing = link_writing,
+                .active_task = (int)active, .pending_task = (int)pending.kind,
+                .dirty = dirty, .quit = quit, .category = category,
+                .in_sidebar = in_sidebar, .setting_row = setting_row,
+                .catalog_count = catalog ? catalog->count : 0,
+                .setup = catalog ? catalog->setup : 0,
+            };
+            for (size_t i = 0; i < sizeof(artwork_cache) / sizeof(*artwork_cache); i++)
+                snap.art_cached += artwork_cache[i].pixels != NULL;
+            const game *fg = focused_game();
+            if (fg)
+                memcpy(snap.focused_id, fg->id, sizeof(snap.focused_id));
+            snprintf(snap.query, sizeof(snap.query), "%s", query);
+            snprintf(snap.feedback, sizeof(snap.feedback), "%s", feedback);
+            snprintf(snap.entered_url, sizeof(snap.entered_url), "%s", entered_url);
+            snprintf(snap.local_url, sizeof(snap.local_url), "%s", local_url);
+            panel_host_on_loop_tick(&snap);
+            if (panel_host_should_force_quit()) {
+                quit = 1;
+                break;
+            }
+        }
+#endif
         int64_t now = clock_ms();
         if (*feedback && now >= feedback_until) {
             *feedback = 0;
@@ -736,6 +793,9 @@ static void loop(int video, uint32_t *buffers[2], int pad, int user) {
             if (at >= 0 && at != wheel_at) {
                 wheel_at = at;
                 dirty = 1;
+#ifdef PANEL_HOST_TEST
+                panel_metrics_on_input();
+#endif
             }
         } else if (connected) {
             /* The left stick walks the menus like the arrows. */
@@ -793,6 +853,9 @@ static void loop(int video, uint32_t *buffers[2], int pad, int user) {
     }
     if (ime)
         sceImeDialogTerm();
+#ifdef PANEL_HOST_TEST
+    panel_host_set_in_loop(0);
+#endif
 }
 
 static int video_loop(int pad, int user) {
@@ -827,7 +890,52 @@ static int video_loop(int pad, int user) {
     return rc;
 }
 
+#ifdef PANEL_HOST_TEST
+void panel_host_wait_worker_reply(void) {
+    pthread_mutex_lock(&mutex);
+    while (!reply.kind && !quit_worker)
+        pthread_cond_wait(&host_reply_cond, &mutex);
+    pthread_mutex_unlock(&mutex);
+}
+
+void panel_host_reset_app_globals(void) {
+    mailbox = (request){0};
+    reply = (result){0};
+    quit_worker = 0;
+    catalog = NULL;
+    config = (settings){0};
+    original_config = (settings){0};
+    spanish = online = config_ready = selected = in_sidebar = visible_count = 0;
+    memset(indices, 0, sizeof(indices));
+    memset(counts, 0, sizeof(counts));
+    category = setting_row = 0;
+    section = SECTION_ALL;
+    page = LIBRARY;
+    held = (hold){0};
+    held_button = 0;
+    wheel = 0;
+    wheel_at = -1;
+    active = IDLE;
+    pending = (request){0};
+    memset(artwork_cache, 0, sizeof(artwork_cache));
+    next_art = 0;
+    query[0] = feedback[0] = entered_url[0] = local_url[0] = 0;
+    memset(keyboard, 0, sizeof(keyboard));
+    links = (downloads){0};
+    dests = (destinations){0};
+    links_ready = dest = dest_ready = link_writing = 0;
+    links_at = 0;
+    ime = 0;
+    dirty = 1;
+    quit = 0;
+    scan_seen = 0;
+    refresh_at = library_at = scan_until = feedback_until = 0;
+}
+
+int panel_app_main(void) {
+#else
 int main(void) {
+#endif
     int32_t user = -1;
     int language = 1;
     OrbisUserServiceInitializeParams user_params = {.priority = ORBIS_KERNEL_PRIO_FIFO_LOWEST};
@@ -837,7 +945,7 @@ int main(void) {
     sceSysmoduleLoadModule(ORBIS_SYSMODULE_FREETYPE_OL);
     sceSysmoduleLoadModule(ORBIS_SYSMODULE_IME_DIALOG);
     if (sceUserServiceGetInitialUser(&user) < 0 ||
-        scePadInit() < 0 || font_open("/app0"))
+        scePadInit() < 0 || font_open(PANEL_ASSET_DIR))
         return 1;
     int pad = scePadOpen(user, ORBIS_PAD_PORT_TYPE_STANDARD, 0, NULL);
     pthread_t thread;

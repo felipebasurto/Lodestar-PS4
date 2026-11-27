@@ -12,6 +12,12 @@ char g_stub_call[64], g_stub_arg[4096];
 int g_stub_calls;
 int g_stub_games_pad;
 unsigned char g_stub_check_first, g_stub_check_last;
+const char *g_stub_games_json;
+const char *g_stub_config_json;
+const char *g_stub_dests_json;
+const char *g_stub_links_json;
+const uint8_t *g_stub_icon_bytes;
+size_t g_stub_icon_len;
 
 static int record(const char *call, const char *arg, char *msg, size_t cap) {
     snprintf(g_stub_call, sizeof(g_stub_call), "%s", call);
@@ -22,6 +28,10 @@ static int record(const char *call, const char *arg, char *msg, size_t cap) {
 }
 
 void app_games_json(buf_t *out) {
+    if (g_stub_games_json) {
+        buf_put(out, g_stub_games_json, strlen(g_stub_games_json));
+        return;
+    }
     buf_printf(out, "{\"version\":\"test\",\"games\":[],\"pad\":\"");
     for (int i = 0; i < g_stub_games_pad; i++)
         buf_put(out, "x", 1);
@@ -46,12 +56,18 @@ void app_stop(void) {
 }
 int app_restore(const char *tids, char *msg, size_t cap) { return record("restore", tids, msg, cap); }
 int app_restored_forget(char *msg, size_t cap) { return record("forget", NULL, msg, cap); }
-void app_config_json(buf_t *out) { buf_printf(out, "{\"batch\":true}"); }
+void app_config_json(buf_t *out) {
+    const char *s = g_stub_config_json ? g_stub_config_json : "{\"batch\":true}";
+    buf_put(out, s, strlen(s));
+}
 int app_config_set(const char *body, char *msg, size_t cap) { return record("config", body, msg, cap); }
 int app_icon(const char *tid, buf_t *out) {
     char m[8];
     record("icon", tid, m, sizeof(m));
-    buf_put(out, "PNG", 3);
+    if (g_stub_icon_bytes && g_stub_icon_len)
+        buf_put(out, g_stub_icon_bytes, g_stub_icon_len);
+    else
+        buf_put(out, "PNG", 3);
     return 0;
 }
 int app_pic(const char *tid, buf_t *out) {
@@ -75,10 +91,16 @@ int app_upload(int fd, const char *query, const void *pre, size_t pre_len, uint6
     return -1; /* refused: the panel answers with msg */
 }
 void app_uploads_json(buf_t *out) { buf_printf(out, "{\"state\":\"idle\"}"); }
-void app_dests_json(buf_t *out) { buf_printf(out, "{\"dests\":[]}"); }
+void app_dests_json(buf_t *out) {
+    const char *s = g_stub_dests_json ? g_stub_dests_json : "{\"dests\":[]}";
+    buf_put(out, s, strlen(s));
+}
 void app_storage_json(buf_t *out) { buf_printf(out, "{\"free\":1,\"total\":2,\"games\":0,\"items\":[]}"); }
 
-void links_status_json(buf_t *out) { buf_printf(out, "{\"configured\":true,\"jobs\":[]}"); }
+void links_status_json(buf_t *out) {
+    const char *s = g_stub_links_json ? g_stub_links_json : "{\"configured\":true,\"jobs\":[]}";
+    buf_put(out, s, strlen(s));
+}
 int links_add(const char *text, const char *dest, const char *password, char *msg, size_t n) {
     char arg[4096];
     snprintf(arg, sizeof(arg), "%s|%zu|%.40s|%s", dest, strlen(text), text, password ? password : "");
