@@ -40,6 +40,8 @@ typedef struct {
     char local_url[48];
     char entered_url[2048];
     settings config;
+    int slot_count;
+    panel_slot_span slots[PANEL_VISIBLE_ROWS];
 } view_snapshot;
 
 typedef struct {

@@ -192,24 +192,106 @@ static void message(canvas c, const char *what, const char *next) {
     text(c, LEFT, 414, 1700, 32, TEXT, next);
 }
 
-static void open_row(const panel_view *v, canvas c, const game *g, int y) {
+static void format_storage_line(const game *g, char *buffer, size_t size) {
+    if (g->bytes)
+        snprintf(buffer, size, "%s%s%.1f GB", g->storage, *g->storage ? " · " : "", g->bytes / 1073741824.0);
+    else
+        snprintf(buffer, size, "%s", g->storage);
+}
+
+static void open_row_left(const panel_view *v, canvas c, const game *g, int y) {
     char buffer[256];
-    shade(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, ORANGE, 22);
-    frame(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, 2, ORANGE);
     cover(v, c, g, LEFT, y + 28, 184);
     bold(c, 296, y + 84, 990, 64, WHITE, *g->name ? g->name : g->id);
     text(c, 296, y + 130, 990, 32, state_color(g->state), game_state_label(v, g->state));
-    if (g->bytes)
-        snprintf(buffer, sizeof(buffer), "%s%s%.1f GB", g->storage, *g->storage ? " · " : "", g->bytes / 1073741824.0);
-    else
-        snprintf(buffer, sizeof(buffer), "%s", g->storage);
+    format_storage_line(g, buffer, sizeof(buffer));
     text(c, 296, y + 170, 990, 28, MUTED, buffer);
     const char *note = *g->issue ? g->issue : state_help(v, g->state);
     if (*note)
         text(c, 296, y + 208, 990, 28, *g->issue || g->state != INTERNAL ? GOLD : MUTED, note);
+}
+
+static void open_row(const panel_view *v, canvas c, const game *g, int y) {
+    background_tinted_rect(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, ORANGE, 22);
+    frame(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, 2, ORANGE);
+    open_row_left(v, c, g, y);
     verbs(v, c, g, 1320, y + 68, 520, 1);
     if (v->holding)
         fill(c, LEFT - EDGE, y + OPEN_ROW - 8, (RIGHT - LEFT + 2 * EDGE) * v->held / 1000, 8, ORANGE);
+}
+
+int panel_compute_library_slots(const panel_view *v, panel_slot_span out[PANEL_VISIBLE_ROWS]) {
+    if (!v || v->page != LIBRARY || !v->online || !v->catalog || !v->visible_count)
+        return 0;
+    int first = panel_list_first(v->selected, v->visible_count);
+    int n = 0;
+    for (int i = first, y = LIST_TOP; i < v->visible_count && n < PANEL_VISIBLE_ROWS; i++) {
+        const game *g = &v->catalog->games[v->indices[i]];
+        int is_open = i == v->selected;
+        int height = is_open ? OPEN_ROW : ROW;
+        if (y + height > LIST_BOTTOM)
+            break;
+        panel_slot_span s = {.y = y, .h = height, .is_open = is_open};
+        const char *title = *g->name ? g->name : g->id;
+        if (is_open) {
+            char buffer[256];
+            format_storage_line(g, buffer, sizeof(buffer));
+            int w = bold_width(64, title);
+            int w2 = text_width(32, game_state_label(v, g->state));
+            if (w2 > w) w = w2;
+            int w3 = text_width(28, buffer);
+            if (w3 > w) w = w3;
+            const char *note = *g->issue ? g->issue : state_help(v, g->state);
+            if (*note) {
+                int w4 = text_width(28, note);
+                if (w4 > w) w = w4;
+            }
+            if (w > 990) w = 990;
+            s.left_x1 = 296 + w + 28;
+            if (s.left_x1 > 1314) s.left_x1 = 1314;
+            s.verbs_sig = ((int)g->state << 8) | ((g->in_place ? 1 : 0) << 5) |
+                          ((v->online ? 1 : 0) << 4) | (int)v->holding;
+        } else {
+            int w = text_width(40, title);
+            if (w > 1200) w = 1200;
+            s.left_x1 = 176 + w + 28;
+            if (s.left_x1 > 1404) s.left_x1 = 1404;
+            if (g->state != READY) {
+                int rw = text_width(28, game_state_label(v, g->state));
+                s.right_x0 = RIGHT - rw - 20;
+                if (s.right_x0 < 1404) s.right_x0 = 1404;
+            }
+        }
+        out[n++] = s;
+        y += height;
+    }
+    return n;
+}
+
+void panel_draw_closed_row_clipped(const panel_view *v, canvas c, int vis_index, int y, rect clip) {
+    if (!v || !v->catalog || vis_index < 0 || vis_index >= v->visible_count)
+        return;
+    const game *g = &v->catalog->games[v->indices[vis_index]];
+    canvas sub = canvas_clip(c.pixels, clip);
+    background(sub);
+    if (clip.x < 1404) {
+        cover(v, sub, g, LEFT, y + 14, 64);
+        text(sub, 176, y + 60, 1200, 40, TEXT, *g->name ? g->name : g->id);
+    }
+    if (g->state != READY && clip.x + clip.w > 1404)
+        right_aligned(sub, RIGHT, y + 58, 28, state_color(g->state), game_state_label(v, g->state));
+}
+
+void panel_draw_open_row_content_clipped(const panel_view *v, canvas c, int y, rect clip) {
+    if (!v || !v->catalog || v->selected < 0 || v->selected >= v->visible_count)
+        return;
+    const game *g = &v->catalog->games[v->indices[v->selected]];
+    canvas sub = canvas_clip(c.pixels, clip);
+    background_tinted_rect(sub, clip.x, clip.y, clip.w, clip.h, ORANGE, 22);
+    if (clip.x < 1316)
+        open_row_left(v, sub, g, y);
+    if (clip.x + clip.w > 1316)
+        verbs(v, sub, g, 1320, y + 68, 520, 1);
 }
 
 int panel_list_first(int selected, int visible_count) {
@@ -780,7 +862,6 @@ void panel_draw_open_row_region(const panel_view *v, canvas c) {
     if (r.w <= 0 || !v->focused)
         return;
     canvas sub = canvas_clip(c.pixels, r);
-    background(sub);
     open_row(v, sub, v->focused, r.y);
 }
 

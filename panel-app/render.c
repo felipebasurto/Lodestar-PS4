@@ -190,6 +190,7 @@ static void snapshot_from_view(view_snapshot *s, const panel_view *v) {
     copy_str(s->entered_url, sizeof(s->entered_url), v->entered_url);
     if (v->config)
         s->config = *v->config;
+    s->slot_count = panel_compute_library_slots(v, s->slots);
 }
 
 static int footer_differs(const view_snapshot *a, const view_snapshot *b) {
@@ -349,19 +350,55 @@ int panel_renderer_present(panel_renderer *r, const panel_view *v, int back_idx,
                 if (prev->selected != cur.selected) {
                     int prev_first = panel_list_first(prev->selected, prev->visible_count);
                     int cur_first = panel_list_first(cur.selected, cur.visible_count);
-                    rect sub = panel_list_rect();
-                    if (prev_first == cur_first) {
-                        int min_sel = prev->selected < cur.selected ? prev->selected : cur.selected;
-                        int max_sel = prev->selected > cur.selected ? prev->selected : cur.selected;
-                        int y0 = PANEL_LIST_TOP + (min_sel - cur_first) * PANEL_ROW;
-                        int y1 = PANEL_LIST_TOP + (max_sel - cur_first) * PANEL_ROW + PANEL_OPEN_ROW;
-                        if (y1 > PANEL_LIST_BOTTOM)
-                            y1 = PANEL_LIST_BOTTOM;
-                        sub.y = y0;
-                        sub.h = y1 - y0;
+                    int same_slot_layout = prev->slot_count == cur.slot_count && cur.slot_count > 0 &&
+                                           prev->holding == NONE && cur.holding == NONE;
+                    for (int k = 0; same_slot_layout && k < cur.slot_count; k++) {
+                        if (prev->slots[k].y != cur.slots[k].y || prev->slots[k].is_open != cur.slots[k].is_open)
+                            same_slot_layout = 0;
                     }
-                    panel_draw_library_list_region(v, sh, sub);
-                    damage_add(&frame_dmg, sub);
+                    if (same_slot_layout) {
+                        for (int k = 0; k < cur.slot_count; k++) {
+                            const panel_slot_span *ps = &prev->slots[k];
+                            const panel_slot_span *cs = &cur.slots[k];
+                            int max_x1 = ps->left_x1 > cs->left_x1 ? ps->left_x1 : cs->left_x1;
+                            if (cs->is_open) {
+                                rect lbox = {PANEL_LEFT, cs->y + 14, max_x1 - PANEL_LEFT, 212};
+                                panel_draw_open_row_content_clipped(v, sh, cs->y, lbox);
+                                damage_add(&frame_dmg, lbox);
+                                if (ps->verbs_sig != cs->verbs_sig) {
+                                    rect vbox = {1316, cs->y + 24, 528, 208};
+                                    panel_draw_open_row_content_clipped(v, sh, cs->y, vbox);
+                                    damage_add(&frame_dmg, vbox);
+                                }
+                            } else {
+                                rect lbox = {PANEL_LEFT, cs->y + 10, max_x1 - PANEL_LEFT, 72};
+                                panel_draw_closed_row_clipped(v, sh, cur_first + k, cs->y, lbox);
+                                damage_add(&frame_dmg, lbox);
+                                if (ps->right_x0 || cs->right_x0) {
+                                    int rx0 = ps->right_x0 && cs->right_x0
+                                                  ? (ps->right_x0 < cs->right_x0 ? ps->right_x0 : cs->right_x0)
+                                                  : (ps->right_x0 ? ps->right_x0 : cs->right_x0);
+                                    rect rbox = {rx0, cs->y + 24, PANEL_RIGHT + 16 - rx0, 50};
+                                    panel_draw_closed_row_clipped(v, sh, cur_first + k, cs->y, rbox);
+                                    damage_add(&frame_dmg, rbox);
+                                }
+                            }
+                        }
+                    } else {
+                        rect sub = panel_list_rect();
+                        if (prev_first == cur_first) {
+                            int min_sel = prev->selected < cur.selected ? prev->selected : cur.selected;
+                            int max_sel = prev->selected > cur.selected ? prev->selected : cur.selected;
+                            int y0 = PANEL_LIST_TOP + (min_sel - cur_first) * PANEL_ROW;
+                            int y1 = PANEL_LIST_TOP + (max_sel - cur_first) * PANEL_ROW + PANEL_OPEN_ROW;
+                            if (y1 > PANEL_LIST_BOTTOM)
+                                y1 = PANEL_LIST_BOTTOM;
+                            sub.y = y0;
+                            sub.h = y1 - y0;
+                        }
+                        panel_draw_library_list_region(v, sh, sub);
+                        damage_add(&frame_dmg, sub);
+                    }
                     list_repainted = 1;
                 } else if (prev->holding != cur.holding || prev->held != cur.held) {
                     if (cur.holding != NONE && cur.holding == prev->holding && cur.held > prev->held) {

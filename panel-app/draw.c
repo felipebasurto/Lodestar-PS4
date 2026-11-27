@@ -20,7 +20,9 @@ enum {
     GLYPH_TABLE_SIZE = 2048, /* power of two */
     GLYPH_MAX_LOAD = 1536,
     GLYPH_POOL_BYTES = 2 * 1024 * 1024,
-    SCALED_ART_SLOTS = 6,
+    SCALED_ART_SLOTS = 20,
+    RING_CACHE_SLOTS = 8,
+    RING_CACHE_MAX_RADIUS = 40,
 };
 
 typedef struct {
@@ -39,6 +41,18 @@ typedef struct {
     uint32_t *pixels;
 } scaled_art_slot;
 
+typedef struct {
+    int radius, weight, dim;
+    uint8_t *hits;
+} ring_mask;
+
+typedef struct {
+    int x0, y0, w, h;
+    uint32_t color;
+    unsigned alpha;
+    uint32_t *pixels;
+} tinted_ground_cache;
+
 #ifndef PANEL_MOCK_FONT
 static FT_Library ft;
 static FT_Face faces[FACES];
@@ -54,6 +68,9 @@ static uint8_t *glyph_pool;
 static uint32_t glyph_count, glyph_pool_used;
 static scaled_art_slot scaled_art[SCALED_ART_SLOTS];
 static uint64_t scaled_art_clock;
+static ring_mask ring_cache[RING_CACHE_SLOTS];
+static int ring_cache_next;
+static tinted_ground_cache tinted_ground;
 static int cache_enabled = 1;
 static draw_stats stats;
 
@@ -83,6 +100,19 @@ static void clear_glyph_cache(void) {
     glyph_pool_used = 0;
 }
 
+static void clear_ring_cache(void) {
+    for (int i = 0; i < RING_CACHE_SLOTS; i++) {
+        free(ring_cache[i].hits);
+        ring_cache[i] = (ring_mask){0};
+    }
+    ring_cache_next = 0;
+}
+
+static void clear_tinted_ground(void) {
+    free(tinted_ground.pixels);
+    tinted_ground = (tinted_ground_cache){0};
+}
+
 void draw_art_cache_invalidate(void) {
     for (int i = 0; i < SCALED_ART_SLOTS; i++) {
         free(scaled_art[i].pixels);
@@ -95,6 +125,8 @@ void draw_set_cache_enabled(int enabled) {
     if (!cache_enabled) {
         clear_glyph_cache();
         draw_art_cache_invalidate();
+        clear_ring_cache();
+        clear_tinted_ground();
     }
 }
 
@@ -165,6 +197,8 @@ void font_close(void) {
     glyph_count = 0;
     glyph_pool_used = 0;
     draw_art_cache_invalidate();
+    clear_ring_cache();
+    clear_tinted_ground();
 }
 
 unsigned utf8_read(const char **text) {
@@ -261,6 +295,46 @@ void frame(canvas c, int x, int y, int w, int h, int weight, uint32_t color) {
     fill(c, x + w - weight, y, weight, h, color);
 }
 
+static const uint8_t *get_ring_mask(int radius, int weight, int *out_dim) {
+    for (int i = 0; i < RING_CACHE_SLOTS; i++) {
+        if (ring_cache[i].hits && ring_cache[i].radius == radius && ring_cache[i].weight == weight) {
+            *out_dim = ring_cache[i].dim;
+            return ring_cache[i].hits;
+        }
+    }
+    int dim = 2 * radius + 1;
+    uint8_t *hits = calloc((size_t)dim * (size_t)dim, 1);
+    if (!hits)
+        return NULL;
+    long long inner = 64LL * (radius - weight) * (radius - weight), outer = 64LL * radius * radius;
+    long long skip_in = radius - weight > 1 ? (long long)(radius - weight - 1) * (radius - weight - 1) : -1;
+    long long skip_out = (long long)(radius + 1) * (radius + 1);
+    for (int y = -radius; y <= radius; y++) {
+        long long y2 = (long long)y * y;
+        uint8_t *dst = hits + (size_t)(y + radius) * (size_t)dim;
+        for (int x = -radius; x <= radius; x++) {
+            long long r2 = (long long)x * x + y2;
+            if (r2 > skip_out || (skip_in >= 0 && r2 < skip_in))
+                continue;
+            unsigned h = 0;
+            for (int j = -3; j <= 3; j += 2) {
+                long long dy = 8 * y + j;
+                long long dy2 = dy * dy;
+                for (int i = -3; i <= 3; i += 2) {
+                    long long dx = 8 * x + i, d = dx * dx + dy2;
+                    h += d <= outer && d > inner;
+                }
+            }
+            dst[x + radius] = (uint8_t)h;
+        }
+    }
+    int slot = ring_cache_next++ % RING_CACHE_SLOTS;
+    free(ring_cache[slot].hits);
+    ring_cache[slot] = (ring_mask){.radius = radius, .weight = weight, .dim = dim, .hits = hits};
+    *out_dim = dim;
+    return hits;
+}
+
 void ring(canvas c, int cx, int cy, int radius, int weight, uint32_t color) {
     if (!c.pixels || radius <= 0)
         return;
@@ -268,14 +342,30 @@ void ring(canvas c, int cx, int cy, int radius, int weight, uint32_t color) {
     clip_bounds(c, &cx0, &cy0, &cx1, &cy1);
     if (cx + radius < cx0 || cx - radius >= cx1 || cy + radius < cy0 || cy - radius >= cy1)
         return;
-    /* 4x4 samples per pixel, in eighths of a pixel, for a smooth edge. */
-    long long inner = 64LL * (radius - weight) * (radius - weight), outer = 64LL * radius * radius;
-    long long skip_in = radius - weight > 1 ? (long long)(radius - weight - 1) * (radius - weight - 1) : -1;
-    long long skip_out = (long long)(radius + 1) * (radius + 1);
     int ymin = cy - radius < cy0 ? cy0 - cy : -radius;
     int ymax = cy + radius >= cy1 ? cy1 - 1 - cy : radius;
     int xmin = cx - radius < cx0 ? cx0 - cx : -radius;
     int xmax = cx + radius >= cx1 ? cx1 - 1 - cx : radius;
+    if (cache_enabled && radius <= RING_CACHE_MAX_RADIUS) {
+        int dim = 0;
+        const uint8_t *mask = get_ring_mask(radius, weight, &dim);
+        if (mask) {
+            for (int y = ymin; y <= ymax; y++) {
+                uint32_t *row = c.pixels + (size_t)(cy + y) * WIDTH;
+                const uint8_t *mrow = mask + (size_t)(y + radius) * (size_t)dim;
+                for (int x = xmin; x <= xmax; x++) {
+                    unsigned hits = mrow[x + radius];
+                    if (hits)
+                        row[cx + x] = blend(row[cx + x], color, hits * 16);
+                }
+            }
+            return;
+        }
+    }
+    /* 4x4 samples per pixel, in eighths of a pixel, for a smooth edge. */
+    long long inner = 64LL * (radius - weight) * (radius - weight), outer = 64LL * radius * radius;
+    long long skip_in = radius - weight > 1 ? (long long)(radius - weight - 1) * (radius - weight - 1) : -1;
+    long long skip_out = (long long)(radius + 1) * (radius + 1);
     for (int y = ymin; y <= ymax; y++) {
         long long y2 = (long long)y * y;
         uint32_t *row = c.pixels + (size_t)(cy + y) * WIDTH;
@@ -524,6 +614,10 @@ int text_width(int size, const char *label) {
     return write_label((canvas){0}, 0, 0, WIDTH, size, 0, label, MEDIUM);
 }
 
+int bold_width(int size, const char *label) {
+    return write_label((canvas){0}, 0, 0, WIDTH, size, 0, label, BOLD);
+}
+
 /* A dark ground, a little lighter towards the top right; dithered so it does not band. */
 static void paint_ground(uint32_t *pixels) {
     static const int dither[4] = {0, 2, 3, 1};
@@ -565,6 +659,65 @@ void background(canvas c) {
     int cx0, cy0, cx1, cy1;
     clip_bounds(c, &cx0, &cy0, &cx1, &cy1);
     background_rect(c, cx0, cy0, cx1 - cx0, cy1 - cy0);
+}
+
+void background_tinted_rect(canvas c, int x, int y, int w, int h, uint32_t color, unsigned alpha) {
+    if (!c.pixels || w <= 0 || h <= 0)
+        return;
+    int cx0, cy0, cx1, cy1;
+    clip_bounds(c, &cx0, &cy0, &cx1, &cy1);
+    int left = x < cx0 ? cx0 : x;
+    int top = y < cy0 ? cy0 : y;
+    int right = x + w > cx1 ? cx1 : x + w;
+    int bottom = y + h > cy1 ? cy1 : y + h;
+    if (left >= right || top >= bottom)
+        return;
+    if (!cache_enabled || !ground || !alpha || alpha >= 256) {
+        background_rect(c, left, top, right - left, bottom - top);
+        if (alpha)
+            shade(c, left, top, right - left, bottom - top, color, alpha);
+        return;
+    }
+    /* Lazy-cache the tinted library viewport band so scrolling open rows is a straight memcpy. */
+    enum { BAND_X0 = 56, BAND_Y0 = 196, BAND_W = 1808, BAND_H = 804 };
+    if (left >= BAND_X0 && right <= BAND_X0 + BAND_W && top >= BAND_Y0 && bottom <= BAND_Y0 + BAND_H) {
+        if (!tinted_ground.pixels || tinted_ground.color != color || tinted_ground.alpha != alpha) {
+            uint32_t *buf = tinted_ground.pixels;
+            if (!buf)
+                buf = malloc((size_t)BAND_W * BAND_H * sizeof(*buf));
+            if (buf) {
+                unsigned inv = 256 - alpha;
+                unsigned fg_rb = (color & 0xff00ff) * alpha;
+                unsigned fg_g = (color & 0xff00) * alpha;
+                for (int r = 0; r < BAND_H; r++) {
+                    const uint32_t *src = ground + (size_t)(BAND_Y0 + r) * WIDTH + BAND_X0;
+                    uint32_t *dst = buf + (size_t)r * BAND_W;
+                    for (int i = 0; i < BAND_W; i++) {
+                        uint32_t bg = src[i];
+                        unsigned rb = (((bg & 0xff00ff) * inv + fg_rb) >> 8) & 0xff00ff;
+                        unsigned g = (((bg & 0xff00) * inv + fg_g) >> 8) & 0xff00;
+                        dst[i] = 0xff000000 | rb | g;
+                    }
+                }
+                tinted_ground = (tinted_ground_cache){
+                    .x0 = BAND_X0, .y0 = BAND_Y0, .w = BAND_W, .h = BAND_H,
+                    .color = color, .alpha = alpha, .pixels = buf,
+                };
+            }
+        }
+        if (tinted_ground.pixels && tinted_ground.color == color && tinted_ground.alpha == alpha) {
+            size_t row_bytes = (size_t)(right - left) * sizeof(*c.pixels);
+            for (int row = top; row < bottom; row++) {
+                memcpy(c.pixels + (size_t)row * WIDTH + left,
+                       tinted_ground.pixels + (size_t)(row - BAND_Y0) * BAND_W + (left - BAND_X0),
+                       row_bytes);
+            }
+            stats.bg_bytes_copied += (uint64_t)(bottom - top) * row_bytes;
+            return;
+        }
+    }
+    background_rect(c, left, top, right - left, bottom - top);
+    shade(c, left, top, right - left, bottom - top, color, alpha);
 }
 
 void brand(canvas c, int x, int y) {
@@ -632,9 +785,17 @@ static const uint32_t *get_scaled_art(const uint32_t *pixels, uint32_t art_gen, 
         if (!scaled_art[i].pixels || scaled_art[i].last_use < scaled_art[victim].last_use)
             victim = i;
     }
-    uint32_t *buf = malloc((size_t)size * (size_t)size * sizeof(*buf));
-    if (!buf)
-        return NULL;
+    uint32_t *buf = NULL;
+    if (scaled_art[victim].pixels && scaled_art[victim].size == size) {
+        buf = scaled_art[victim].pixels;
+        scaled_art[victim].pixels = NULL;
+    } else {
+        buf = malloc((size_t)size * (size_t)size * sizeof(*buf));
+        if (!buf)
+            return NULL;
+        free(scaled_art[victim].pixels);
+        scaled_art[victim].pixels = NULL;
+    }
     stats.art_scales++;
     int opaque = 1;
     for (int row = 0; row < size; row++) {
@@ -647,7 +808,6 @@ static const uint32_t *get_scaled_art(const uint32_t *pixels, uint32_t art_gen, 
             dst_row[col] = src;
         }
     }
-    free(scaled_art[victim].pixels);
     scaled_art[victim] = (scaled_art_slot){
         .src = pixels, .art_gen = art_gen, .size = size,
         .opaque = opaque, .last_use = ++scaled_art_clock, .pixels = buf,

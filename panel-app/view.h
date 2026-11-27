@@ -8,6 +8,13 @@
 enum { PAGE = 8, PANEL_VISIBLE_ROWS = 7, ART_SLOTS = 20, SETTINGS_COUNT = 9 };
 enum page { LIBRARY, DETAIL, SETTINGS, PHONE, DOWNLOADS };
 
+typedef struct {
+    int y, h, is_open;
+    int left_x1;
+    int right_x0;
+    int verbs_sig;
+} panel_slot_span;
+
 enum {
     PANEL_LEFT = 80,
     PANEL_RIGHT = 1840,
@@ -65,6 +72,9 @@ void panel_draw(const panel_view *v, canvas c);
 
 /* Layout geometry & surgical partial-redraw primitives (pixel-exact with panel_draw). */
 int panel_list_first(int selected, int visible_count);
+int panel_compute_library_slots(const panel_view *v, panel_slot_span out[PANEL_VISIBLE_ROWS]);
+void panel_draw_closed_row_clipped(const panel_view *v, canvas c, int vis_index, int y, rect clip);
+void panel_draw_open_row_content_clipped(const panel_view *v, canvas c, int y, rect clip);
 rect panel_header_rect(void);
 rect panel_footer_rect(void);
 rect panel_section_bar_rect(void);
