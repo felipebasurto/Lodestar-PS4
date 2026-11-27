@@ -58,6 +58,20 @@ Check: test (memory ownership and boundary arithmetic). Test: `test/unit.c` › 
 compile boundary `test/sdkcheck.sh`.
 Source: rewrite memory audit 2026-11-25.
 
+### REG-6: registration staging, open-app detection and version-mismatch re-add fail closed
+- `open_apps` / `open_games` must return a negative error when `sysctl` or buffer allocation fails rather
+  than returning `0` ("no apps open"), so staging masks, panel auto-launch, restore and migration fail closed.
+- `install_all` must return immediately after unmasking if `install_all_start` fails instead of waiting 30 s
+  and logging stale installer status.
+- `mask_user_app` must abort if `unmask_leftover()` could not unmask `/user/app`; `unmask_user_app` must
+  keep `g_masked` aligned with `user_app_masked()` and must not clear `STAGE_DIR` while the mask remains active.
+- `enforce_patch_sfo` must ignore empty `sfo_len` and compare `param.sfo` files larger than 8 KiB via mapped
+  allocation instead of rewriting them on every scan.
+- `scan_root` must require `db_confirms_registered(tid)` before queuing a version-mismatch remove/re-add so
+  a stale `app.db` cache cannot trigger destructive re-registration.
+Check: read (system-facing kernel/DB boundary compiled through `test/sdkcheck.sh`).
+Source: upstream vs Lodestar focused registration audit, 2026-11-27.
+
 ## Non-goals
 
 - Changing the external param.sfo parser rules in `specs/pkg.md`.
