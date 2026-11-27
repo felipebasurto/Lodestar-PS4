@@ -104,6 +104,7 @@ pre{white-space:pre-wrap;font-size:12px;background:#050607;padding:12px;border:1
   <div id="restart-banner" style="display:none">
     <div class="rb-main" id="rb-main"></div>
   </div>
+  <div class="warn" id="coexistnote" style="display:none">PS4Mount is installed or set to start with the console. Lodestar is not adding games on its own. Disable PS4Mount in GoldHEN AutoRun, uninstall the PS4Mount app, then restart and load only Lodestar.</div>
   <div id="actbar" style="display:none">
     <span class="db-main" id="ab-text"></span>
     <progress id="act-prog" max="1" value="0" hidden></progress>
@@ -345,6 +346,8 @@ function load(done) {
   api('/api/games', 'GET', null, function (err, j) {
     if (err) { say(t('Could not read the list: {0}', err)); if (done) done(); return; }
     setLang(j.lang);
+    var cx = j.coexist || {};
+    $('coexistnote').style.display = cx.block ? 'block' : 'none';
     games = j.games;
     activity = j.activity || {};
     $('ver').innerHTML = esc(j.version);

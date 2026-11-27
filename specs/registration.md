@@ -58,6 +58,18 @@ Check: test (memory ownership and boundary arithmetic). Test: `test/unit.c` › 
 compile boundary `test/sdkcheck.sh`.
 Source: rewrite memory audit 2026-11-25.
 
+### REG-11: a scan does not register the shared library while PS4Mount is installed or in AutoRun
+`title_state` queues a title that is already in `app.db` when any later check fails: no game task names
+Lodestar's pkg URL, that task holds an error, the `/data/lodestar/<TITLE_ID>.src` marker is missing or
+different, a hold link is not ready, or add-ons are not ready. PS4Mount's task names its own hold path and
+its marker lives under `/data/ps4mount`, so a title it already registered is queued. While P4N-32 blocks
+automatic registration, a scan must not run `AppInstallAll` or a version-mismatch re-add for those titles.
+The decision is `coexist_scan_registers`. An explicit panel add is not this path.
+Check: test (data loss: a second registration of a library the other daemon already registered).
+Test: `test/env_test.c`.
+Source: the same 2026-11-27 incident as P4N-32. Numbered past REG-6..REG-10, which open pull requests
+already use, so a later merge can keep one sequence.
+
 ## Non-goals
 
 - Changing the external param.sfo parser rules in `specs/pkg.md`.

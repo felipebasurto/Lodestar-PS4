@@ -110,3 +110,13 @@ refresh) or the action stops being available for it, and one press performs at m
 Check: test (data loss: restore moves files; ordering: refreshes arrive mid-hold).
 Test: `test/panel_lane_test.c`.
 Source: user chose hold-to-confirm in the one-column prototype (2026-11-27).
+
+### PANEL-13: both panels say when PS4Mount blocks automatic registration
+When `GET /api/games` reports `coexist.block`, the main page and the legacy page show the same warning,
+in the language the console reports. The warning says Lodestar is not adding games on its own, and tells
+the user to disable PS4Mount in GoldHEN AutoRun, uninstall the PS4Mount app, restart, and load only
+Lodestar. Leftover PS4Mount state with `block` false leaves the warning hidden. The words match the
+console notification (P4N-32).
+Check: test. Test: `test/web/panel.test.js`.
+Source: the same 2026-11-27 incident as P4N-32. Numbered past PANEL-10..PANEL-12, which an open pull
+request already uses.

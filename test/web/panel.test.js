@@ -21,6 +21,7 @@ let GAMES_VERSION = 'Lodestar test';
 let LINKS = { configured: false }; // GET /api/links
 let DRIVES = [{ label: 'usb0', free: 120.5 * 1073741824, total: 500 * 1073741824 }]; // GET /api/games drives
 let NOTICES = []; // GET /api/games notices
+let COEXIST = null; // GET /api/games coexist, when the daemon publishes one
 let ACTIVITY = { busy: false, phase: '', drive: '', title: '', title_id: '', done: 0, total: 0, group: 0, groups: 0, dlc_pending: [] };
 const STORAGE = { free: 2.5e10, total: 8e10, games: 2, items: [{ id: 'install', bytes: 3e8 }, { id: 'log', bytes: 2097152 }, { id: 'appmeta', bytes: 5e5 }] }; // GET /api/storage
 const DESTS = { dests: [{ id: 'usb0', label: 'usb0', folder: '/mnt/usb0/PS4Mount', free: 5e11, fits: true }] };
@@ -30,7 +31,8 @@ function reply(url) {
   if (url === '/api/storage') return STORAGE;
   return url.indexOf('/api/log') === 0 ? { log: 'a\nb' } : url.indexOf('/api/config') === 0 ? CFG :
     url.indexOf('/api/games') === 0 ? { version: GAMES_VERSION, lang: REPLY_LANG, games: GAMES, drives: DRIVES,
-      notices: NOTICES, activity: ACTIVITY, dlc_mode: CFG.dlc_mode || 'external' } : { ok: true, message: 'ok ' + url };
+      notices: NOTICES, activity: ACTIVITY, dlc_mode: CFG.dlc_mode || 'external',
+      ...(COEXIST ? { coexist: COEXIST } : {}) } : { ok: true, message: 'ok ' + url };
 }
 const tick = () => new Promise(r => setTimeout(r, 30));
 const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) process.exitCode = 1; };
@@ -692,6 +694,40 @@ function tKeys(file) {
   const lcfg = reqs.find(r => r.url === '/api/config' && r.method === 'POST');
   ok(lcfg && lcfg.body.includes('dlc_mode=internal&dlc=1&dlc_big=1&internal=1'),
     'legacy saves dlc_mode, dlc, dlc_big and internal: ' + (lcfg && lcfg.body));
+
+  const CX_EN = 'PS4Mount is installed or set to start with the console. Lodestar is not adding games on its own. Disable PS4Mount in GoldHEN AutoRun, uninstall the PS4Mount app, then restart and load only Lodestar.';
+  const CX_ES = 'PS4Mount está instalado o arranca con la consola. Lodestar no añade juegos por su cuenta. Desactiva PS4Mount en el AutoRun de GoldHEN, desinstala la app de PS4Mount, reinicia y carga solo Lodestar.';
+  COEXIST = { ps4mount_installed: true, ps4mount_autorun: true, ps4mount_state: false, block: true };
+  REPLY_LANG = 'en';
+  p = page('index.html', { dialog: true }); ({ w, d } = p);
+  await tick();
+  ok(d.getElementById('coexistnote').hidden === false && d.getElementById('coexistnote').textContent === CX_EN,
+    'banner when PS4Mount blocks auto-register');
+  REPLY_LANG = 'es';
+  p = page('index.html', { dialog: true }); ({ w, d } = p);
+  await tick();
+  ok(d.getElementById('coexistnote').hidden === false && d.getElementById('coexistnote').textContent === CX_ES,
+    'banner in Spanish');
+  REPLY_LANG = 'en';
+  p = page('legacy.html', {}); ({ w, d } = p);
+  await tick();
+  ok(d.getElementById('coexistnote').style.display === 'block' && d.getElementById('coexistnote').textContent === CX_EN,
+    'legacy banner when PS4Mount blocks auto-register');
+  REPLY_LANG = 'es';
+  p = page('legacy.html', {}); ({ w, d } = p);
+  await tick();
+  ok(d.getElementById('coexistnote').style.display === 'block' && d.getElementById('coexistnote').textContent === CX_ES,
+    'legacy banner in Spanish');
+  COEXIST = { ps4mount_installed: false, ps4mount_autorun: false, ps4mount_state: true, block: false };
+  REPLY_LANG = 'en';
+  p = page('index.html', { dialog: true }); ({ w, d } = p);
+  await tick();
+  ok(d.getElementById('coexistnote').hidden === true, 'leftover PS4Mount state alone keeps the banner hidden');
+  p = page('legacy.html', {}); ({ w, d } = p);
+  await tick();
+  ok(d.getElementById('coexistnote').style.display === 'none', 'legacy banner stays hidden for leftover state');
+  COEXIST = null;
+  REPLY_LANG = 'en';
 })()
   /* jsdom keeps the windows' own timers: end the process, with the code ok() left */
   .then(() => process.exit(process.exitCode || 0), (e) => { console.error(e); process.exit(1); });

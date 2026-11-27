@@ -271,11 +271,26 @@ table, BGFT tasks, system installer state and kernel-log consumer, so they must 
 at once. Stopping one payload and loading the other must preserve each product's own library and state.
 
 The organized package bytes in `<drive>/ps4/<TITLE_ID>/` are user/library data, not product-private state.
-Lodestar may scan and serve them, but without Lodestar ownership evidence it must treat their mount layers and
-management records conservatively. A user-initiated console delete follows the normal delete contract; daemon
-cleanup must never use PS4Mount's `.src`, `.removed` or hold files as Lodestar evidence.
+Lodestar may scan and list them. Automatic registration of those titles is forbidden while PS4Mount is
+installed or listed in GoldHEN AutoRun (P4N-32). Without Lodestar ownership evidence it must treat their
+mount layers and management records conservatively. A user-initiated console delete follows the normal
+delete contract; daemon cleanup must never use PS4Mount's `.src`, `.removed` or hold files as Lodestar
+evidence.
 Check: test for port/manifest and ownership decision tables; read for the console-wide service interlock.
 Source: user hardware coexistence requirement, 2026-11-26.
+
+### P4N-32: PS4Mount installed or in AutoRun blocks automatic registration
+When a real `ps4mount-ps4.bin` or `ps4mount-ps4.elf` is present (regular file, at least 4 KiB, ELF or UH
+magic), the PS4Mount app directory `PSMT00001` or shortcut directory `PMNT00001` exists, or an active
+GoldHEN AutoRun line names that payload, Lodestar must not register titles from a scan, must not re-add a
+title because its registered version differs, and must not save first-start defaults when the 120-second
+wait elapses. An explicit add from the panel remains the user's action. The console notification and both
+web panels say so in English and Spanish and tell the user to disable PS4Mount in GoldHEN AutoRun, uninstall
+the PS4Mount app, restart, and load only Lodestar. Leftover `/data/ps4mount` or `/system_data/ps4mount`
+alone does not trip this guard. The shared 9032 lock is unchanged.
+Check: test. Test: `test/env_test.c`; the banner in `test/web/panel.test.js`.
+Source: console incident 2026-11-27, firmware 14.00, Lodestar 3.1.0-rc.3 with Vld439/PS4Mount-PS4 also
+installed. The shared `<drive>/ps4/<TITLE_ID>/` library was a plausible second writer of `app.db`.
 
 ## Toshiba reference profile (not a compatibility requirement)
 

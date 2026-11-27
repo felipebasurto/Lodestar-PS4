@@ -49,6 +49,7 @@
 #include "catalog.h"
 #include "catsnap.h"
 #include "check.h"
+#include "coexist.h"
 #include "upload.h"
 #include "crypto.h"
 #include "db.h"
@@ -4210,6 +4211,46 @@ static void scan_finish(unsigned seq) {
 static int g_stop; /* one-way atomic stop intent: the long loops end before the daemon does */
 static int stop_requested(void) { return __atomic_load_n(&g_stop, __ATOMIC_ACQUIRE); }
 
+/* PS4Mount installed or in AutoRun (P4N-32). Published from the main thread;
+ * the panel threads only load these. */
+static int g_cx_installed, g_cx_autorun, g_cx_state, g_cx_block;
+
+static int auto_register_blocked(void) { return __atomic_load_n(&g_cx_block, __ATOMIC_ACQUIRE); }
+
+static void coexist_publish(void) {
+    coexist_evidence_t e;
+    coexist_probe(coexist_console_paths(), &e);
+    int inst = coexist_ps4mount_installed(&e);
+    int block = coexist_block_auto_register(&e);
+    int prev = __atomic_load_n(&g_cx_block, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_cx_installed, inst, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_cx_autorun, e.autorun, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_cx_state, e.state_dir, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_cx_block, block, __ATOMIC_RELEASE);
+    if (block && !prev)
+        printf("[coexist] PS4Mount %s%s%s: auto-register is off\n", inst ? "installed" : "",
+               inst && e.autorun ? " and " : "", e.autorun ? "in AutoRun" : (inst ? "" : "present"));
+}
+
+static void coexist_warn_once(void) {
+    static int said;
+    if (said)
+        return;
+    said = 1;
+    notify_kind(NOTIFY_WARN, "%s",
+                TR("PS4Mount is installed or set to start with the console. Lodestar is not adding games on its own. Disable PS4Mount in GoldHEN AutoRun, uninstall the PS4Mount app, then restart and load only Lodestar.",
+                   "PS4Mount está instalado o arranca con la consola. Lodestar no añade juegos por su cuenta. Desactiva PS4Mount en el AutoRun de GoldHEN, desinstala la app de PS4Mount, reinicia y carga solo Lodestar."));
+}
+
+static void coexist_json(buf_t *out) {
+    char js[256];
+    coexist_format_json(__atomic_load_n(&g_cx_installed, __ATOMIC_ACQUIRE),
+                        __atomic_load_n(&g_cx_autorun, __ATOMIC_ACQUIRE),
+                        __atomic_load_n(&g_cx_state, __ATOMIC_ACQUIRE),
+                        __atomic_load_n(&g_cx_block, __ATOMIC_ACQUIRE), js, sizeof(js));
+    buf_put(out, js, strlen(js));
+}
+
 static void scan_root(const char *root, int fresh, int reconnected) {
     const char *label = root_label(root);
     int have = in_place() ? catalog_has_games(root) : has_candidates(root);
@@ -4267,6 +4308,23 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             t->state = -1; /* failed recently: tried again later */
         pending += t->state == 1;
     }
+    /* PS4Mount already owns this library, or it is set to start with the console.
+     * A title it registered still looks new here (its task and .src are not ours),
+     * and registering it again is what corrupts the menu. Leave those titles. */
+    if (auto_register_blocked()) {
+        int held = 0;
+        for (int i = 0; i < count; i++) {
+            if (titles[i].state == 1) {
+                titles[i].state = -1;
+                held++;
+            }
+        }
+        if (held) {
+            pending = 0;
+            coexist_warn_once();
+            printf("[coexist] %s: %d title(s) not auto-registered while PS4Mount is present\n", label, held);
+        }
+    }
     /* the totals for a scan asked in the panel; otherwise only what changed */
     if (fresh && g_scan_manual_active && !count)
         notify_kind(NOTIFY_DRIVE, TR("%s: no PS4 games found", "%s: no se encontraron juegos de PS4"), label);
@@ -4295,11 +4353,15 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         /* PS4: the system registered another version (the update came later) */
         const char *rv = db_app_ver(t->tid);
         if (rv && *rv && strcmp(rv, info->ver)) {
-            char why[64];
-            snprintf(why, sizeof(why), TR("registered as %s, the update is %s", "registrado como %s, la actualización es %s"), rv,
-                     info->ver);
-            if (readd_queue(t->tid, why))
-                printf("[reg] %s: %s\n", t->tid, why);
+            if (auto_register_blocked())
+                printf("[coexist] %s: version differs, not re-registered while PS4Mount is present\n", t->tid);
+            else {
+                char why[64];
+                snprintf(why, sizeof(why), TR("registered as %s, the update is %s", "registrado como %s, la actualización es %s"), rv,
+                         info->ver);
+                if (readd_queue(t->tid, why))
+                    printf("[reg] %s: %s\n", t->tid, why);
+            }
         }
         managed_t *m = managed_by(t->tid, NULL);
         int running = title_running(t->tid);
@@ -5459,6 +5521,8 @@ static void activity_json(buf_t *out) {
  * request it does not mark the first setup as seen, and it never enumerates games. */
 static void app_status_state_json(buf_t *out) {
     buf_printf(out, "\"setup\":%s,", setup_active() ? "true" : "false");
+    coexist_json(out);
+    buf_put(out, ",", 1);
     activity_json(out);
     buf_put(out, ",", 1);
     notices_json(out, 5);
@@ -5597,6 +5661,8 @@ void app_games_json(buf_t *out) {
     /* what the daemon is doing now, and the add-ons the system is still installing */
     buf_put(out, ",", 1);
     activity_json(out);
+    buf_put(out, ",", 1);
+    coexist_json(out);
     buf_put(out, "}", 1);
     am.titles = (uint32_t)(nlisted + noffline);
     am.wall_ms = mono_ms() - t0;
@@ -7417,6 +7483,12 @@ static const char *panel_url(char *out, size_t n) {
 /* The start, as the console shows it. */
 static void notify_running(void) {
     char url[48];
+    if (auto_register_blocked()) {
+        /* The two-minute promise would be a lie: nothing is registered while PS4Mount is there. */
+        printf("[coexist] panel at %s; auto-register is off\n", panel_url(url, sizeof(url)));
+        coexist_warn_once();
+        return;
+    }
     if (setup_active() && g_reg_mode != REG_NONE && g_web >= 0)
         notify(TR(VERSION ": first start. Choose the settings in the Lodestar app or at %s and save them. Without it, "
                           "the games are added with the default settings in 2 minutes.",
@@ -7468,6 +7540,7 @@ int main(void) {
     apply_lang();
     if (g_cfg.autorun && autorun_apply(1))
         printf("[config] autorun on: could not update payloads.ini\n");
+    coexist_publish();
     if (setup_active())
         printf("[main] first start: no game is added until the settings are saved\n");
     signal(SIGPIPE, SIG_IGN);
@@ -7528,11 +7601,21 @@ int main(void) {
         }
         install_received(); /* an app sent with "Send and install" */
         panel_app_step();
+        coexist_publish();
         if (scan_due(time(NULL)) && !g_deleting) {
             time_t seen = setup_seen_at();
-            if (setup_active() && time(NULL) >= (seen > g_setup_start ? seen : g_setup_start) + SETUP_WAIT) {
-                printf("[main] first start: nobody at the panel, the default settings are saved\n");
-                config_save();
+            if (setup_active() && coexist_setup_timeout_due(g_setup_start, seen, time(NULL), SETUP_WAIT)) {
+                if (auto_register_blocked()) {
+                    static int held_setup;
+                    if (!held_setup) {
+                        held_setup = 1;
+                        printf("[coexist] first start: PS4Mount is present, defaults are not saved\n");
+                        coexist_warn_once();
+                    }
+                } else {
+                    printf("[main] first start: nobody at the panel, the default settings are saved\n");
+                    config_save();
+                }
             }
             int manual = 0, hard = 0;
             scan_trigger_t trig = SCAN_TRIG_ROUTINE;

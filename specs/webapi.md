@@ -150,15 +150,20 @@ is static apart from those versioned constants, uses no application locks and is
 `api_version`, `setup`, `activity`, `queues`, at most five recent `notices`, and key
 `endpoints`. `activity` has the same fields and meaning as the `activity` object of
 `GET /api/games`, including `dlc_pending`, but `/api/status` must not enumerate the library
-or copy the game list. `queues.web_owner_pending`, `queues.web_write_pending` and
+or copy the game list. Both `GET /api/games` and `GET /api/status` also include an additive
+`coexist` object, `{ps4mount_installed, ps4mount_autorun, ps4mount_state, block}` (P4N-32).
+`ps4mount_state` records leftover `/data/ps4mount` or `/system_data/ps4mount` and does not by
+itself set `block`. `queues.web_owner_pending`, `queues.web_write_pending` and
 `queues.web_write_active` are read through the web server's synchronized counters. Status is
 observational: it does not touch the first-setup presence timestamp, start work or mutate
 application state. Both endpoints are GET-only; unknown methods keep the normal method
 handling.
 
-Check: test through the existing real-socket HTTP harness (`test/http_test.c`); read for
+Check: test through the existing real-socket HTTP harness (`test/http_test.c`); the `coexist`
+object's shape in `test/env_test.c` and its banner in `test/web/panel.test.js`; read for
 snapshot locking and for the absence of catalog/library enumeration in `/api/status`.
-Source: Lodestar agent control-plane design.
+Source: Lodestar agent control-plane design. The `coexist` object is from the 2026-11-27
+coexistence incident (P4N-32).
 
 ### WEBAPI-8: `X-Lodestar` is the canonical write header and `X-PS4Mount` its legacy alias
 Requests that write files or otherwise change state keep the existing threat model: POSTs

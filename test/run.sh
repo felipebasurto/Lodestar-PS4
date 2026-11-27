@@ -104,6 +104,10 @@ echo "== firmware simulation"
 $CC $FLAGS -o "$B/fw_sim" test/fw_sim.c src/fw.c
 "$B/fw_sim"
 
+echo "== environment (PS4Mount beside Lodestar)"
+$CC $FLAGS -o "$B/env_test" test/env_test.c src/coexist.c src/autorun.c src/fw.c
+"$B/env_test"
+
 echo "== system database"
 $CC $FLAGS -Ithird_party/sqlite -DAPP_DB="\"$B/app.db\"" -o "$B/db_test" test/db_test.c src/db.c src/crypto.c src/mem.c src/la_alloc.c "$SQ"
 "$B/db_test"

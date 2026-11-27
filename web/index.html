@@ -240,6 +240,7 @@ form.settings input.num{width:6em}
     <button type="button" id="restart-filter" class="small"></button>
   </div>
   <div class="warn" id="setupnote" hidden>First start: review Settings and press Save. No game is added while this page is open. If it stays closed for 2 minutes, the default settings are used.</div>
+  <div class="warn" id="coexistnote" hidden>PS4Mount is installed or set to start with the console. Lodestar is not adding games on its own. Disable PS4Mount in GoldHEN AutoRun, uninstall the PS4Mount app, then restart and load only Lodestar.</div>
   <div class="libbar">
     <h2 class="library-heading">Library</h2>
     <input id="q" type="search" placeholder="Search game or CUSA" aria-label="Search game or CUSA">
@@ -672,6 +673,8 @@ function load() {
     renderActivity();
     renderNotices();
     $('setupnote').hidden = !j.setup;
+    var cx = j.coexist || {};
+    $('coexistnote').hidden = !cx.block;
     $('mc-ver').textContent = j.version;
     $('mc-dot').className = 'dot ok';
   })

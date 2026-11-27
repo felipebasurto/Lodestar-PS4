@@ -65,6 +65,8 @@ var LANGS = {
     'Removing {0} of {1}…': 'Quitando {0} de {1}…',
     'First start: review Settings and press Save. No game is added while this page is open. If it stays closed for 2 minutes, the default settings are used.':
       'Primer arranque: revisa los Ajustes y pulsa Guardar. Mientras esta página esté abierta no se añade ningún juego. Si queda cerrada 2 minutos, se usan los ajustes por defecto.',
+    'PS4Mount is installed or set to start with the console. Lodestar is not adding games on its own. Disable PS4Mount in GoldHEN AutoRun, uninstall the PS4Mount app, then restart and load only Lodestar.':
+      'PS4Mount está instalado o arranca con la consola. Lodestar no añade juegos por su cuenta. Desactiva PS4Mount en el AutoRun de GoldHEN, desinstala la app de PS4Mount, reinicia y carga solo Lodestar.',
     'Language': 'Idioma',
     'Restore original files': 'Restaurar archivos originales',
     'Takes games off the console and puts their pkgs (game, update and add-ons) back where they were, with the names they had. Nothing is deleted. The open game is closed first.':
