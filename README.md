@@ -462,4 +462,4 @@ bash test/sdkcheck.sh
 | `tools/` | `logcheck.py` (explains the log), `exfatmap.py` (maps an exFAT drive), `benchdisk` |
 | `evidence/` | Measurements taken on the console |
 
-The menus use [Barlow Condensed](https://github.com/jpt/barlow), SIL Open Font License 1.1 (`third_party/barlow/OFL.txt`). The globe's coastlines come from [Natural Earth](https://www.naturalearthdata.com/) (public domain).
+The menus use [Barlow Condensed](https://github.com/jpt/barlow), SIL Open Font License 1.1 (`third_party/barlow/OFL.txt`). The wordmark is outlined from [Michroma](https://github.com/googlefonts/Michroma-font), under the same licence (`third_party/michroma/OFL.txt`).

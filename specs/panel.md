@@ -86,19 +86,21 @@ Check: read for copy and technical accuracy; the existing panel and upload tests
 the transfer controls and the reason shown when a package cannot be used.
 Source: repository owner's public copy request (2026-11-26).
 
-### PANEL-7: one identity, inspired by Black Ops II menus, drawn from original art
+### PANEL-7: one quiet identity, drawn from original art
 
 The web panels, the PS4 app and the browser extension share one light look: dark neutral grounds,
 orange for whatever is chosen, condensed type (Barlow Condensed, SIL OFL) written in sentence case,
 bold only for what is focused or titled, few boxes and lines. Capitals are the wordmark's. The mark
-is a flying wing seen from above that carries a four-point star: the Lodestar of Black Ops II was a
-drone, and a lodestar is the star one steers by. `assets/render_icons.py` is the source of the mark,
-wordmark and pictures; the night globe appears in the console's launch picture, not behind menus. No
-game artwork, logo, typeface or name of its publisher appears in the product.
+is flat: a white flying wing under an orange four-point star it steers by (the Lodestar of Black Ops
+II was a drone, and a lodestar is the star one steers by). The wordmark is outlined from Michroma
+(SIL OFL) in one colour. Nothing is rendered in 3D or textured, and the console's launch picture is
+the lockup on a dark ground with one soft light. `assets/render_icons.py` is the source of the mark, wordmark and
+pictures. No game artwork, logo, typeface or name of its publisher appears in the product.
 The panel pages stay self-contained: `build.sh` inlines their font.
 Check: read.
 Source: user direction (2026-11-27): redo the previous identity, heavily inspired by Black Ops II;
-then make it lighter.
+then make it lighter. User choice of the flat "wing under its star" mark, after rejecting a 3D one
+(2026-11-27).
 
 ### PANEL-8: a hold acts only on what was under the button the whole time
 

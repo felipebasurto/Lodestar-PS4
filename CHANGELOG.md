@@ -4,13 +4,13 @@ Lodestar (PS4Mount PS4 before 2.0.0) began as a PS4-only port of [PS4Mount](http
 
 ## 3.1.0-rc.3
 
-**New look.** A new mark (a flying wing seen from above, carrying a lodestar) and wordmark, and a light menu style inspired by Black Ops II in the web panel, the PS4 app and the browser extension: dark neutral grounds, orange selection and condensed type; the app's home screen art has a night globe.
+**New look.** A new flat mark (a flying wing under the star it steers by) and wordmark, and a light menu style inspired by Black Ops II in the web panel, the PS4 app and the browser extension: dark neutral grounds, orange selection and condensed type.
 
 **Clearer states and notices.** The web panel and the PS4 app give each game state the same name, and opening a game that needs attention says what to do. While a game waits for a restart, both say so above the library; the app did not before. The restart notices say that rest mode does not count and, without AutoRun, to load Lodestar again. Warnings say what to do next.
 
 **A one-column library.** Games are listed one per row in title order, and the chosen row grows. In the PS4 app, Up and Down walk the list, Left and Right jump by initial, L1 and R1 change section, holding Cross adds or removes, holding Square restores the original files, Triangle shows the details, and holding L2 opens a wheel with the other actions. Install `lodestar-panel.pkg` again to get the new app. The new [user guide](docs/guide.md) explains every screen and button.
 
-**Aspecto nuevo.** Logo y logotipo nuevos (un ala volante vista desde arriba que lleva una estrella polar) y un estilo de menús ligero inspirado en Black Ops II en el panel web, la app de PS4 y la extensión del navegador: fondos neutros oscuros, selección naranja y letra condensada; el fondo de la app en la pantalla de inicio tiene un globo nocturno.
+**Aspecto nuevo.** Logo y logotipo nuevos, planos (un ala volante bajo la estrella que sigue), y un estilo de menús ligero inspirado en Black Ops II en el panel web, la app de PS4 y la extensión del navegador: fondos neutros oscuros, selección naranja y letra condensada.
 
 **Estados y avisos más claros.** El panel web y la app de PS4 llaman igual a cada estado, y al abrir un juego que necesita atención se explica qué hacer. Mientras un juego espera un reinicio, los dos lo avisan encima de la biblioteca; antes la app no lo hacía. Los avisos de reinicio aclaran que el modo reposo no vale y, sin AutoRun, piden volver a cargar Lodestar. Las advertencias dicen qué hacer a continuación.
 
