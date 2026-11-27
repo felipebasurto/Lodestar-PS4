@@ -273,7 +273,9 @@ at once. Stopping one payload and loading the other must preserve each product's
 The organized package bytes in `<drive>/ps4/<TITLE_ID>/` are user/library data, not product-private state.
 Lodestar may scan and serve them, but without Lodestar ownership evidence it must treat their mount layers and
 management records conservatively. A user-initiated console delete follows the normal delete contract; daemon
-cleanup must never use PS4Mount's `.src`, `.removed` or hold files as Lodestar evidence.
+cleanup must never use PS4Mount's `.src`, `.removed` or hold files as Lodestar evidence. When PS4Mount is
+installed or enabled in GoldHEN AutoRun, P4N-32 holds automatic registration and library migration so Lodestar
+does not re-register or move PS4Mount's shared library.
 Check: test for port/manifest and ownership decision tables; read for the console-wide service interlock.
 Source: user hardware coexistence requirement, 2026-11-26.
 
@@ -331,6 +333,24 @@ Check: test (conflict classification in `test/unit.c` › `test_lock_conflict`);
 socket error handling (`test/sdkcheck.sh`).
 Source: firmware 14.00 rc.3 hardware incident (2026-11-27): a duplicate Lodestar load reported that PS4Mount
 was running because both share port 9032.
+
+### P4N-32: PS4Mount coexistence guard blocks automatic library registration
+Lodestar detects read-only whether PS4Mount (`Vld439/PS4Mount-PS4`) is installed or enabled in GoldHEN
+AutoRun: payload files `ps4mount-ps4.bin` / `ps4mount-ps4.elf` under `/data/GoldHEN/payloads` or
+`/data/payloads` (real files >= 4 KiB with ELF or payload magic), installed panel/shortcut directories
+`PSMT00001` or `PMNT00001` under `/user/app`, or an active non-comment `ps4mount-ps4.bin` / `ps4mount-ps4.elf`
+line in `/data/GoldHEN/payloads.ini`. Leftover `/data/ps4mount` or `/system_data/ps4mount` state alone is
+recorded as `ps4mount_state` for visibility without tripping the block, because Lodestar never deletes
+PS4Mount files (P4N-27).
+
+While PS4Mount is installed or active in AutoRun, Lodestar holds automatic registration, version-mismatch
+re-registration, and `migrate_organized` library moves so it does not re-register or move `<drive>/ps4/<TID>`
+titles already managed by PS4Mount. An explicit single-title Add (`POST /api/mount?title_id=<TID>`) from
+the panel remains allowed for that requested title alone. Lodestar emits a Spanish/English notice and
+exposes the read-only `coexist` object in `GET /api/status` and `GET /api/games`.
+Check: test (keep bar 2: data/system safety; keep bar 5: cross-product conflict). Test: `test/env_test.c`,
+`test/web/panel.test.js`; compile boundary `test/sdkcheck.sh`.
+Source: environment coexistence hazard review (`hazards/environment`), 2026-11-27.
 
 ## Toshiba reference profile (not a compatibility requirement)
 

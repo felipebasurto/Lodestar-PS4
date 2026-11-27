@@ -153,3 +153,14 @@ blocking calls on input/render in `test/panel_render_test.c`; no NetCtl or IME c
 loop in `test/panel_lane_test.c`). Real frame pacing requires a PS4 smoke test.
 Source: PS4 rc.3 performance report (slow L2 wheel and UI caused by full-frame redraws, per-frame
 FreeType rasterization and alpha-blending reads on write-combining direct memory) (2026-11-27).
+
+### PANEL-13: web panels warn when PS4Mount coexistence holds automatic registration
+
+When `GET /api/games` reports `coexist.auto_register_blocked: true`, both the modern panel (`web/index.html`)
+and the legacy panel (`web/legacy.html`) show a prominent Spanish/English warning banner explaining that
+PS4Mount is still installed or active in GoldHEN AutoRun, that automatic registration is paused so the
+shared library is not re-registered twice, and that the user should remove PS4Mount or disable it in
+AutoRun before continuing (Lodestar never deletes PS4Mount's files). When `coexist.auto_register_blocked`
+is false or absent, the banner stays hidden.
+Check: test (`test/web/panel.test.js` in both modern and legacy panels, English and Spanish).
+Source: environment coexistence hazard review (`hazards/environment`), 2026-11-27.

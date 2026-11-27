@@ -72,6 +72,9 @@ textarea{width:100%;min-height:90px;font-family:monospace;font-size:14px}
 #dbcorrupt-banner{border-bottom:1px solid #a83c3c;color:#ff9e9e;padding:0 0 12px;margin:0 0 24px}
 #dbcorrupt-banner .dbc-main{font-weight:500}
 #dbcorrupt-banner .dbc-detail{color:#c9b2b2;font-size:.9em;margin-top:4px}
+#coexist-banner{border-bottom:1px solid #7d6527;color:#ffcb47;padding:0 0 12px;margin:0 0 24px}
+#coexist-banner .cx-main{font-weight:500}
+#coexist-banner .cx-detail{color:#c9be9e;font-size:.9em;margin-top:4px}
 #actbar{border:1px solid #2c3036;background:#121418;padding:10px 14px;margin:0 0 12px;font-size:16px}
 #actbar .db-main{font-weight:500;display:block}
 #actbar .db-sub{color:#a9aeb6;font-size:15px;display:block;margin-top:4px}
@@ -107,6 +110,10 @@ pre{white-space:pre-wrap;font-size:12px;background:#050607;padding:12px;border:1
   <div id="dbcorrupt-banner" role="alert" style="display:none">
     <div class="dbc-main" id="dbc-main"></div>
     <div class="dbc-detail" id="dbc-detail"></div>
+  </div>
+  <div id="coexist-banner" role="alert" style="display:none">
+    <div class="cx-main" id="cx-main"></div>
+    <div class="cx-detail" id="cx-detail"></div>
   </div>
   <div id="restart-banner" style="display:none">
     <div class="rb-main" id="rb-main"></div>
@@ -360,6 +367,14 @@ function load(done) {
     if (j.db_corrupt) {
       $('dbc-main').textContent = t('System database flagged as damaged: do not keep registering; restart/recover before continuing');
       $('dbc-detail').textContent = j.db_corrupt_reason || '';
+    }
+    var cxb = $('coexist-banner');
+    var cxBlocked = !!(j.coexist && j.coexist.auto_register_blocked);
+    cxb.style.display = cxBlocked ? 'block' : 'none';
+    if (cxBlocked) {
+      $('cx-main').textContent = t('PS4Mount is still installed or active in GoldHEN AutoRun: automatic game registration is paused.');
+      var cxWhy = (j.coexist.reasons && j.coexist.reasons.length) ? ' (' + j.coexist.reasons.join(', ') + ')' : '';
+      $('cx-detail').textContent = t('Remove PS4Mount or disable it in payloads.ini before continuing so your shared library is not registered twice. Lodestar never deletes PS4Mount files.') + cxWhy;
     }
     render();
     renderAct();

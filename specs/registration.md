@@ -139,6 +139,17 @@ Source: post-rebuild recovery requirement after firmware 14.00 database rebuild.
 Check: read (system-facing kernel/DB boundary compiled through `test/sdkcheck.sh`).
 Source: upstream vs Lodestar focused registration audit, 2026-11-27.
 
+### REG-12: automatic registration is held while PS4Mount is installed or in AutoRun
+When `coexist_block_auto_register` reports that PS4Mount (`Vld439/PS4Mount-PS4`) is installed or active in
+GoldHEN AutoRun (P4N-32), `scan_root` does not queue `<drive>/ps4/<TID>` titles for automatic `AppInstallAll`
+or `AppInstallTitleDir` registration, skips version-mismatch re-registration, and skips `migrate_organized`.
+Only a title explicitly requested through `POST /api/mount?title_id=<TID>` may proceed during a scan while
+the guard is active.
+Check: test (keep bar 2: system DB / library safety; keep bar 3: scan ordering). Test: `test/env_test.c`;
+compile boundary `test/sdkcheck.sh`.
+Source: environment coexistence hazard review (`hazards/environment`), 2026-11-27 (renumbered from `REG-11`
+to avoid colliding with `REG-11` from PR #19).
+
 
 ## Non-goals
 

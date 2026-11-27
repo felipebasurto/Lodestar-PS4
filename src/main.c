@@ -49,6 +49,7 @@
 #include "catalog.h"
 #include "catsnap.h"
 #include "check.h"
+#include "coexist.h"
 #include "upload.h"
 #include "crypto.h"
 #include "db.h"
@@ -194,6 +195,10 @@ static int g_setup; /* a first start: no game is added until the settings are sa
 static dbguard_t g_dbguard;
 static reg_breaker_t g_breaker;
 static int g_cfg_migrated;
+static pthread_mutex_t g_coexist_mu = PTHREAD_MUTEX_INITIALIZER;
+static coexist_state_t g_coexist;
+static int g_coexist_valid, g_coexist_warned;
+static char g_manual_add_tid[10];
 #define INV_FILE STATE_DIR "/inventory.tsv"
 
 static int setup_active(void) { return __atomic_load_n(&g_setup, __ATOMIC_ACQUIRE); }
@@ -398,6 +403,63 @@ static int dbguard_halt_active(void) {
                        "Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar"));
     }
     return corrupt;
+}
+
+/* P4N-32: read-only PS4Mount coexistence snapshot shared by scans, notices, and panel API. */
+static void coexist_publish(void) {
+    coexist_paths_t paths = coexist_console_paths();
+    coexist_state_t s;
+    coexist_probe(&paths, &s);
+    pthread_mutex_lock(&g_coexist_mu);
+    g_coexist = s;
+    g_coexist_valid = 1;
+    pthread_mutex_unlock(&g_coexist_mu);
+}
+
+static void coexist_snapshot(coexist_state_t *out) {
+    pthread_mutex_lock(&g_coexist_mu);
+    int valid = g_coexist_valid;
+    if (valid)
+        *out = g_coexist;
+    pthread_mutex_unlock(&g_coexist_mu);
+    if (!valid) {
+        coexist_publish();
+        pthread_mutex_lock(&g_coexist_mu);
+        *out = g_coexist;
+        pthread_mutex_unlock(&g_coexist_mu);
+    }
+}
+
+static int auto_register_blocked(void) {
+    coexist_state_t s;
+    coexist_snapshot(&s);
+    return coexist_block_auto_register(&s);
+}
+
+static void coexist_warn_once(void) {
+    pthread_mutex_lock(&g_coexist_mu);
+    int fire = !g_coexist_warned;
+    g_coexist_warned = 1;
+    pthread_mutex_unlock(&g_coexist_mu);
+    if (fire) {
+        notify_kind(
+            NOTIFY_WARN, "%s",
+            TR("PS4Mount is installed or in AutoRun: automatic game registration is paused so the shared library is "
+               "not registered twice. Remove PS4Mount or disable it in AutoRun.",
+               "PS4Mount está instalado o en AutoRun: el registro automático de juegos está en pausa para no registrar "
+               "dos veces la biblioteca compartida. Quita PS4Mount o desactívalo en AutoRun."));
+    }
+}
+
+static void coexist_json(buf_t *out) {
+    coexist_state_t s;
+    coexist_snapshot(&s);
+    char js[256];
+    size_t n = coexist_format_json(&s, js, sizeof(js));
+    if (n) {
+        buf_printf(out, "\"coexist\":");
+        buf_put(out, js, n);
+    }
 }
 
 /* What the daemon is doing right now, for the panel: the phase of the scan or restore
@@ -4443,8 +4505,29 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         activity_clear();
         return;
     }
+    int coexist_blocked = auto_register_blocked();
+    int coexist_held = 0;
+    if (coexist_blocked) {
+        int allow_count = 0;
+        for (int i = 0; i < count; i++) {
+            if (titles[i].state == 1 && !coexist_title_register_allowed(1, titles[i].tid, g_manual_add_tid)) {
+                titles[i].state = -1;
+                coexist_held++;
+            } else if (titles[i].state == 1) {
+                allow_count++;
+            }
+        }
+        pending = allow_count;
+        if (coexist_held) {
+            printf("[coexist] held automatic registration for %d game(s) on %s (PS4Mount is installed or in AutoRun)\n",
+                   coexist_held, label);
+            coexist_warn_once();
+        }
+    }
     inventory_record_root(root, titles, fps, count,
-                          g_breaker.mode == BREAKER_PILOT_REQUIRED ? "pending_pilot" : "pending");
+                          coexist_blocked && coexist_held          ? "blocked_coexist"
+                          : g_breaker.mode == BREAKER_PILOT_REQUIRED ? "pending_pilot"
+                                                                     : "pending");
     /* the totals for a scan asked in the panel; otherwise only what changed */
     if (fresh && g_scan_manual_active && !count)
         notify_kind(NOTIFY_DRIVE, TR("%s: no PS4 games found", "%s: no se encontraron juegos de PS4"), label);
@@ -4472,7 +4555,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         manage_info(info);
         /* PS4: the system registered another version (the update came later) */
         const char *rv = db_confirms_registered(t->tid) ? db_app_ver(t->tid) : NULL;
-        if (rv && *rv && strcmp(rv, info->ver)) {
+        if (!coexist_blocked && rv && *rv && strcmp(rv, info->ver)) {
             char why[64];
             snprintf(why, sizeof(why), TR("registered as %s, the update is %s", "registrado como %s, la actualización es %s"), rv,
                      info->ver);
@@ -4976,6 +5059,7 @@ static void rescan_invalidate(void);
 static int scan_all(int hard) {
     static int seen[NROOTS], first = 1;
     char root[PATH_MAX];
+    coexist_publish();
     if (dbguard_halt_active()) {
         if (user_app_masked())
             unmask_leftover();
@@ -5058,6 +5142,7 @@ static int scan_all(int hard) {
             seen[i] = present;
         }
     }
+    g_manual_add_tid[0] = 0;
     first = 0;
     return 1;
 }
@@ -5745,6 +5830,8 @@ static void app_status_state_json(buf_t *out) {
                setup_active() ? "true" : "false", corrupt ? "true" : "false");
     json_str(out, corrupt_reason);
     buf_put(out, ",", 1);
+    coexist_json(out);
+    buf_put(out, ",", 1);
     activity_json(out);
     buf_put(out, ",", 1);
     notices_json(out, 5);
@@ -5761,6 +5848,8 @@ void app_games_json(buf_t *out) {
     buf_printf(out, "{\"lang\":\"%s\",\"setup\":%s,\"db_corrupt\":%s,\"db_corrupt_reason\":",
                lang_tag(lang_current()), setup_active() ? "true" : "false", corrupt ? "true" : "false");
     json_str(out, corrupt_reason);
+    buf_put(out, ",", 1);
+    coexist_json(out);
     buf_printf(out, ",\"version\":");
     json_str(out, VERSION);
     /* the drives in use, with room left: where the pkgs are and what a send needs */
@@ -5946,7 +6035,7 @@ static int app_art(const char *tid, const char *name, uint32_t id, buf_t *out) {
     return -1;
 }
 
-int app_add(const char *tid, char *msg, size_t cap) {
+static int app_add_internal(const char *tid, char *msg, size_t cap, int manual) {
     if (dbguard_halt_active()) {
         snprintf(msg, cap, "%s",
                  TR("System database flagged as damaged: do not keep registering; restart/recover before continuing",
@@ -5962,10 +6051,14 @@ int app_add(const char *tid, char *msg, size_t cap) {
     unlink(rm);
     clear_removed_dlc_for(tid);
     breaker_resume(&g_breaker, 0);
+    if (manual)
+        snprintf(g_manual_add_tid, sizeof(g_manual_add_tid), "%.9s", tid);
     scan_request_why(0, SCAN_TRIG_ADD);
     snprintf(msg, cap, TR("Adding %s to the library", "Añadiendo %s a la biblioteca"), tid);
     return 0;
 }
+
+int app_add(const char *tid, char *msg, size_t cap) { return app_add_internal(tid, msg, cap, 1); }
 
 /* sceAppInstUtilAppUnInstall in its own thread, waited for at most UNINSTALL_WAIT seconds:
  * a call that never returns (as InstallAll did after rest mode) must not freeze PS4Mount.
@@ -6107,6 +6200,10 @@ int app_remove(const char *tid, char *msg, size_t cap) {
 static void readd_title(const char *tid) {
     if (dbguard_halt_active()) {
         printf("[dbguard] readd_title %s halted: system database flagged as damaged\n", tid);
+        return;
+    }
+    if (auto_register_blocked()) {
+        printf("[coexist] readd_title %s skipped: PS4Mount is installed or in AutoRun\n", tid);
         return;
     }
     char msg[256], name[128];
@@ -6566,7 +6663,7 @@ static int organized_on_root(const char *root, char (*tids)[10], int max) {
 /* organize off: gives back the pkgs of the games PS4Mount had organized, once per drive.
  * A game left open is not closed behind the user's back: the next scan tries again. */
 static void migrate_organized(void) {
-    if (g_cfg.organize || dbguard_halt_active())
+    if (!coexist_migrate_allowed(g_cfg.organize, dbguard_halt_active(), auto_register_blocked()))
         return;
     int pending = 0;
     for (int i = 0; i < NROOTS && !pending; i++) {
@@ -7863,6 +7960,10 @@ static void notify_running(void) {
     char url[48];
     if (dbguard_halt_active())
         return;
+    if (auto_register_blocked()) {
+        coexist_warn_once();
+        return;
+    }
     if (setup_active() && g_reg_mode != REG_NONE && g_web >= 0)
         notify(TR(VERSION ": first start. Review settings in the Lodestar app or at %s and press Save. No games are added until you save.",
                   VERSION ": primera vez. Revisa los ajustes en la app Lodestar o en %s y pulsa Guardar. No se añadirá ningún juego hasta que guardes."),
@@ -7925,6 +8026,7 @@ int main(void) {
     if (user_app_masked())
         unmask_leftover();
     dbguard_halt_active();
+    coexist_publish();
     /* left behind if an earlier load stopped mid-check: removed before the panel can ask for one */
     check_temp_cleanup();
     web_status_provider(app_status_state_json);

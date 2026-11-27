@@ -24,6 +24,7 @@ let NOTICES = []; // GET /api/games notices
 let ACTIVITY = { busy: false, phase: '', drive: '', title: '', title_id: '', done: 0, total: 0, group: 0, groups: 0, dlc_pending: [] };
 let DB_CORRUPT = false;
 let DB_CORRUPT_REASON = '';
+let COEXIST = { ps4mount_installed: false, ps4mount_autorun: false, ps4mount_state: false, auto_register_blocked: false, reasons: [] };
 const STORAGE = { free: 2.5e10, total: 8e10, games: 2, items: [{ id: 'install', bytes: 3e8 }, { id: 'log', bytes: 2097152 }, { id: 'appmeta', bytes: 5e5 }] }; // GET /api/storage
 const DESTS = { dests: [{ id: 'usb0', label: 'usb0', folder: '/mnt/usb0/PS4Mount', free: 5e11, fits: true }] };
 function reply(url) {
@@ -32,7 +33,7 @@ function reply(url) {
   if (url === '/api/storage') return STORAGE;
   return url.indexOf('/api/log') === 0 ? { log: 'a\nb' } : url.indexOf('/api/config') === 0 ? CFG :
     url.indexOf('/api/games') === 0 ? { version: GAMES_VERSION, lang: REPLY_LANG, db_corrupt: DB_CORRUPT,
-      db_corrupt_reason: DB_CORRUPT_REASON, games: GAMES, drives: DRIVES,
+      db_corrupt_reason: DB_CORRUPT_REASON, coexist: COEXIST, games: GAMES, drives: DRIVES,
       notices: NOTICES, activity: ACTIVITY, dlc_mode: CFG.dlc_mode || 'external' } : { ok: true, message: 'ok ' + url };
 }
 const tick = () => new Promise(r => setTimeout(r, 30));
@@ -730,6 +731,37 @@ function tKeys(file) {
   p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
   await tick();
   ok(d.getElementById('dbcorrupt-banner').hidden === true, 'DB corruption banner stays hidden when healthy');
+  ok(d.getElementById('coexist-banner').hidden === true, 'coexistence banner stays hidden when PS4Mount is absent');
+
+  // --- PANEL-13: PS4Mount coexistence banner in both panels (EN + ES)
+  COEXIST = { ps4mount_installed: true, ps4mount_autorun: true, ps4mount_state: true, auto_register_blocked: true, reasons: ['payload', 'autorun'] };
+  REPLY_LANG = 'es';
+  p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('coexist-banner').hidden === false &&
+    d.getElementById('cx-main').textContent.includes('PS4Mount sigue instalado o activo en AutoRun') &&
+    d.getElementById('cx-detail').textContent.includes('Lodestar nunca borra archivos de PS4Mount') &&
+    d.getElementById('cx-detail').textContent.includes('payload, autorun'),
+    'modern panel shows Spanish PS4Mount coexistence banner (PANEL-13)');
+  p = page('legacy.html', {}); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('coexist-banner').style.display === 'block' &&
+    d.getElementById('cx-main').textContent.includes('PS4Mount sigue instalado o activo en AutoRun'),
+    'legacy panel shows Spanish PS4Mount coexistence banner (PANEL-13)');
+  REPLY_LANG = 'en';
+  p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('coexist-banner').hidden === false &&
+    d.getElementById('cx-main').textContent.includes('PS4Mount is still installed or active in GoldHEN AutoRun') &&
+    d.getElementById('cx-detail').textContent.includes('Lodestar never deletes PS4Mount files'),
+    'modern panel shows English PS4Mount coexistence banner (PANEL-13)');
+  p = page('legacy.html', {}); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('coexist-banner').style.display === 'block' &&
+    d.getElementById('cx-main').textContent.includes('PS4Mount is still installed or active in GoldHEN AutoRun'),
+    'legacy panel shows English PS4Mount coexistence banner (PANEL-13)');
+  COEXIST = { ps4mount_installed: false, ps4mount_autorun: false, ps4mount_state: false, auto_register_blocked: false, reasons: [] };
+  REPLY_LANG = undefined;
 })()
   /* jsdom keeps the windows' own timers: end the process, with the code ok() left */
   .then(() => process.exit(process.exitCode || 0), (e) => { console.error(e); process.exit(1); });

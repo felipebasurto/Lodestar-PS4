@@ -112,6 +112,10 @@ echo "== database guardrails & circuit breakers (REG-7..REG-10)"
 $CC $FLAGS -pthread -o "$B/dbguard_test" test/dbguard_test.c src/dbguard.c src/inventory.c src/mem.c
 "$B/dbguard_test"
 
+echo "== PS4Mount coexistence guard (P4N-32, REG-12)"
+$CC $FLAGS -o "$B/env_test" test/env_test.c src/coexist.c src/autorun.c src/build.c src/crypto.c src/mem.c
+"$B/env_test"
+
 echo "== web panel server"
 $CC $FLAGS -Itest -o "$B/http_test" test/http_test.c test/stubs.c src/web.c src/lang.c src/build.c src/mem.c src/crypto.c -lpthread
 "$B/http_test"

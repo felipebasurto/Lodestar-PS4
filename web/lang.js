@@ -247,7 +247,11 @@ var LANGS = {
     'Warning': 'Aviso',
     'Drive': 'Unidad',
     'Info': 'Info',
-    'No notifications yet.': 'Aún no hay notificaciones.'
+    'No notifications yet.': 'Aún no hay notificaciones.',
+    'PS4Mount is still installed or active in GoldHEN AutoRun: automatic game registration is paused.':
+      'PS4Mount sigue instalado o activo en AutoRun de GoldHEN: el registro automático de juegos está en pausa.',
+    'Remove PS4Mount or disable it in payloads.ini before continuing so your shared library is not registered twice. Lodestar never deletes PS4Mount files.':
+      'Quita PS4Mount o desactívalo en payloads.ini antes de continuar para no registrar dos veces tu biblioteca compartida. Lodestar nunca borra archivos de PS4Mount.'
   }
 };
 var LANG = 'en';
