@@ -27,11 +27,50 @@ function bindShelfNavigation(grid, tv, select, back) {
     var id = e.keyCode === 9 && e.target.getAttribute('data-g');
     if (id) { select(id); keepVisible(e.target); }
   });
+  function gridMove(from, direction) {
+    var card = from.parentNode;
+    if (!card || card.parentNode !== grid) return null;
+    var origin = from.getBoundingClientRect();
+    var ox = origin.left + origin.width / 2;
+    var oy = origin.top + origin.height / 2;
+    var forward = direction === 'Right' || direction === 'Down';
+    var horiz = direction === 'Left' || direction === 'Right';
+    var step = forward ? 'nextElementSibling' : 'previousElementSibling';
+    var cur = card[step];
+    var best = null, bestScore = Infinity, sawOtherRow = false;
+    while (cur) {
+      var btn = cur.querySelector('[data-g]:not([disabled])');
+      if (btn && btn.getClientRects().length) {
+        var r = btn.getBoundingClientRect();
+        var dx = r.left + r.width / 2 - ox;
+        var dy = r.top + r.height / 2 - oy;
+        if (horiz) {
+          if (Math.abs(dy) <= Math.max(origin.height, r.height) * 0.5 && (forward ? dx : -dx) >= 3)
+            return btn;
+          return null;
+        }
+        var along = (forward ? dy : -dy);
+        if (along >= 3) {
+          var across = Math.abs(dx);
+          var score = along + across * 3 + (across > along ? 160 : 0);
+          if (score < bestScore) { best = btn; bestScore = score; }
+          if (sawOtherRow && along > Math.max(origin.height, r.height) * 1.5) break;
+          sawOtherRow = true;
+        }
+      }
+      cur = cur[step];
+    }
+    return best;
+  }
   function move(direction) {
     var axis = direction === 'Left' || direction === 'Right' ? 'x' : 'y';
     var sign = direction === 'Left' || direction === 'Up' ? -1 : 1;
     var scope = activeScope();
     var from = document.activeElement;
+    if (from && from.getAttribute && from.getAttribute('data-g') && scope.contains(grid) && grid.contains(from)) {
+      var fast = gridMove(from, direction);
+      if (fast) { focus(fast); return; }
+    }
     var controls = Array.prototype.filter.call(
       scope.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex="0"]'),
       function (el) { return el.getClientRects().length; });
@@ -76,7 +115,7 @@ function bindShelfNavigation(grid, tv, select, back) {
   });
 
   if (!tv || !navigator.getGamepads || !window.requestAnimationFrame) return;
-  var previous = '', next = 0, confirmed = false, cancelled = false;
+  var previous = '', next = 0, repeatSteps = 0, confirmed = false, cancelled = false;
   function poll(now) {
     if (document.hidden) { window.requestAnimationFrame(poll); return; }
     var pads, pad;
@@ -84,21 +123,32 @@ function bindShelfNavigation(grid, tv, select, back) {
     if (!pads) return;
     window.requestAnimationFrame(poll);
     for (var i = 0; i < pads.length; i++) if (pads[i]) { pad = pads[i]; break; }
-    if (!pad) { previous = ''; confirmed = cancelled = false; return; }
+    if (!pad) { previous = ''; repeatSteps = 0; confirmed = cancelled = false; return; }
     function pressed(index) {
       var button = pad.buttons[index];
       return typeof button === 'number' ? button > 0.5 : !!(button && button.pressed);
     }
-    var direction = pressed(12) || pad.axes[1] < -.65 ? 'Up' :
-      pressed(13) || pad.axes[1] > .65 ? 'Down' :
-      pressed(14) || pad.axes[0] < -.65 ? 'Left' :
-      pressed(15) || pad.axes[0] > .65 ? 'Right' : '';
+    var ay = pad.axes[1] || 0, ax = pad.axes[0] || 0;
+    var direction = pressed(12) || (previous === 'Up' ? ay < -.45 : ay < -.65) ? 'Up' :
+      pressed(13) || (previous === 'Down' ? ay > .45 : ay > .65) ? 'Down' :
+      pressed(14) || (previous === 'Left' ? ax < -.45 : ax < -.65) ? 'Left' :
+      pressed(15) || (previous === 'Right' ? ax > .45 : ax > .65) ? 'Right' : '';
     var ok = pressed(0), cancel = pressed(1);
     // Some dialog engines also surface the same physical input as native keys.
     if (Date.now() - lastKey > 250) {
       if (direction && (direction !== previous || now >= next)) {
         move(direction);
-        next = now + (direction === previous ? 120 : 275);
+        if (direction !== previous) {
+          repeatSteps = 0;
+          next = now + 250;
+        } else {
+          repeatSteps++;
+          var inGrid = document.activeElement && grid.contains(document.activeElement);
+          var interval = inGrid ? (repeatSteps < 6 ? 85 : 50) : 110;
+          next = now + interval;
+        }
+      } else if (!direction) {
+        repeatSteps = 0;
       }
       if (ok && !confirmed) {
         var el = document.activeElement;
