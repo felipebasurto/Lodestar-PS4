@@ -32,7 +32,7 @@ You need a jailbroken PS4 with GoldHEN, and `.pkg` files you are allowed to use.
 1. Copy `lodestar-ps4.bin` to `/data/payloads/` on the console (over FTP, for example).
 2. Load the payload with GoldHEN's Payloader or with Payload Guest. A notification shows the panel address.
 3. The app installs itself a few seconds later, if the console has internet and there is a release for that version, and opens on the first start. If it does not appear, install `lodestar-panel.pkg` with GoldHEN's Package Installer. It is called **Lodestar** on the home screen.
-4. **Choose the settings and save.** On the first start no game is added until you save. In the app: hold **L2**, choose **Settings**, review them and go down to **Save settings**. If nobody opens the app or the panel for 2 minutes, the default settings are used.
+4. **Choose the settings and save.** On the first start no existing game is added until you explicitly save (there is no timed auto-save fallback). In the app: hold **L2**, choose **Settings**, review them and go down to **Save settings**, or save from the web panel.
 5. Add games as described in [the next section](#where-to-put-games) and connect the drive.
 6. If a game shows **Restart to play**, restart the console once (**rest mode does not count**) and load Lodestar again.
 7. Play from the home screen, like any other game.

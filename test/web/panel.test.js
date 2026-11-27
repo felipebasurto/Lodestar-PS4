@@ -532,6 +532,7 @@ function tKeys(file) {
   ok(d.documentElement.lang === 'es', 'the page takes the language the console reports');
   ok(d.getElementById('rescan').textContent === 'Buscar juegos' && d.getElementById('settingsbtn').textContent === 'Ajustes', 'fixed texts in Spanish');
   ok(d.getElementById('setupnote').textContent.startsWith('Primer arranque'), 'a long fixed text in Spanish');
+  ok(!d.getElementById('setupnote').textContent.includes('2 minutos'), 'Spanish setup note does not promise a 2-minute auto-add');
   ok(d.getElementById('q').placeholder === 'Buscar juego o CUSA', 'placeholders in Spanish');
   { const c = d.querySelector('[data-g="CUSA34284"]'); c.click();
     ok(c.querySelector('.badge').textContent === 'Reinicia para jugar', 'states in Spanish');
@@ -550,6 +551,7 @@ function tKeys(file) {
   ok(reqs.some(r => r.url === '/api/config' && /(^|&)lang=en(&|$)/.test(r.body)), 'the chosen language is saved');
   REPLY_LANG = 'en'; w.load(); await tick(); await tick();
   ok(d.getElementById('rescan').textContent === 'Scan for games' && d.documentElement.lang === 'en', 'and the page switches back to English');
+  ok(!d.getElementById('setupnote').textContent.includes('2 minutes'), 'English setup note does not promise a 2-minute auto-add');
   REPLY_LANG = 'fr';
   p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
   await tick();

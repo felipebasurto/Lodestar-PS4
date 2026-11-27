@@ -101,7 +101,7 @@ $CC $FLAGS -o "$B/titlecache_test" test/titlecache_test.c src/titlecache.c src/m
 "$B/titlecache_test"
 
 echo "== firmware simulation"
-$CC $FLAGS -o "$B/fw_sim" test/fw_sim.c src/fw.c
+$CC $FLAGS -DSTRICT_FIRST_RUN_SAFETY -o "$B/fw_sim" test/fw_sim.c src/fw.c
 "$B/fw_sim"
 
 echo "== system database"

@@ -277,6 +277,60 @@ cleanup must never use PS4Mount's `.src`, `.removed` or hold files as Lodestar e
 Check: test for port/manifest and ownership decision tables; read for the console-wide service interlock.
 Source: user hardware coexistence requirement, 2026-11-26.
 
+### P4N-28: panel auto-launch requires a valid foreground user; never launch as user 0
+`sceUserServiceInitialize` is called with a valid priority parameter (`0x2BC`, normal priority) and its return
+code is logged (`0` ok, `0x80960003` already initialized in the borrowed host process, any other code is a
+failure). Before auto-opening the native panel app (`LODS00001`) on a first start, the foreground user ID
+variable is initialized to `-1` (never `0`) and queried with `sceUserServiceGetForegroundUser`. `sceLncUtilLaunchApp`
+must never be called if the query returns a non-zero status or an invalid user ID (`<= 0xFF`, which rejects
+`0`, `-1`, all negative values, `0xFE` `USER_ID_EVERYONE`, and `0xFF` `USER_ID_SYSTEM`), or while any game
+or the panel app is already open (or open-app inspection fails), or unless `app.db` freshly confirms the
+panel app is registered. The exact return code and user value are logged. When no valid foreground user is
+available, Lodestar skips auto-opening and leaves clear instructions in the log, console notification and
+panel notices telling the user to open Lodestar manually or use the web panel.
+Check: test (system boundary, database-corruption regression on firmware 14.00). Test: `test/unit.c` ›
+`test_firstrun_launch`; compile boundary `test/sdkcheck.sh`.
+Source: firmware 14.00 rc.3 hardware incident (2026-11-27): auto-opening with unchecked `user = 0` was
+followed 200 ms later by `DbCorruptionOccured ... app.db` / `no such table: tbl_appbrowse_0000000000`.
+
+### P4N-29: first-run library adoption requires explicit user consent, never a UI timeout
+On a first start (no `config.txt` and no prior Lodestar `.src` or `catalog-*` state), Lodestar enters
+`FIRSTRUN_AWAITING_CONSENT` and waits indefinitely for the user to explicitly save settings (`POST /api/config`).
+No elapsed timeout, panel absence, panel close, or native-app crash may auto-save defaults or trigger adoption
+or registration of preexisting games (whether the library has 1 game or 20+ games). Opening or polling the
+panel is strictly observational and never completes first-run consent. Once the user explicitly saves settings
+(or on a subsequent run where `config.txt` or prior Lodestar state already exists), the state transitions to
+`FIRSTRUN_READY` and subsequent scans automatically adopt and register packages added afterwards according to
+the saved settings.
+Check: test (unwanted mass registration / BGFT write prevention, state/time ordering, real firmware 14.00
+regression). Test: `test/unit.c` › `test_firstrun_state`; panel copy in `test/web/panel.test.js`.
+Source: firmware 14.00 rc.3 hardware incident (2026-11-27): after the panel app crashed on first start,
+the 120-second timeout auto-saved defaults and registered 20 preexisting games in 4 groups.
+
+### P4N-30: system database corruption markers are detected read-only without touching databases
+`app.db` remains strictly read-only (`mode=ro&nolock=1`); Lodestar never writes, creates, repairs or deletes
+any file under `/system_data/priv/mms/`. `mode=ro&nolock=1` acquires no locks that could fail ShellCore's
+writes and cannot modify `app.db`; its only trade-off is possible transient inconsistent reads on the reader
+side, which `db.c` already handles fail-closed (`db_confirms_registered` and `db_confirms_unregistered`).
+Lodestar checks `/system_data/priv/mms/app.db-corrupt` with read-only `stat()` at startup and while running,
+logging and emitting one warning notice distinguishing whether the marker already existed at startup or
+appeared during the run, without ever modifying or deleting it.
+Check: test (system boundary, read-only database contract). Test: `test/db_test.c`, `test/policy.sh`;
+compile boundary `test/sdkcheck.sh`.
+Source: firmware 14.00 rc.3 hardware incident (2026-11-27): `app.db` passed `pragma quick_check=ok` while
+`/system_data/priv/mms/app.db-corrupt` existed.
+
+### P4N-31: busy instance lock reports real lock state without blaming PS4Mount
+The shared loopback lock on port 9032 (P4N-27) is preserved unchanged. When acquiring it fails, Lodestar
+logs the port, `errno` and `pid`, probes loopback panel port 8780 read-only (`GET /api/agent`) with a short
+timeout to check whether another Lodestar instance is already answering, and reports clearly whether Lodestar
+itself is already running, another active instance holds lock port 9032, or lock creation failed for another
+reason. It must not specifically claim PS4Mount/USB Mount is running when the holder may be Lodestar itself.
+Check: test (conflict classification in `test/unit.c` › `test_lock_conflict`); read for loopback probe and
+socket error handling (`test/sdkcheck.sh`).
+Source: firmware 14.00 rc.3 hardware incident (2026-11-27): a duplicate Lodestar load reported that PS4Mount
+was running because both share port 9032.
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,

@@ -39,7 +39,13 @@ If a scan queues a game for re-registration because the PS4 still lists a differ
 report explains that recovery and that it can reinstall the game's add-ons. The queue message
 only establishes that recovery was requested. A scan rejecting a macOS `._*.pkg` sidecar is
 informational. An unreadable package without that prefix is still reported.
-Check: test (keep bar 6: the report people act on). Test: `test/logcheck_test.sh`. Source: user (2026-11-24).
+`DbCorruptionOccured`, `tbl_appbrowse_0000000000`, `0x80f50061` (`SCE_LSDB_ERROR_DB_CORRUPT`) and
+`0x809c110e` (`SCE_DBRECOVERY_ERROR_APP_BROWSE_ACCESSOR_APP_DB_ERROR`) are reported as errors explaining
+that the corruption mark is raised by the system (ShellCore) and that comparing timestamps against
+Lodestar's start, any app launch, and any `[reg]` lines establishes what triggered it; `app.db-corrupt`
+marker notices are reported as warnings noting that Lodestar never modifies or deletes system databases.
+Check: test (keep bar 6: the report people act on). Test: `test/logcheck_test.sh`. Source: user (2026-11-24;
+firmware 14.00 `DbCorruptionOccured` audit, 2026-11-27).
 
 ### LOG-6: the analyzer only reads
 It changes no file and uses no network.

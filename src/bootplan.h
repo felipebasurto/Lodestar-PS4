@@ -5,8 +5,9 @@
  * real decision logic without the PS4 SDK or kernel. */
 #pragma once
 
+#include <errno.h>
 #include <stdint.h>
-#include <time.h>
+#include <string.h>
 
 #include "fw.h"
 
@@ -26,32 +27,18 @@ static inline int boot_first_start(int has_config, int has_catalog_or_src) {
     return !has_config && !has_catalog_or_src;
 }
 
-/* First-run setup timeout: expires wait_sec seconds after the later of startup and the
- * panel's last GET /api/games observation. */
-static inline int boot_setup_timeout_expired(int setup_active, time_t now, time_t start, time_t last_seen,
-                                             int wait_sec) {
-    if (!setup_active)
-        return 0;
-    time_t base = last_seen > start ? last_seen : start;
-    return now >= base + wait_sec;
-}
-
-/* Pure risk classifier: true when an expired setup timeout would auto-adopt pending games. */
-static inline int boot_setup_would_auto_adopt(int setup_expired, int pending_games) {
-    return setup_expired && pending_games > 0;
-}
-
-/* Pure foreground-user safety predicate: PS4 user IDs are positive non-zero values returned
- * when sceUserServiceGetForegroundUser succeeds (rc == 0). */
+/* The user a launch or a user-scoped install may name. The system's pseudo users end at
+ * 0xFF (0xFE everyone, 0xFF system) and a real one is far above: user 0, -1 or a failed
+ * sceUserServiceGetForegroundUser make ShellCore read tbl_appbrowse_0000000000, which
+ * does not exist, and flag app.db as corrupt (REG-6, P4N-28). */
 static inline int boot_fg_user_valid(int fg_rc, int32_t fg_user) {
-    return fg_rc == 0 && fg_user > 0;
+    return fg_rc == 0 && fg_user > 0xFF;
 }
 
-/* Current production policy for launching the panel app on first start: preserves main's
- * behavior verbatim (passes fg_user unchecked). fix/first-run-registration-safety tightens
- * this single decision point to require boot_fg_user_valid(fg_rc, fg_user). */
-static inline int boot_panel_launch_user(int fg_rc, int32_t fg_user, uint32_t *out_user) {
-    (void)fg_rc;
+/* Writes the user to launch or install for and returns 1 only when it is valid. */
+static inline int boot_launch_user(int fg_rc, int32_t fg_user, uint32_t *out_user) {
+    if (!boot_fg_user_valid(fg_rc, fg_user))
+        return 0;
     if (out_user)
         *out_user = (uint32_t)fg_user;
     return 1;
@@ -64,31 +51,26 @@ typedef struct {
     int start_fetch;
 } boot_panel_step_t;
 
-/* Pure decision table for panel_app_step() in src/main.c. */
+/* Pure decision table for panel_app_step() in src/main.c. any_app_open is nonzero when an
+ * app is open or the process table could not be read (fail closed). */
 static inline boot_panel_step_t boot_panel_app_plan(int have_installed, int done_marker, int setup_active,
-                                                    int already_opened, int db_registered, int any_game_open,
+                                                    int already_opened, int db_registered, int any_app_open,
                                                     int fetching_state, long elapsed_sec, int delay_sec,
                                                     int upload_active, int install_waiting) {
     boot_panel_step_t plan = {0, 0, 0, 0};
     plan.mark_done = have_installed && !done_marker;
     plan.set_opened = have_installed && setup_active && !already_opened && db_registered;
-    plan.launch_app = plan.set_opened && !any_game_open;
+    plan.launch_app = plan.set_opened && !any_app_open;
     plan.start_fetch = !have_installed && !done_marker && !fetching_state && elapsed_sec >= delay_sec &&
                        !upload_active && !install_waiting;
     return plan;
 }
 
-/* Current production DB gate in scan_all(): checks only db_ready(). Marker/schema checks
- * are parameters here so fix/first-run-registration-safety can tighten one boundary. */
-static inline int boot_db_usable(int db_ready, int db_corrupt_marker, int db_schema_consistent) {
-    (void)db_corrupt_marker;
-    (void)db_schema_consistent;
-    return db_ready != 0;
-}
-
-/* Strict DB safety predicate for future corruption/schema guards. */
-static inline int boot_db_safe_for_registration(int db_ready, int db_corrupt_marker, int db_schema_consistent) {
-    return db_ready != 0 && !db_corrupt_marker && db_schema_consistent != 0;
+/* scan_all() reads app.db to tell the games that need registering: with an unreadable
+ * database (db_ready covers a missing file and a missing tbl_appinfo) or one the system
+ * flagged as damaged (REG-7) every game would look unregistered and be added again. */
+static inline int boot_db_usable(int db_ready, int db_corrupt) {
+    return db_ready != 0 && !db_corrupt;
 }
 
 typedef enum {
@@ -162,4 +144,20 @@ static inline boot_reg_outcome_t boot_install_all_outcome(int reg_mode, int inst
     if (registered < total)
         return BOOT_REG_PARTIAL;
     return BOOT_REG_OK;
+}
+
+/* Who holds the lock port (P4N-31): bind_errno of the failed bind and what the local panel
+ * answered to GET /api/agent. */
+typedef enum {
+    LOCK_CONFLICT_LODESTAR_RUNNING = 0,
+    LOCK_CONFLICT_OTHER_OR_UNKNOWN = 1,
+    LOCK_CONFLICT_SYS_ERROR = 2
+} lock_conflict_t;
+
+static inline lock_conflict_t lock_conflict_classify(int bind_errno, const char *agent_reply) {
+    if (bind_errno != EADDRINUSE)
+        return LOCK_CONFLICT_SYS_ERROR;
+    if (agent_reply && strstr(agent_reply, "\"product\":\"Lodestar\""))
+        return LOCK_CONFLICT_LODESTAR_RUNNING;
+    return LOCK_CONFLICT_OTHER_OR_UNKNOWN;
 }

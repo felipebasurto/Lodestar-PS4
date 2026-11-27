@@ -4,8 +4,9 @@
  * Models daemon decisions through host-testable functions (fw.h, bootplan.h, scanreq.h,
  * stage.h) without needing the PS4 kernel. Run with: bash test/run.sh
  * With --report, also prints a markdown table of the PS5 releases after the results.
- * Compile with -DSTRICT_FIRST_RUN_SAFETY on fix/first-run-registration-safety to turn
- * the documented rc.3 reproducers into hard pass/fail assertions. */
+ * test/run.sh compiles it with -DSTRICT_FIRST_RUN_SAFETY: the rc.3 incident (a panel launch
+ * with user 0, then a 120 s timeout that registered 20 games) as hard pass/fail assertions
+ * on the rules src/main.c runs. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,8 +54,6 @@ typedef struct {
     int has_prior_state;
     int setup_active;
     time_t setup_start;
-    time_t setup_seen;
-    int setup_wait;
     int panel_installed;
     int panel_done_marker;
     int panel_opened;
@@ -64,12 +63,11 @@ typedef struct {
     int fg_rc;
     int32_t fg_user;
     int db_ready;
-    int db_schema_ok;
     int db_corrupt_marker;
     int reg_mode;
     int user_app_masked;
     int library_games;
-    int auto_adopted_games;
+    int registered_games;
     int launched_count;
     uint32_t last_launch_user;
     int scans_run;
@@ -78,12 +76,10 @@ typedef struct {
 static void sim_init(boot_sim_t *s, time_t t0) {
     memset(s, 0, sizeof(*s));
     s->lock_fd = 3;
-    s->setup_wait = 120;
     s->setup_start = t0;
     s->fg_rc = 0;
     s->fg_user = 0x10000000;
     s->db_ready = 1;
-    s->db_schema_ok = 1;
     s->reg_mode = REG_ALL;
 }
 
@@ -101,7 +97,7 @@ static void sim_tick(boot_sim_t *s, time_t now, int upload_active, int install_w
         s->panel_opened = 1;
     if (p.launch_app) {
         uint32_t u = 0;
-        if (boot_panel_launch_user(s->fg_rc, s->fg_user, &u)) {
+        if (boot_launch_user(s->fg_rc, s->fg_user, &u)) {
             s->launched_count++;
             s->last_launch_user = u;
         }
@@ -109,15 +105,11 @@ static void sim_tick(boot_sim_t *s, time_t now, int upload_active, int install_w
     if (p.start_fetch)
         s->panel_fetching = 1;
 
-    if (boot_setup_timeout_expired(s->setup_active, now, s->setup_start, s->setup_seen, s->setup_wait)) {
-        s->setup_active = 0;
-        s->has_config = 1;
-        s->auto_adopted_games = s->library_games;
-    }
-
     boot_scan_gate_t gate = boot_scan_gate(0, s->setup_active, s->reg_mode);
-    if (gate == BOOT_SCAN_RUN && boot_db_usable(s->db_ready, s->db_corrupt_marker, s->db_schema_ok))
+    if (gate == BOOT_SCAN_RUN && boot_db_usable(s->db_ready, s->db_corrupt_marker)) {
         s->scans_run++;
+        s->registered_games = s->library_games;
+    }
 }
 
 static void test_lock_and_first_start(void) {
@@ -135,7 +127,8 @@ static void test_lock_and_first_start(void) {
 static void test_foreground_user_and_panel_lifecycle(void) {
     printf("foreground user and panel app launch decisions\n");
     CHECK(boot_fg_user_valid(0, 0x10000000) == 1, "standard PS4 user id");
-    CHECK(boot_fg_user_valid(0, 1) == 1, "small positive user id");
+    CHECK(boot_fg_user_valid(0, 1) == 0, "small ids belong to the system's pseudo users");
+    CHECK(boot_fg_user_valid(0, 0x100) == 1, "first id above the pseudo users");
     CHECK(boot_fg_user_valid(0, 0) == 0, "user 0 is invalid (triggers tbl_appbrowse_0000000000)");
     CHECK(boot_fg_user_valid(0, -1) == 0, "negative user id is invalid");
     CHECK(boot_fg_user_valid(-1, 0x10000000) == 0, "failed sceUserServiceGetForegroundUser syscall");
@@ -164,7 +157,7 @@ static void test_foreground_user_and_panel_lifecycle(void) {
     CHECK(p.mark_done && !p.launch_app && !p.start_fetch, "installed but not yet in app.db: mark done, wait");
 
     p = boot_panel_app_plan(1, 1, 1, 0, 1, 1, 0, 1, 20, 0, 0);
-    CHECK(p.set_opened && !p.launch_app, "game already open: never launch over it");
+    CHECK(p.set_opened && !p.launch_app, "an app already open (or unreadable process table): never launch over it");
 
     p = boot_panel_app_plan(1, 1, 1, 0, 1, 0, 0, 1, 20, 0, 0);
     CHECK(p.set_opened && p.launch_app, "installed + registered + setup_active + no open game: launch");
@@ -175,86 +168,51 @@ static void test_foreground_user_and_panel_lifecycle(void) {
     p = boot_panel_app_plan(1, 1, 0, 0, 1, 0, 0, 1, 20, 0, 0);
     CHECK(!p.launch_app, "not first start: do not auto-open");
 
-    /* Valid user launches cleanly */
+    /* Valid user launches cleanly; user 0, a failed query and the pseudo users never do */
     uint32_t lu = 0;
-    CHECK(boot_panel_launch_user(0, 0x10000000, &lu) == 1 && lu == 0x10000000u, "valid foreground user");
-
-#ifdef STRICT_FIRST_RUN_SAFETY
-    /* Target contract for fix/first-run-registration-safety: never launch with user 0 or failed fg query. */
-    CHECK(boot_panel_launch_user(0, 0, &lu) == 0, "STRICT: must not launch LODS00001 with user 0");
-    CHECK(boot_panel_launch_user(-1, 0, &lu) == 0, "STRICT: must not launch when GetForegroundUser fails");
-    CHECK(boot_panel_launch_user(-1, 0x10000000, &lu) == 0, "STRICT: must not trust user output on error rc");
-#else
-    /* Reproduces current main (rc.3) behavior: unchecked return value launches with user_id = 0. */
+    CHECK(boot_launch_user(0, 0x10000000, &lu) == 1 && lu == 0x10000000u, "valid foreground user");
+    CHECK(boot_launch_user(0, 0x1B421304, &lu) == 1 && lu == 0x1B421304u, "real local PS4 user id");
     lu = 0xdeadbeefu;
-    int launched_zero = boot_panel_launch_user(0, 0, &lu);
-    CHECK(launched_zero == 1 && lu == 0u, "repro rc.3: current main launches with user=0");
-    int launched_err = boot_panel_launch_user(-1, 0, &lu);
-    CHECK(launched_err == 1 && lu == 0u, "repro rc.3: current main ignores negative GetForegroundUser rc");
-    printf("  [repro rc.3] boot_panel_launch_user(rc=-1, user=0) => launch=1 user=%u (strict check activates on fix/first-run-registration-safety)\n",
-           lu);
+#ifdef STRICT_FIRST_RUN_SAFETY
+    CHECK(boot_launch_user(0, 0, &lu) == 0, "STRICT: must not launch LODS00001 with user 0");
+    CHECK(boot_launch_user(-1, 0, &lu) == 0, "STRICT: must not launch when GetForegroundUser fails");
+    CHECK(boot_launch_user(-1, 0x10000000, &lu) == 0, "STRICT: must not trust user output on error rc");
+    CHECK(boot_launch_user(0, -1, &lu) == 0, "STRICT: must not launch with user -1");
+    CHECK(boot_launch_user(0, 0xFE, &lu) == 0, "STRICT: pseudo user EVERYONE");
+    CHECK(boot_launch_user(0, 0xFF, &lu) == 0, "STRICT: pseudo user SYSTEM");
+    CHECK(lu == 0xdeadbeefu, "STRICT: a refused user is never written out");
 #endif
 }
 
-static void test_setup_timeout_and_library_sizes(void) {
-    printf("first-run setup timeout and pre-existing library sizes (0/1/20/768)\n");
+static void test_library_sizes(void) {
+    printf("registration batches for pre-existing libraries (0/1/20/768)\n");
     const int sizes[] = {0, 1, 20, 768};
     for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
         int n = sizes[i];
         int sz = 0, groups = 0;
 
-        /* Unbatched registration */
         boot_batch_plan(n, 0, 50, &sz, &groups);
         if (n == 0)
             CHECK(sz == 0 && groups == 0, "n=0 unbatched");
         else
             CHECK(sz == n && groups == 1, "n=%d unbatched => 1 group of %d", n, n);
 
-        /* Batched registration (batch_size=50) */
         boot_batch_plan(n, 1, 50, &sz, &groups);
         if (n == 0)
             CHECK(sz == 0 && groups == 0, "n=0 batched");
         else
             CHECK(sz == 50 && groups == (n + 49) / 50, "n=%d batched(50) => %d groups", n, groups);
-
-        /* First start with user interaction: panel polls at t=60, extends deadline to 180; user saves at t=90. */
-        CHECK(boot_setup_timeout_expired(1, 119, 0, 0, 120) == 0, "t=119 before timeout");
-        CHECK(boot_setup_timeout_expired(1, 120, 0, 60, 120) == 0, "t=120 extended by panel poll at t=60");
-        CHECK(boot_setup_timeout_expired(1, 179, 0, 60, 120) == 0, "t=179 still extended");
-        CHECK(boot_setup_timeout_expired(0, 90, 0, 60, 120) == 0, "user saved settings at t=90");
-
-        /* First start WITHOUT interaction: timeout at t=120. */
-        int expired = boot_setup_timeout_expired(1, 120, 0, 0, 120);
-        int adopts = boot_setup_would_auto_adopt(expired, n);
-#ifdef STRICT_FIRST_RUN_SAFETY
-        /* Target contract for fix/first-run-registration-safety: timeout must not mass-adopt pre-existing games. */
-        CHECK(adopts == 0, "STRICT: timeout with %d pre-existing games must not auto-adopt", n);
-#else
-        CHECK(expired == 1, "repro rc.3: timeout fires at 120s without panel poll");
-        CHECK(adopts == (n > 0), "repro rc.3: n=%d auto-adopt=%d", n, adopts);
-#endif
     }
-#ifndef STRICT_FIRST_RUN_SAFETY
-    printf("  [repro rc.3] 120s idle timeout auto-adopts 1/20/768 pre-existing games (strict check activates on fix/first-run-registration-safety)\n");
-#endif
 }
 
 static void test_db_states_and_install_outcomes(void) {
     printf("app.db states, corrupt marker, staging /user/app and AppInstallAll outcomes\n");
-    CHECK(boot_db_usable(0, 0, 1) == 0, "missing app.db blocks scan");
-    CHECK(boot_db_usable(1, 0, 1) == 1, "healthy app.db allows scan");
-    CHECK(boot_db_safe_for_registration(0, 0, 1) == 0, "missing app.db is unsafe");
-    CHECK(boot_db_safe_for_registration(1, 0, 0) == 0, "inconsistent app.db schema is unsafe");
-    CHECK(boot_db_safe_for_registration(1, 1, 1) == 0, "app.db-corrupt marker is unsafe for registration");
-    CHECK(boot_db_safe_for_registration(1, 0, 1) == 1, "healthy DB without corrupt marker is safe");
+    CHECK(boot_db_usable(0, 0) == 0, "unreadable app.db (missing file or no tbl_appinfo, db_ready) blocks scan");
+    CHECK(boot_db_usable(0, 1) == 0, "unreadable and flagged");
 
+    CHECK(boot_db_usable(1, 0) == 1, "healthy app.db allows scan");
 #ifdef STRICT_FIRST_RUN_SAFETY
-    CHECK(boot_db_usable(1, 1, 1) == 0, "STRICT: app.db-corrupt marker must block scan_all");
-    CHECK(boot_db_usable(1, 0, 0) == 0, "STRICT: inconsistent schema must block scan_all");
-#else
-    CHECK(boot_db_usable(1, 1, 1) == 1, "repro rc.3: current main scan_all ignores app.db-corrupt marker");
-    CHECK(boot_db_usable(1, 0, 0) == 1, "repro rc.3: current main scan_all ignores extra schema inconsistency");
-    printf("  [repro rc.3] boot_db_usable(ready=1, corrupt_marker=1) == 1 (strict check activates on fix/first-run-registration-safety)\n");
+    CHECK(boot_db_usable(1, 1) == 0, "STRICT: app.db-corrupt marker must block scan_all");
 #endif
 
     /* Scan gate combinations */
@@ -349,31 +307,32 @@ static void test_rc3_timeline(void) {
     sim_tick(&s, 1001, 0, 0);
 #ifdef STRICT_FIRST_RUN_SAFETY
     CHECK(s.launched_count == 0, "STRICT: LODS00001 must not be launched while foreground user is 0");
-#else
-    CHECK(s.launched_count == 1 && s.last_launch_user == 0u, "repro rc.3: LODS00001 launched with user 0");
 #endif
 
-    /* Following launch with user 0, ShellCore logs DbCorruptionOccured + app.db-corrupt,
-     * and LODS00001 crashes with ExceptionCode 12 (SIGSYS), so setup_seen stays 0. */
+    /* Had it launched with user 0, ShellCore would log DbCorruptionOccured and leave
+     * app.db-corrupt; the panel app would crash and nobody would save the settings. */
     if (s.launched_count > 0 && s.last_launch_user == 0u)
         s.db_corrupt_marker = 1;
 
-    /* T+2s..T+119s: no panel poll arrives; scans stay paused during setup wait. */
-    for (time_t t = 1002; t < 1120; t += 10)
+    /* T+2s..T+10 min: nobody saves the settings. Neither the 120 s of rc.3 nor any later
+     * time adopts or registers the library. */
+    for (time_t t = 1002; t < 1600; t += 10)
         sim_tick(&s, t, 0, 0);
-    CHECK(s.scans_run == 0, "no scan before 120s timeout");
-
-    /* T+120s: setup timeout expires with nobody at the panel. */
-    sim_tick(&s, 1120, 0, 0);
 #ifdef STRICT_FIRST_RUN_SAFETY
-    CHECK(s.auto_adopted_games == 0, "STRICT: rc.3 timeout must not auto-adopt 20 games");
-    CHECK(s.scans_run == 0, "STRICT: scan must not run while app.db-corrupt is present");
-#else
-    CHECK(s.setup_active == 0 && s.auto_adopted_games == 20, "repro rc.3: 20 games auto-adopted at T+120s");
-    CHECK(s.scans_run == 1, "repro rc.3: scan runs at T+120s despite app.db-corrupt");
-    printf("  [repro rc.3] timeline confirmed: launch(user=%u) -> db_corrupt=%d -> T+120s auto_adopted=%d scans=%d\n",
-           s.last_launch_user, s.db_corrupt_marker, s.auto_adopted_games, s.scans_run);
+    CHECK(s.setup_active == 1, "STRICT: the first start waits for an explicit save");
+    CHECK(s.registered_games == 0 && s.scans_run == 0, "STRICT: rc.3 timeout must not register the 20 games");
 #endif
+
+    /* The settings are saved: the scan runs, unless the system flagged app.db */
+    s.setup_active = 0;
+    s.db_corrupt_marker = 1;
+    sim_tick(&s, 1601, 0, 0);
+#ifdef STRICT_FIRST_RUN_SAFETY
+    CHECK(s.scans_run == 0, "STRICT: scan must not run while app.db-corrupt is present");
+#endif
+    s.db_corrupt_marker = 0;
+    sim_tick(&s, 1602, 0, 0);
+    CHECK(s.scans_run == 1 && s.registered_games == 20, "after the save and without the marker the scan runs");
 }
 
 int main(int argc, char **argv) {
@@ -414,7 +373,7 @@ int main(int argc, char **argv) {
 
     test_lock_and_first_start();
     test_foreground_user_and_panel_lifecycle();
-    test_setup_timeout_and_library_sizes();
+    test_library_sizes();
     test_db_states_and_install_outcomes();
     test_scan_repetitions();
     test_rc3_timeline();

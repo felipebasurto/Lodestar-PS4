@@ -1,0 +1,6 @@
+2026-11-27 10:00:00.000 [main] start (lock 7, pid 512)
+2026-11-27 10:00:00.100 [main] firmware 14.00 (0x14000000), InstallAll present, TitleDir present, UnInstall present, registration: AppInstallAll
+2026-11-27 10:00:00.200 [db] system corruption marker detected (/system_data/priv/mms/app.db-corrupt): already existed at startup; Lodestar never writes or repairs system databases
+2026-11-27 10:00:18.400 [klog] [SceShellCore] no such table: tbl_appbrowse_0000000000
+2026-11-27 10:00:18.450 [klog] [SceShellCore] [AppBrowseAccessor] app.db error 0x809c110e
+2026-11-27 10:00:18.500 [klog] [SceShellCore] [LSDB] DbCorruptionOccured (0x80f50061)
