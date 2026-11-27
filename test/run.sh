@@ -120,6 +120,14 @@ echo "== native panel hold to confirm (PANEL-8) =="
 $CC $FLAGS -o "$B/panel_lane_test" test/panel_lane_test.c panel-app/lane.c
 "$B/panel_lane_test"
 
+echo "== native panel app lifecycle, concurrency, logging and fuzz (PANEL-10/11/12) =="
+$CC $FLAGS -DPANEL_MOCK_FONT -pthread -o "$B/panel_app_test" test/panel_app_test.c panel-app/app.c panel-app/applog.c panel-app/api.c panel-app/view.c panel-app/draw.c panel-app/art.c panel-app/lane.c src/json.c -lm
+"$B/panel_app_test"
+
+echo "== native panel double-buffered renderer exactness and benchmark (PANEL-12) =="
+$CC $FLAGS -DPANEL_MOCK_FONT -o "$B/panel_render_test" test/panel_render_test.c panel-app/render.c panel-app/view.c panel-app/draw.c panel-app/art.c panel-app/lane.c -lm
+"$B/panel_render_test"
+
 echo "== pkgs sent from the panel"
 $CC $FLAGS -Itest -o "$B/upload_test" test/upload_test.c src/upload.c src/lang.c src/mem.c src/check.c src/pkg.c src/build.c src/crypto.c -lpthread
 "$B/upload_test"
