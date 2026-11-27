@@ -58,6 +58,74 @@ Check: test (memory ownership and boundary arithmetic). Test: `test/unit.c` › 
 compile boundary `test/sdkcheck.sh`.
 Source: rewrite memory audit 2026-11-25.
 
+### REG-6: user-dependent system calls require a verified non-zero foreground user
+Before launching an application (`sceLncUtilLaunchApp`) or queuing a user-owned installer
+task (`install_pkg` / BGFT), Lodestar must initialize the output user ID to an invalid
+sentinel (`-1`), check the return code of `sceUserServiceGetForegroundUser`, and verify
+that the returned user ID is strictly valid (`rc == 0`, `user_id > 0`, and neither
+`SCE_USER_SERVICE_USER_ID_EVERYONE` `0xFE` nor `SCE_USER_SERVICE_USER_ID_SYSTEM` `0xFF`).
+Launching or installing with user `0` or an unchecked/failed user query is forbidden:
+on PS4, launching with `user_id = 0` causes ShellCore to look up `tbl_appbrowse_0000000000`
+in `app.db`, fail with `no such table`, emit `DbCorruptionOccured` and write
+`/system_data/priv/mms/app.db-corrupt`.
+Check: test (keep bar 2: data loss; keep bar 5: real hardware regression). Test:
+`test/dbguard_test.c`; compile boundary `test/sdkcheck.sh`.
+Source: firmware 14.00 Lodestar 3.1.0-rc.3 incident (`tbl_appbrowse_0000000000`).
+
+### REG-7: system database corruption markers and klog events latch an immediate halt
+If `/system_data/priv/mms/app.db-corrupt` (or `appinfo.db-corrupt` / `addcont.db-corrupt`)
+exists on disk, or the kernel log emits `DbCorruptionOccured` (or an equivalent LSDB/DbRecovery
+corruption event), Lodestar immediately latches a persistent-for-this-run corruption halt.
+While halted, Lodestar must not start or continue any game registration, re-registration,
+uninstall, BGFT install, or panel-app auto-launch. Lodestar must never attempt to repair,
+delete, rename, or modify any file under `/system_data/priv/mms/`; all markers and databases
+are preserved untouched for inspection. Lodestar emits an explicit warning in the log,
+console notifications, `/api/status`, `/api/games`, and both web panels telling the user
+that the system database is flagged as damaged and to stop registering and restart/recover
+before continuing.
+Check: test (keep bar 2: data loss; keep bar 5: real hardware regression). Test:
+`test/dbguard_test.c`, `test/web/panel.test.js`, `test/logcheck_test.sh`; compile boundary
+`test/sdkcheck.sh`.
+Source: firmware 14.00 Lodestar 3.1.0-rc.3 incident (`app.db-corrupt` and repeated
+`DbCorruptionOccured` during subsequent `AppInstallAll` batches).
+
+### REG-8: first-start and post-migration registration circuit breaker
+On a first start, Lodestar must never automatically save default settings or convert a
+library because of a UI timeout or inactivity. Registration begins only after the user
+explicitly saves settings (or explicitly requests a title). On a first start after settings
+are saved, or after a configuration/storage migration, a registration circuit breaker caps
+registration to at most one pilot title and validates post-registration state (no corruption
+latch, fresh `db_confirms_registered` for the pilot title, and `/user/app` proven unmasked).
+If validation fails, the breaker trips and halts further registration. If validation succeeds
+and more titles remain pending, Lodestar holds the remaining titles until explicit user
+continuation (such as a manual scan or explicit add) rather than bulk-registering unattended.
+Check: test (keep bar 2: data loss; keep bar 3: ordering; keep bar 5: real hardware
+regression). Test: `test/dbguard_test.c`; compile boundary `test/sdkcheck.sh`.
+Source: firmware 14.00 Lodestar 3.1.0-rc.3 incident (120 s timeout auto-saved defaults and
+registered ~20 titles in 4 batches while the panel app was crashing and `app.db-corrupt` was set).
+
+### REG-9: staging errors and DB errors prioritize restoring `/user/app` and abort the batch
+Staging must not mask `/user/app` while any application (including the panel app) is open.
+If any database corruption signal or database-layer installer error (`0x80F5xxxx` / `0x809C11xx`)
+appears during staging or `AppInstallAll`, Lodestar immediately aborts the wait, prioritizes
+unmounting staged child mounts and `/user/app` (gentle retries followed by `MNT_FORCE`), and
+aborts the batch without running `register_finish` or subsequent groups. If `/user/app`
+cannot be proven unmasked, Lodestar must keep its masked flag set, leave `STAGE_DIR` intact
+rather than clearing it while mounted, report the fault, and abort the batch.
+Check: test (keep bar 2: data loss; keep bar 3: ordering). Test: `test/dbguard_test.c`;
+compile boundary `test/sdkcheck.sh`.
+Source: forensic staging/unmount race audit on firmware 14.00 incident.
+
+### REG-10: operational inventory is persisted under `/data/lodestar` before registration
+Before registration operations, Lodestar atomically writes its own operational inventory to
+`/data/lodestar/inventory.tsv` recording title IDs, source paths, mount mode, base and
+effective versions, patch/add-on metadata, and operational state. Entries for titles on
+disconnected drives are preserved across scans. This file lives strictly under `/data/lodestar`
+and never copies, reads for writeback, or writes any system database under `/system_data/priv/mms/`.
+Check: test (keep bar 1: external file format; keep bar 2: recovery/data safety). Test:
+`test/dbguard_test.c`; compile boundary `test/sdkcheck.sh`.
+Source: post-rebuild recovery requirement after firmware 14.00 database rebuild.
+
 ## Non-goals
 
 - Changing the external param.sfo parser rules in `specs/pkg.md`.

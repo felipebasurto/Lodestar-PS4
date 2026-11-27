@@ -147,8 +147,10 @@ work; temporary validation files and read-only network probes are not mutations.
 is static apart from those versioned constants, uses no application locks and is worker-safe.
 
 `GET /api/status` returns a lightweight JSON snapshot with `product`, `version`,
-`api_version`, `setup`, `activity`, `queues`, at most five recent `notices`, and key
-`endpoints`. `activity` has the same fields and meaning as the `activity` object of
+`api_version`, `setup`, `db_corrupt`, `db_corrupt_reason`, `activity`, `queues`, at most five recent `notices`, and key
+`endpoints`. `db_corrupt` and `db_corrupt_reason` are also included in `GET /api/games` so panels
+can show an explicit corruption warning without extra requests; both are copied from a synchronized
+snapshot and never touch the catalog or system database writes. `activity` has the same fields and meaning as the `activity` object of
 `GET /api/games`, including `dlc_pending`, but `/api/status` must not enumerate the library
 or copy the game list. `queues.web_owner_pending`, `queues.web_write_pending` and
 `queues.web_write_active` are read through the web server's synchronized counters. Status is

@@ -39,6 +39,9 @@ If a scan queues a game for re-registration because the PS4 still lists a differ
 report explains that recovery and that it can reinstall the game's add-ons. The queue message
 only establishes that recovery was requested. A scan rejecting a macOS `._*.pkg` sidecar is
 informational. An unreadable package without that prefix is still reported.
+A `DbCorruptionOccured` kernel line, an `app.db-corrupt` marker report, or a `[dbguard]`
+corruption halt is reported as an `ERROR` advising the operator to stop registering and
+restart/recover before continuing.
 Check: test (keep bar 6: the report people act on). Test: `test/logcheck_test.sh`. Source: user (2026-11-24).
 
 ### LOG-6: the analyzer only reads

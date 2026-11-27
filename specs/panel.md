@@ -43,7 +43,9 @@ The web panels and the PS4 app give each game state the same name. Opening a gam
 restart, whose drive is away, that has another active copy, that is still to be added or that is
 installed on the console says what that means and what to do. While any game waits for a restart,
 both panels' libraries say so at the top: restart the console (rest mode does not count) and have
-Lodestar loaded afterwards. The console's notification for it asks to load Lodestar again unless it
+Lodestar loaded afterwards. While the system database is flagged as damaged (`db_corrupt`), both
+web panels show an explicit top-level warning telling the user not to continue registering and to
+restart/recover before continuing (`REG-7`). The console's notification for it asks to load Lodestar again unless it
 starts with GoldHEN. A warning says what happened and, when the user can do something, what.
 Check: test for the web names and restart notices (`test/web/panel.test.js`), read for the app and
 the notifications.
