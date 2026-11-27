@@ -19,7 +19,7 @@ CC=${CC:-clang}
 LD=${LD:-ld.lld}
 TITLE_ID=LODS00001 # must match PANEL_APP_TID in src/main.c
 CONTENT_ID=IV0000-${TITLE_ID}_00-LODESTARPANEL000
-VER=02.00
+VER=02.01
 W=../build/panel-app
 export OO_PS4_TOOLCHAIN=$O DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 rm -rf "$W" && mkdir -p "$W/sce_sys/about" "$W/sce_module"

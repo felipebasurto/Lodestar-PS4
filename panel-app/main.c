@@ -729,7 +729,7 @@ static void loop(int video, uint32_t *buffers[2], int pad, int user) {
                 submitted = -1;
             }
         }
-        if (dirty && submitted < 0) {
+        if (dirty && submitted < 0 && !quit) {
             int back = front == 0 ? 1 : 0;
             draw((canvas){buffers[back]});
             if (sceVideoOutSubmitFlip(video, back, ORBIS_VIDEO_OUT_FLIP_VSYNC, 0) >= 0) {
@@ -738,6 +738,12 @@ static void loop(int video, uint32_t *buffers[2], int pad, int user) {
             }
         }
         usleep(16000);
+    }
+    for (int i = 0; submitted >= 0 && i < 200; i++) {
+        OrbisVideoOutFlipStatus status = {0};
+        if (sceVideoOutGetFlipStatus(video, &status) >= 0 && !status.numFlipPending)
+            break;
+        usleep(1000);
     }
     if (ime)
         sceImeDialogTerm();
@@ -798,20 +804,14 @@ int main(void) {
     int rc = video_loop(pad, user);
     pthread_mutex_lock(&mutex);
     quit_worker = 1;
-    int detach_worker = active && !reply.kind;
     pthread_cond_signal(&wake);
     pthread_mutex_unlock(&mutex);
-    if (detach_worker)
-        pthread_detach(thread); /* the process exits; the worker only owns its request and result */
-    else
-        pthread_join(thread, NULL);
+    pthread_join(thread, NULL);
     scePadClose(pad);
     clear_art();
     free(catalog);
-    if (!detach_worker) {
-        free(reply.catalog);
-        free(reply.cover.pixels);
-    }
+    free(reply.catalog);
+    free(reply.cover.pixels);
     font_close();
     return rc < 0;
 }
