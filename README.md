@@ -1,13 +1,15 @@
-<p align="center"><img src="assets/lodestar-512.png" width="180" alt="Lodestar"></p>
+<p align="center"><img src="assets/lodestar-lockup.svg" width="640" alt="Lodestar"></p>
 
 # Lodestar
 
 **Organiza y monta tus paquetes locales de PS4 desde USB o el almacenamiento de la consola.**
 **Organize and mount your local PS4 packages from USB or console storage.**
 
-**[Empezar](#uso) · [Getting started](#use) · [Descargas / Downloads](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.2)**
+**[Empezar](#uso) · [Guía completa](docs/guia.md) · [Getting started](#use) · [User guide](docs/guide.md) · [Descargas / Downloads](https://github.com/felipebasurto/Lodestar-PS4/releases/tag/v3.1.0-rc.2)**
 
-`3.1.0-rc.2` incluye la app nativa de PS4 y el panel web. / `3.1.0-rc.2` includes the native PS4 app and web panel.
+> [!NOTE]
+> Este README describe la **3.1.0-rc.3** (rama `main`, aún sin release). La última publicada es la `3.1.0-rc.2`, cuya app de PS4 tiene la interfaz y los controles anteriores. Las compilaciones de `main` están en el artefacto `lodestar-ps4` de [Build and release](https://github.com/felipebasurto/Lodestar-PS4/actions/workflows/build.yml).
+> This README describes **3.1.0-rc.3** (the `main` branch, not released yet). The latest published build is `3.1.0-rc.2`, whose PS4 app has the previous interface and controls. Builds of `main` are in the `lodestar-ps4` artifact of [Build and release](https://github.com/felipebasurto/Lodestar-PS4/actions/workflows/build.yml).
 
 Lodestar es un proyecto independiente para PS4, publicado como [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
 Lodestar is an independent PS4 project, published as [felipebasurto/Lodestar-PS4](https://github.com/felipebasurto/Lodestar-PS4).
@@ -28,7 +30,7 @@ Lodestar es un payload para una PS4 con jailbreak. Pones los pkgs del juego (y s
 
 Lodestar está centrado deliberadamente en discos duros USB y almacenamiento local. **No incluye Google Drive, NAS, SMB, NFS ni FUSE**: esas funciones se eliminaron para reducir superficie, dependencias y fallos difíciles de diagnosticar.
 
-El panel web enseña la biblioteca como una parrilla densa de carátulas, parecida a una biblioteca de Steam. La ficha y las acciones de un juego se abren solo cuando las pides, sin ocupar media pantalla permanentemente.
+El panel web y la app de PS4 enseñan la biblioteca como una columna de juegos, en la que la fila elegida crece. La ficha de un juego se abre solo cuando la pides, sin ocupar permanentemente media pantalla con un panel de detalles.
 
 El payload se ha probado en **13.52** y **14.00** con GoldHEN. El panel y las notificaciones están en **español e inglés**: salen en el idioma de la consola (inglés si no es ninguno de los dos), y se puede cambiar en **Ajustes → Idioma**.
 
@@ -72,38 +74,58 @@ El payload se ha probado en **13.52** y **14.00** con GoldHEN. El panel y las no
 
 ## Uso
 
+La explicación completa, con capturas de cada pantalla, está en la **[guía de uso](docs/guia.md)**.
+
+### Primera vez
+
 1. **Descarga** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-ps4.bin) y cópialo en **`/data/payloads/`** de la consola.
-2. **Después de cada arranque**, carga Lodestar. Aparece una notificación con `Lodestar <versión> en marcha` y la dirección del panel.
-3. **Pon los juegos** de una de estas formas:
-   - **En un USB:** copia los pkgs en la carpeta `PS4Mount` y conecta el USB a la PS4. Si desactivas **Organizar** en Ajustes, puedes guardarlos en cualquier carpeta de la unidad.
-   - **En la memoria interna:** copia los pkgs en `/data/Lodestar` por FTP.
-   - **Desde el panel:** usa **Enviar paquetes** para mandarlos por la red local.
-4. Abre el panel desde el móvil o el PC: `http://<IP de la PS4>:8780`.
+2. **Carga Lodestar.** Aparece una notificación con `Lodestar <versión> en marcha` y la dirección del panel. Hay que repetirlo **después de cada arranque**, salvo que actives **Arrancar con GoldHEN**.
+3. **Abre la app o el panel** (`http://<IP de la PS4>:8780`), elige los ajustes y **guarda**. Hasta entonces no se añade ningún juego; si nadie los abre en 2 minutos, se usan los ajustes por defecto.
+4. **Pon los juegos** (con su actualización y sus DLC):
+   - **En un USB:** en la carpeta `Lodestar` de la unidad, y conéctalo.
+   - **En la memoria interna:** en `/data/Lodestar`, por FTP.
+   - **Desde el panel:** con **Enviar paquetes**, por la red local.
+5. Si un juego queda como **Reinicia para jugar**, reinicia una vez y vuelve a cargar Lodestar.
+6. Juega desde la pantalla de inicio.
 
-### En la consola
+> [!IMPORTANT]
+> Con **Organizar** activado (por defecto), Lodestar **mueve y renombra** los pkgs a `ps4/<ID del juego>/` en su unidad. Desactívalo antes de guardar si no quieres que toque tus archivos. **Restaurar archivos originales** los devuelve.
 
-El juego aparece en la pantalla de inicio como cualquier otro. Lodestar avisa con notificaciones al cargarse, al encontrar y añadir juegos, si falta el disco de un juego, al borrar uno y cuando una acción necesita reiniciar.
+### La app de PS4
+
+La app se instala sola cuando hay una release de la versión y la consola tiene internet. Si no, instala [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) con el instalador de paquetes de GoldHEN. Usa `LODS00001` y aparece como un icono separado llamado **Lodestar**; no reemplaza la app `PSMT00001` de PS4Mount. Necesita el payload cargado.
+
+![La app de PS4](docs/app-library-es.png)
+
+| Botón | Qué hace |
+| --- | --- |
+| **↑ ↓** o stick izquierdo | Recorrer la biblioteca |
+| **← →** | Saltar a la inicial anterior o siguiente |
+| **L1 / R1** | Cambiar de sección: Pendientes, Todos, Abiertos |
+| Mantener **✕** | Añadir o quitar el juego |
+| Mantener **□** | Restaurar sus archivos originales |
+| **△** | Ficha: ID, versión, DLC, firmware, tamaño y ubicación |
+| Mantener **L2**, apuntar y soltar | Rueda: Buscar juegos, Enviar paquetes, Transferencias, Ajustes, Buscar por nombre, Salir |
+| **○** | Volver, borrar la búsqueda o salir |
+
+Añadir, quitar y restaurar piden mantener el botón hasta que se llena la barra naranja; si lo sueltas antes, no pasa nada. En **Ajustes**, nada se aplica hasta elegir **Guardar ajustes**.
+
+La compilación y las pruebas de host están verificadas. La [validación en una PS4 real](https://github.com/felipebasurto/Lodestar-PS4/issues/13) sigue pendiente.
+
+### El panel web
+
+Para el móvil y el PC: `http://<IP de la PS4>:8780`. No tiene contraseña.
+
+- **Arriba**: **Buscar juegos** (vuelve a mirar las unidades), **Enviar paquetes**, **Importar desde URL**, la campana de notificaciones y **Más** (Ajustes, Quitar varios, Log y Detener).
+- **Encima de la biblioteca**: el buscador, los filtros por estado (Listo, Reinicia para jugar, Unidad no conectada…) y por plataforma, y el espacio libre de cada unidad.
+- **La biblioteca**: un juego por fila, ordenados por título; la fila elegida crece. Al pulsar un juego se abre su ficha: versión, DLC, firmware que necesita, dónde están sus pkgs y las acciones (quitar o añadir a la biblioteca, restaurar sus archivos originales).
+- **Ajustes**: biblioteca (carpetas, organizar, memoria interna, grupos), DLC, consola (idioma, AutoRun, log del sistema), lo que Lodestar ocupa en la consola y restaurar archivos originales.
+
+En la pantalla de inicio, cada juego aparece como cualquier otro. Lodestar avisa con notificaciones al cargarse, al encontrar y añadir juegos, si falta el disco de un juego, al borrar uno y cuando hace falta reiniciar.
 
 ### Por qué hay que reiniciar una vez
 
 La consola solo prepara algunos juegos nuevos al arrancar. Cuando Lodestar registra un juego nuevo, o una actualización llega después del juego, la consola pide reiniciar una vez. Después ese juego queda listo para los arranques siguientes.
-
-### El panel
-
-- **Arriba**: **Buscar juegos** (vuelve a mirar las unidades), **Enviar paquetes**, **Importar desde URL**, la campana de notificaciones y **Más** (Ajustes, Quitar varios, Log y Detener).
-- **Encima de la parrilla**: el buscador, los filtros por estado (Listo, Reinicia para jugar, Unidad no conectada…) y por plataforma, y el espacio libre de cada unidad.
-- **La parrilla**: una carátula por juego. Al pulsarla se abre su ficha: versión, DLC, firmware que necesita, dónde están sus pkgs y las acciones (quitar o añadir a la biblioteca, restaurar sus archivos originales).
-- **Ajustes**: biblioteca (carpetas, organizar, memoria interna, grupos), DLC, consola (idioma, AutoRun, log del sistema), lo que Lodestar ocupa en la consola y restaurar archivos originales.
-
-### App nativa de PS4
-
-Descarga [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) e instálalo con el instalador de paquetes de GoldHEN. Este PKG usa `LODS00001` y aparece como un icono separado; no reemplaza la app `PSMT00001` de PS4Mount. Carga el payload de esta release y abre **Lodestar** desde la pantalla de inicio. La app usa la API local del payload.
-
-- **Flechas** para moverte entre la barra lateral y las carátulas. **X** abre la ficha, **△** abre el teclado para buscar, **□** vuelve a escanear y **○** vuelve o sale.
-- Desde la barra lateral puedes encolar una URL, consultar el progreso y abrir los ajustes de biblioteca, DLC y consola.
-- **Enviar paquetes** muestra la dirección del panel para abrirlo desde otro equipo. Allí se envían archivos del móvil o PC y se gestionan importaciones y ajustes avanzados.
-
-La compilación y las pruebas de host están verificadas. La [validación en una PS4 real](https://github.com/felipebasurto/Lodestar-PS4/issues/13) sigue pendiente.
 
 ### API para agentes y scripts
 
@@ -231,7 +253,7 @@ Lodestar is a payload for a jailbroken PS4. Put a game's packages (with its upda
 
 Lodestar is deliberately focused on USB hard drives and local storage. **It does not include Google Drive, NAS, SMB, NFS or FUSE**: those features were removed to reduce surface area, dependencies and hard-to-diagnose failures.
 
-The web panel shows the library as a dense artwork grid, closer to a Steam library. A game's details and actions open only on demand instead of a permanent details pane taking half the screen.
+The web panel and the PS4 app show the library as one column of games, where the chosen row grows. A game's details open only on demand instead of a permanent details pane taking half the screen.
 
 ![The Lodestar panel](docs/panel-main.png)
 
@@ -275,38 +297,58 @@ The payload has been tested on firmware **13.52** and **14.00** with GoldHEN. Th
 
 ## Use
 
+The full explanation, with a screenshot of every screen, is in the **[user guide](docs/guide.md)**.
+
+### First time
+
 1. **Download** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-ps4.bin) and copy it to **`/data/payloads/`** on the console.
-2. **After every boot**, load Lodestar. A notification shows `Lodestar <version> running` and the panel address.
-3. **Add games** in one of these ways:
-   - **USB:** copy the pkgs into the `PS4Mount` folder and connect the drive. If **Organize** is disabled in Settings, pkgs may stay anywhere on the drive.
-   - **Internal storage:** copy pkgs into `/data/Lodestar` over FTP.
-   - **Panel:** use **Send packages** to upload them over the local network.
-4. Open the panel from a phone or PC: `http://<PS4 IP>:8780`.
+2. **Load Lodestar.** A notification shows `Lodestar <version> running` and the panel address. Do it again **after every boot**, unless you turn on **Start with GoldHEN**.
+3. **Open the app or the panel** (`http://<PS4 IP>:8780`), choose the settings and **save**. No game is added until then; if nobody opens either for 2 minutes, the default settings are used.
+4. **Add games** (with their update and add-ons):
+   - **USB:** in the drive's `Lodestar` folder, then connect it.
+   - **Internal storage:** in `/data/Lodestar`, over FTP.
+   - **Panel:** with **Send packages**, over the local network.
+5. If a game shows **Restart to play**, restart once and load Lodestar again.
+6. Play from the home screen.
 
-### On the console
+> [!IMPORTANT]
+> With **Organize** on (the default), Lodestar **moves and renames** pkgs to `ps4/<title ID>/` on their drive. Turn it off before saving if you do not want it to touch your files. **Restore original files** puts them back.
 
-The game appears on the home screen like any other. Lodestar notifies when it loads, when games are found and added, when a game's drive is missing, when one is deleted, and when an action needs a restart.
+### The PS4 app
+
+The app installs itself when there is a release for the version and the console has internet. Otherwise install [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) with GoldHEN’s Package Installer. It uses `LODS00001` and appears as a separate tile named **Lodestar**; it does not replace PS4Mount’s `PSMT00001` app. It needs the payload loaded.
+
+![The PS4 app](docs/app-library-en.png)
+
+| Button | What it does |
+| --- | --- |
+| **↑ ↓** or left stick | Walk the library |
+| **← →** | Jump to the previous or next initial |
+| **L1 / R1** | Change section: Needs attention, All, Running |
+| Hold **Cross** | Add or remove the game |
+| Hold **Square** | Restore its original files |
+| **Triangle** | Details: ID, version, add-ons, firmware, size and location |
+| Hold **L2**, point and release | Wheel: Scan for games, Send packages, Transfers, Settings, Search by name, Exit |
+| **Circle** | Back, clear the search or exit |
+
+Adding, removing and restoring need the button held until the orange bar fills; release it earlier and nothing happens. In **Settings**, nothing is applied until you choose **Save settings**.
+
+The package builds and the host checks pass. [PS4 hardware validation](https://github.com/felipebasurto/Lodestar-PS4/issues/13) is still pending.
+
+### The web panel
+
+For phones and PCs: `http://<PS4 IP>:8780`. It has no password.
+
+- **Top**: **Scan for games** (looks at the drives again), **Send packages**, **Import from URL**, the notifications bell and **More** (Settings, Remove several, Log and Stop).
+- **Above the library**: the search field, the filters by state (Ready, Restart to play, Drive not connected…) and by platform, and each drive's free space.
+- **The library**: one game per row, in title order; the chosen row grows. Choosing a game opens its details: version, add-ons, required firmware, where its pkgs are, and its actions (remove from or add to the library, restore its original files).
+- **Settings**: library (folders, organize, internal storage, groups), add-ons, console (language, AutoRun, system log), what Lodestar keeps on the console, and restoring original files.
+
+On the home screen each game looks like any other. Lodestar notifies when it loads, when games are found and added, when a game's drive is missing, when one is deleted, and when an action needs a restart.
 
 ### Why one restart is needed
 
 The console prepares some new games only during boot. When Lodestar registers a new game, or an update arrives after the game, the console asks for one restart. After that, the game remains ready across boots.
-
-### The panel
-
-- **Top**: **Scan for games** (looks at the drives again), **Send packages**, **Import from URL**, the notifications bell and **More** (Settings, Remove several, Log and Stop).
-- **Above the grid**: the search field, the filters by state (Ready, Restart to play, Drive not connected…) and by platform, and each drive's free space.
-- **The grid**: one artwork per game. Choosing it opens its details: version, add-ons, required firmware, where its pkgs are, and its actions (remove from or add to the library, restore its original files).
-- **Settings**: library (folders, organize, internal storage, groups), add-ons, console (language, AutoRun, system log), what Lodestar keeps on the console, and restoring original files.
-
-### Native PS4 app
-
-Download [`lodestar-panel.pkg`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.2/lodestar-panel.pkg) and install it with GoldHEN’s Package Installer. This PKG uses `LODS00001` and appears as a separate tile; it does not replace PS4Mount’s `PSMT00001` app. Load the payload from this release and open **Lodestar** from the home screen. The app uses the payload’s local API.
-
-- Use the **D-pad** to move between the sidebar and the game grid. **Cross** opens details, **Triangle** opens the search keyboard, **Square** scans again, and **Circle** goes back or exits.
-- From the sidebar you can queue a URL import, check its progress, and open the library, add-on and console settings.
-- **Send packages** shows the panel address to open on another device. Use that panel to upload files from your phone or PC and manage advanced imports and settings.
-
-The package builds and the host checks pass. [PS4 hardware validation](https://github.com/felipebasurto/Lodestar-PS4/issues/13) is still pending.
 
 ### Agent and script API
 
@@ -412,9 +454,12 @@ bash test/sdkcheck.sh
 | --- | --- |
 | `src/` | The payload in C (scan, registration, mounts, HTTP panel, downloads) |
 | `web/` | The panel: `index.html`, `legacy.html` (the PS4's browser) and translations |
+| `assets/` | The identity: `render_icons.py` draws the mark, wordmark and artwork; `render_web_theme.py` packs the font for the web panel |
 | `panel-app/` | Native PS4 app (OpenOrbis, VideoOut and the API client) |
 | `extension/` | The browser extension |
 | `specs/` | Behavior rules, by area |
 | `test/` | Host tests (C, Python and the panel in jsdom) |
 | `tools/` | `logcheck.py` (explains the log), `exfatmap.py` (maps an exFAT drive), `benchdisk` |
 | `evidence/` | Measurements taken on the console |
+
+The menus use [Barlow Condensed](https://github.com/jpt/barlow), SIL Open Font License 1.1 (`third_party/barlow/OFL.txt`). The globe's coastlines come from [Natural Earth](https://www.naturalearthdata.com/) (public domain).

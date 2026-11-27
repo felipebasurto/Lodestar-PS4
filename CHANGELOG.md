@@ -4,6 +4,14 @@ Lodestar (PS4Mount PS4 before 2.0.0) began as a PS4-only port of [PS4Mount](http
 
 ## 3.1.0-rc.3
 
+**New look.** A new mark (a flying wing seen from above, carrying a lodestar) and wordmark, and a light menu style inspired by Black Ops II in the web panel, the PS4 app and the browser extension: dark neutral grounds, orange selection and condensed type; the app's home screen art has a night globe.
+
+**A one-column library.** Games are listed one per row in title order, and the chosen row grows. In the PS4 app, Up and Down walk the list, Left and Right jump by initial, L1 and R1 change section, holding Cross adds or removes, holding Square restores the original files, Triangle shows the details, and holding L2 opens a wheel with the other actions. Install `lodestar-panel.pkg` again to get the new app. The new [user guide](docs/guide.md) explains every screen and button.
+
+**Aspecto nuevo.** Logo y logotipo nuevos (un ala volante vista desde arriba que lleva una estrella polar) y un estilo de menús ligero inspirado en Black Ops II en el panel web, la app de PS4 y la extensión del navegador: fondos neutros oscuros, selección naranja y letra condensada; el fondo de la app en la pantalla de inicio tiene un globo nocturno.
+
+**Biblioteca en una columna.** Los juegos aparecen uno por fila, ordenados por título, y la fila elegida crece. En la app de PS4, arriba y abajo recorren la lista, izquierda y derecha saltan por inicial, L1 y R1 cambian de sección, mantener Cruz añade o quita, mantener Cuadrado restaura los archivos originales, Triángulo muestra la ficha y mantener L2 abre una rueda con el resto de acciones. Instala de nuevo `lodestar-panel.pkg` para tener la app nueva. La nueva [guía de uso](docs/guia.md) explica cada pantalla y cada botón.
+
 **Side-by-side identity test build.** Lodestar now uses its own console identity so it can be tested next to PS4Mount-PS4 without adopting or deleting that installation: state in `/data/lodestar`, hold files in `/system_data/lodestar`, USB scan folder `Lodestar`, internal packages in `/data/Lodestar`, web panel port 8780, helper relay port 8781 and native panel title `LODS00001`.
 
 PS4Mount's `/data/ps4mount`, `/system_data/ps4mount`, `PS4Mount` scan folder, `PSMT00001` panel and `ps4mount-ps4` AutoRun entries are foreign and are preserved. The organized package bytes already present in `<USB>/ps4/<TID>` remain reusable library data. Only one mount daemon can run at a time: the loopback lock on port 9032 is deliberately shared as a safety interlock, so stop PS4Mount before loading Lodestar.
