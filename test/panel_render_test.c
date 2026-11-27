@@ -510,6 +510,63 @@ static void scenario_settings_nav(const test_fixture *f, panel_view *v, int step
     v->setting_row = step % (setting_start[1] - setting_start[0]);
 }
 
+static void scenario_settings_sidebar(const test_fixture *f, panel_view *v, int step, int *out_done) {
+    (void)f;
+    if (step > 12) {
+        *out_done = 1;
+        return;
+    }
+    v->page = SETTINGS;
+    v->category = (step / 2) % 3;
+    v->in_sidebar = (step & 1) == 0;
+    v->setting_row = 0;
+}
+
+static void scenario_downloads_progress(const test_fixture *f, panel_view *v, int step, int *out_done) {
+    static downloads dl;
+    if (step == 0) {
+        dl = f->dl;
+        v->links = &dl;
+        v->page = DOWNLOADS;
+        v->entered_url = "https://example.invalid/game.pkg";
+        v->dest = 0;
+        return;
+    }
+    if (step > 16) {
+        *out_done = 1;
+        return;
+    }
+    v->page = DOWNLOADS;
+    v->entered_url = "https://example.invalid/game.pkg";
+    v->links = &dl;
+    if (step & 1) {
+        v->dest = (step / 2) % f->dests.count;
+    } else {
+        dl.done = ((long long)step * dl.total) / 18;
+        v->links_gen++;
+    }
+}
+
+static void scenario_library_sections(const test_fixture *f, panel_view *v, int step, int *out_done) {
+    static int sec_idx[GAME_LIMIT];
+    if (step > 9) {
+        *out_done = 1;
+        return;
+    }
+    enum section sec = (enum section)(step % SECTIONS);
+    int n = 0;
+    for (int i = 0; i < f->cat.count; i++) {
+        if (lane_in_section(&f->cat.games[i], sec))
+            sec_idx[n++] = i;
+    }
+    v->page = LIBRARY;
+    v->section = sec;
+    v->indices = sec_idx;
+    v->visible_count = n;
+    v->selected = 0;
+    v->focused = n ? &f->cat.games[sec_idx[0]] : NULL;
+}
+
 static bench_result run_scenario(const test_fixture *f, const char *name, scenario_fn fn) {
     bench_result res = {.name = name};
     uint32_t *hw[2] = {malloc(FRAME_BYTES), malloc(FRAME_BYTES)};
@@ -587,12 +644,15 @@ static void print_and_assert_benchmarks(const test_fixture *f) {
     bench_result hold = run_scenario(f, "Hold-to-confirm (42 frames)", scenario_hold);
     bench_result nav = run_scenario(f, "Library nav (20 steps+art)", scenario_library_nav);
     bench_result cfg = run_scenario(f, "Settings nav (10 steps)", scenario_settings_nav);
+    bench_result cfg_cat = run_scenario(f, "Settings sidebar+cats (12f)", scenario_settings_sidebar);
+    bench_result dl = run_scenario(f, "Downloads dest+ticks (16f)", scenario_downloads_progress);
+    bench_result sec = run_scenario(f, "Library sections (9f)", scenario_library_sections);
 
-    bench_result all[4] = {wheel, hold, nav, cfg};
+    bench_result all[7] = {wheel, hold, nav, cfg, cfg_cat, dl, sec};
     puts("\n=== PANEL-12 Render Benchmark (Baseline main vs Optimized) ===");
     printf("%-28s | %6s | %10s -> %10s (%5s) | %7s -> %5s | %4s -> %4s | %6s -> %6s\n",
            "Scenario", "Frames", "Base FB MB", "Opt FB MB", "Saved", "Glyphs", "Opt", "Art", "Opt", "Base ms", "Opt ms");
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 7; i++) {
         double base_mb = (double)all[i].base_fb_bytes_written / (1024.0 * 1024.0);
         double opt_mb = (double)all[i].opt_fb_bytes_written / (1024.0 * 1024.0);
         double saved = all[i].base_fb_bytes_written
@@ -619,9 +679,9 @@ static void print_and_assert_benchmarks(const test_fixture *f) {
     assert(hold.opt_fb_bytes_written * 50 < hold.base_fb_bytes_written);       /* >98% reduction */
     assert(hold.opt_glyph_rasters * 500 < hold.base_glyph_rasters);            /* >99.8% reduction */
 
-    /* 3. Library navigation: >25% FB byte reduction, >85% fewer glyph rasterizations, art cached! */
+    /* 3. Library navigation: >60% FB byte reduction with tight row spans, 0 full copies, >85% fewer glyphs, art cached! */
     assert(nav.opt_fb_full_copies == 0);
-    assert(nav.opt_fb_bytes_written * 4 < nav.base_fb_bytes_written * 3);
+    assert(nav.opt_fb_bytes_written * 10 < nav.base_fb_bytes_written * 4);     /* >60% reduction */
     assert(nav.opt_glyph_rasters * 7 < nav.base_glyph_rasters);                /* >85% reduction */
     assert(nav.opt_art_scales < nav.base_art_scales);
 
@@ -629,6 +689,18 @@ static void print_and_assert_benchmarks(const test_fixture *f) {
     assert(cfg.opt_fb_full_copies == 0);
     assert(cfg.opt_fb_bytes_written * 4 < cfg.base_fb_bytes_written);          /* >75% reduction */
     assert(cfg.opt_glyph_rasters * 10 < cfg.base_glyph_rasters);               /* >90% reduction */
+
+    /* 5. Settings sidebar + category switches: 0 full copies, >65% FB byte reduction. */
+    assert(cfg_cat.opt_fb_full_copies == 0);
+    assert(cfg_cat.opt_fb_bytes_written * 100 < cfg_cat.base_fb_bytes_written * 35);
+
+    /* 6. Downloads destination switch + progress ticks: 0 full copies, >35% FB byte reduction. */
+    assert(dl.opt_fb_full_copies == 0);
+    assert(dl.opt_fb_bytes_written * 100 < dl.base_fb_bytes_written * 65);
+
+    /* 7. Library section switches (L1/R1): 0 full copies, partial section bar + list body only. */
+    assert(sec.opt_fb_full_copies == 0);
+    assert(sec.opt_fb_bytes_written < sec.base_fb_bytes_written);
 }
 
 int main(int argc, char **argv) {

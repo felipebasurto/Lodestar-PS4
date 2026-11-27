@@ -1070,6 +1070,17 @@ int main(void) {
     CHECK(rc == 0, "benchmark exit code 0");
     CHECK(m.redraws > 0 && m.inputs > 0 && m.full_frame_copies > 0 && m.text_rasterizations > 0,
           "metrics instrumentation recorded real work");
+    CHECK(m.full_frame_copies <= 5, "interactive benchmark full_frame_copies budget <= 5 (got %llu)",
+          (unsigned long long)m.full_frame_copies);
+    CHECK(m.fb_bytes_written <= 65ULL * 1024ULL * 1024ULL,
+          "interactive benchmark fb_bytes_written budget <= 65 MiB (got %.1f MiB)",
+          (double)m.fb_bytes_written / (1024.0 * 1024.0));
+    CHECK(m.blocking_netctl_calls == 0, "interactive loop never blocks on NetCtl (got %llu)",
+          (unsigned long long)m.blocking_netctl_calls);
+    CHECK(m.art_scalings <= 8, "interactive benchmark art_scalings budget <= 8 (got %llu)",
+          (unsigned long long)m.art_scalings);
+    CHECK(m.text_rasterizations <= 160, "interactive benchmark text_rasters budget <= 160 (got %llu)",
+          (unsigned long long)m.text_rasterizations);
     check_lifecycle(&life, "bench");
 
     double redraws_per_input = m.inputs ? (double)m.redraws / (double)m.inputs : 0.0;
