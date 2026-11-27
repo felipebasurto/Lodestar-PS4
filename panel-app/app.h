@@ -126,7 +126,12 @@ typedef struct {
     int64_t ime_cooldown_until;
 
     uint32_t last_buttons;
+    uint32_t stick_dirs;
     int64_t repeat_at;
+    int repeat_steps;
+    char section_focus[SECTIONS][10];
+    char pre_search_focus[10];
+    int settings_visited;
     int dirty, quit;
     const char *quit_reason;
     int scan_seen;

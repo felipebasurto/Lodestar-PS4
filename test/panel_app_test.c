@@ -644,6 +644,172 @@ static void test_deterministic_input_fuzz(void) {
     }
 }
 
+/* Test 7: Key-repeat acceleration, stick hysteresis, remembered positions, and immediate scan feedback (PANEL-12). */
+static void test_menu_feel_repeat_hysteresis_and_memory(void) {
+    mock_env m;
+    mock_init(&m);
+
+    applog log;
+    applog_open(&log, NULL, 4096);
+
+    panel_app app;
+    assert(panel_app_init(&app, make_platform(&m), &log, 0) == 0);
+    assert(panel_app_start_worker(&app) == 0);
+
+    /* Wait for initial catalog load via condition variable (zero sleeps). */
+    panel_pad idle = {.connected = 1};
+    int64_t now = 1000;
+    panel_app_tick(&app, &idle, now);
+    wait_finished(&m, 1);
+    now += 16;
+    panel_app_tick(&app, &idle, now);
+    assert(app.online && app.visible_count >= 16);
+    assert(app.selected == 0);
+
+    /* 1. Key-repeat initial delay (250 ms) and smooth acceleration on long library list. */
+    panel_pad down = {.connected = 1, .buttons = PANEL_BTN_DOWN};
+    panel_app_tick(&app, &down, now);
+    assert(app.selected == 1);
+    int64_t press_t = now;
+    panel_app_tick(&app, &down, press_t + 240);
+    assert(app.selected == 1); /* must not repeat before 250 ms */
+    panel_app_tick(&app, &down, press_t + 250);
+    assert(app.selected == 2); /* repeats right at 250 ms */
+    /* Continue holding for 900 ms in 16 ms steps: acceleration must traverse >= 14 items total. */
+    for (int64_t t = press_t + 266; t <= press_t + 1150; t += 16)
+        panel_app_tick(&app, &down, t);
+    assert(app.selected >= 14);
+    now = press_t + 1200;
+    panel_app_tick(&app, &idle, now);
+
+    /* 2. Analog stick deadzone hysteresis (engage > 72, hold while > 52, release <= 52). */
+    int start_sel = app.selected;
+    panel_pad stick_up = {.connected = 1, .ly = -80};
+    panel_app_tick(&app, &stick_up, now);
+    assert(app.selected == start_sel - 1);
+    /* Wobble to -60 (above release threshold -52): must stay engaged and repeat at +250 ms. */
+    stick_up.ly = -60;
+    panel_app_tick(&app, &stick_up, now + 100);
+    assert(app.selected == start_sel - 1);
+    panel_app_tick(&app, &stick_up, now + 250);
+    assert(app.selected == start_sel - 2);
+    /* Drop to -40 (below release threshold 52): releases cleanly without extra move. */
+    stick_up.ly = -40;
+    panel_app_tick(&app, &stick_up, now + 350);
+    assert(app.selected == start_sel - 2);
+    now += 400;
+    panel_app_tick(&app, &idle, now);
+
+    /* 3. Remembered selection per section across L1/R1 switches. */
+    const game *saved_all = panel_app_focused(&app);
+    assert(saved_all != NULL);
+    char saved_all_id[10];
+    snprintf(saved_all_id, sizeof(saved_all_id), "%s", saved_all->id);
+
+    panel_pad r1 = {.connected = 1, .buttons = PANEL_BTN_R1};
+    panel_app_tick(&app, &r1, now);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    assert(app.section == SECTION_RUNNING);
+
+    panel_pad l1 = {.connected = 1, .buttons = PANEL_BTN_L1};
+    panel_app_tick(&app, &l1, now);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    assert(app.section == SECTION_ALL);
+    assert(panel_app_focused(&app) != NULL && strcmp(panel_app_focused(&app)->id, saved_all_id) == 0);
+
+    /* 4. Remembered pre-search selection when clearing an empty search with Circle. */
+    panel_pad l2 = {.connected = 1, .buttons = PANEL_BTN_L2};
+    panel_app_tick(&app, &l2, now);
+    now += 20;
+    panel_pad l2_search = {.connected = 1, .buttons = PANEL_BTN_L2, .lx = -100, .ly = 60};
+    panel_app_tick(&app, &l2_search, now);
+    assert(app.wheel && app.wheel_at == 4);
+    now += 20;
+    panel_app_tick(&app, &idle, now); /* release -> opens IME_SEARCH */
+    assert(app.ime);
+    m.ime_next_status = IME_OK;
+    snprintf(m.ime_next_text, sizeof(m.ime_next_text), "zzz_no_such_title");
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    assert(!app.ime && app.visible_count == 0);
+    now += 250; /* past IME cooldown */
+    panel_pad circle = {.connected = 1, .buttons = PANEL_BTN_CIRCLE};
+    panel_app_tick(&app, &circle, now);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    assert(app.query[0] == 0 && panel_app_focused(&app) != NULL);
+    assert(strcmp(panel_app_focused(&app)->id, saved_all_id) == 0);
+
+    /* 5. Settings remembers category/row and keeps config_ready warm across reopens. */
+    panel_app_tick(&app, &l2, now);
+    now += 20;
+    panel_pad l2_settings = {.connected = 1, .buttons = PANEL_BTN_L2, .lx = 0, .ly = 110};
+    panel_app_tick(&app, &l2_settings, now);
+    assert(app.wheel_at == 3);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    while (!app.config_ready) {
+        pthread_mutex_lock(&m.mu);
+        int done_now = m.finished_count;
+        pthread_mutex_unlock(&m.mu);
+        panel_app_tick(&app, &idle, now);
+        if (app.config_ready)
+            break;
+        wait_finished(&m, done_now + 1);
+        now += 16;
+    }
+    assert(app.page == SETTINGS && app.config_ready && app.in_sidebar == 1 && app.category == 0);
+    /* Move to category 1, enter rows, move to row 1, then leave Settings with Circle. */
+    panel_app_tick(&app, &down, now);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    panel_pad right = {.connected = 1, .buttons = PANEL_BTN_RIGHT};
+    panel_app_tick(&app, &right, now);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    panel_app_tick(&app, &down, now);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    assert(app.category == 1 && app.in_sidebar == 0 && app.setting_row == 1);
+    panel_app_tick(&app, &circle, now);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    assert(app.page == LIBRARY);
+    /* Reopen Settings: must keep config_ready=1 AND category=1, in_sidebar=0, setting_row=1 immediately! */
+    panel_app_tick(&app, &l2, now);
+    now += 20;
+    panel_app_tick(&app, &l2_settings, now);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    assert(app.page == SETTINGS && app.config_ready == 1);
+    assert(app.category == 1 && app.in_sidebar == 0 && app.setting_row == 1);
+
+    /* 6. Immediate scan feedback on press before HTTP completes. */
+    pthread_mutex_lock(&m.mu);
+    m.block_requests = 1;
+    m.release_requests = 0;
+    pthread_mutex_unlock(&m.mu);
+    panel_app_tick(&app, &l2, now);
+    now += 20;
+    panel_pad l2_scan = {.connected = 1, .buttons = PANEL_BTN_L2, .lx = 0, .ly = -110};
+    panel_app_tick(&app, &l2_scan, now);
+    assert(app.wheel_at == 0);
+    now += 20;
+    panel_app_tick(&app, &idle, now);
+    assert(app.page == LIBRARY && strstr(app.feedback, "Scanning") != NULL);
+    pthread_mutex_lock(&m.mu);
+    m.block_requests = 0;
+    m.release_requests = 1;
+    pthread_cond_broadcast(&m.cv);
+    pthread_mutex_unlock(&m.mu);
+
+    panel_app_destroy(&app);
+    applog_close(&log);
+    mock_destroy(&m);
+}
+
 int main(void) {
     test_cooperative_shutdown_and_no_post_quit_mutation();
     test_write_not_clobbered_by_read();
@@ -651,6 +817,7 @@ int main(void) {
     test_wheel_and_holds_decoupled_from_http();
     test_applog_rotation_and_redaction();
     test_deterministic_input_fuzz();
+    test_menu_feel_repeat_hysteresis_and_memory();
     puts("PANEL-10/11/12 app lifecycle, worker safety, applog and 15000-tick fuzz hold");
     return 0;
 }

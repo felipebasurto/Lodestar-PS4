@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-enum { DAMAGE_MAX_RECTS = 16 };
+enum { DAMAGE_MAX_RECTS = 32 };
 
 typedef struct {
     int full;
@@ -31,7 +31,7 @@ typedef struct {
     int config_ready, category, setting_row;
     enum action holding;
     int held, wheel, wheel_at;
-    int links_ready, dest_ready, dest, link_writing, waiting;
+    int links_ready, links_configured, dest_ready, dest, link_writing, waiting;
     int loading_library, loading_links, loading_config, loading_destinations;
     uint32_t catalog_gen, art_gen, links_gen, config_gen, dests_gen;
     char focused_id[10];
@@ -40,6 +40,8 @@ typedef struct {
     char local_url[48];
     char entered_url[2048];
     settings config;
+    int slot_count;
+    panel_slot_span slots[PANEL_VISIBLE_ROWS];
 } view_snapshot;
 
 typedef struct {

@@ -369,6 +369,12 @@ static void accept_reply(panel_app *app, int64_t now) {
         }
         break;
     case TASK_CONFIG:
+        if (!r.ok && app->config_ready)
+            break;
+        if (r.ok && app->config_ready && memcmp(&app->config, &app->original_config, sizeof(settings)) != 0) {
+            app->original_config = r.config;
+            break;
+        }
         app->config_ready = r.ok;
         app->config = app->original_config = r.config;
         app->config_gen++;
@@ -466,8 +472,8 @@ static void schedule(panel_app *app, int64_t now) {
     if (!app->online || app->wheel || app->held.action ||
         (app->page != LIBRARY && app->page != DETAIL) || !app->visible_count)
         return;
-    /* The focused game first, then the rows around it. */
-    int first = app->selected > 2 ? app->selected - 2 : 0;
+    /* The focused game first, then the visible rows around it. */
+    int first = panel_list_first(app->selected, app->visible_count);
     for (int i = -1; i < PAGE; i++) {
         int at = i < 0 ? app->selected : first + i;
         if (at >= app->visible_count)
@@ -494,6 +500,10 @@ static void start_keyboard(panel_app *app, int64_t now) {
     const char *initial = target == IME_URL ? app->entered_url : app->query;
     size_t max_chars = target == IME_URL ? 511 : 63;
     if (app->plat.ime_open && app->plat.ime_open(app->plat.ctx, target, initial, max_chars) == 0) {
+        if (target == IME_SEARCH && !*app->query) {
+            const game *g = panel_app_focused(app);
+            snprintf(app->pre_search_focus, sizeof(app->pre_search_focus), "%s", g ? g->id : "");
+        }
         app->ime = 1;
         app->ime_target = target;
         app->held.action = NONE;
@@ -664,9 +674,15 @@ static void settings_input(panel_app *app, uint32_t buttons) {
 static void library_input(panel_app *app, uint32_t buttons, int64_t now) {
     if (buttons & PANEL_BTN_CIRCLE) {
         if (*app->query) {
+            const game *g = panel_app_focused(app);
+            char keep[10] = "";
+            if (g)
+                snprintf(keep, sizeof(keep), "%s", g->id);
+            else if (*app->pre_search_focus)
+                snprintf(keep, sizeof(keep), "%s", app->pre_search_focus);
             *app->query = 0;
             app->selected = 0;
-            rebuild(app, NULL);
+            rebuild(app, keep[0] ? keep : NULL);
             if (app->log)
                 applog_write(app->log, "input", "search cleared");
         } else {
@@ -680,10 +696,13 @@ static void library_input(panel_app *app, uint32_t buttons, int64_t now) {
         return;
     }
     if (buttons & (PANEL_BTN_L1 | PANEL_BTN_R1)) {
+        const game *cur = panel_app_focused(app);
+        if (cur)
+            snprintf(app->section_focus[app->section], sizeof(app->section_focus[app->section]), "%s", cur->id);
         app->section = (enum section)((app->section + ((buttons & PANEL_BTN_R1) ? 1 : SECTIONS - 1)) % SECTIONS);
         app->selected = 0;
         app->held.action = NONE;
-        rebuild(app, NULL);
+        rebuild(app, app->section_focus[app->section][0] ? app->section_focus[app->section] : NULL);
         if (app->log)
             applog_write(app->log, "input", "section=%d visible=%d", (int)app->section, app->visible_count);
         return;
@@ -721,10 +740,12 @@ static void wheel_run(panel_app *app, int64_t now) {
     if (writing(app) && (chosen == 0 || chosen == 2 || chosen == 3))
         return;
     if (chosen == 0) {
-        if (app->online)
+        if (app->online) {
+            say(app, tr(app, "Scanning for games…", "Buscando juegos…"), now);
             queue_write(app, (panel_request){.kind = TASK_SCAN, .path = "/api/rescan"});
-        else
+        } else {
             queue_read(app, (panel_request){.kind = TASK_LOAD, .path = "/api/games"});
+        }
         app->page = LIBRARY;
     } else if (chosen == 1) {
         app->page = PHONE;
@@ -734,10 +755,12 @@ static void wheel_run(panel_app *app, int64_t now) {
         app->links_at = 0;
     } else if (chosen == 3) {
         app->page = SETTINGS;
-        app->config_ready = 0;
-        app->category = 0;
-        app->in_sidebar = 1;
-        app->setting_row = 0;
+        if (!app->settings_visited) {
+            app->category = 0;
+            app->in_sidebar = 1;
+            app->setting_row = 0;
+            app->settings_visited = 1;
+        }
         queue_read(app, (panel_request){.kind = TASK_CONFIG, .path = "/api/config"});
     } else if (chosen == 4) {
         app->page = LIBRARY;
@@ -832,6 +855,31 @@ static void handle_buttons(panel_app *app, uint32_t buttons, int64_t now) {
     }
 }
 
+static uint32_t update_stick_dirs(uint32_t prev, int sx, int sy) {
+    /* Hysteresis (engage 72/96, release 52/70) prevents analog noise from resetting repeat. */
+    uint32_t next = 0;
+    if ((prev & PANEL_BTN_UP) ? (sy < -52) : (sy < -72))
+        next |= PANEL_BTN_UP;
+    else if ((prev & PANEL_BTN_DOWN) ? (sy > 52) : (sy > 72))
+        next |= PANEL_BTN_DOWN;
+    if ((prev & PANEL_BTN_LEFT) ? (sx < -70) : (sx < -96))
+        next |= PANEL_BTN_LEFT;
+    else if ((prev & PANEL_BTN_RIGHT) ? (sx > 70) : (sx > 96))
+        next |= PANEL_BTN_RIGHT;
+    return next;
+}
+
+static int64_t repeat_interval_ms(const panel_app *app, uint32_t dir) {
+    if (!app->wheel && app->page == LIBRARY && (dir & (PANEL_BTN_UP | PANEL_BTN_DOWN))) {
+        if (app->repeat_steps < 4)
+            return 85;
+        if (app->repeat_steps < 12)
+            return 55;
+        return 35;
+    }
+    return 105;
+}
+
 void panel_app_tick(panel_app *app, const panel_pad *pad, int64_t now) {
     if (!app || app->quit)
         return;
@@ -852,6 +900,7 @@ void panel_app_tick(panel_app *app, const panel_pad *pad, int64_t now) {
     int stick_y = connected ? pad->ly : 0;
 
     if (app->wheel) {
+        app->stick_dirs = 0;
         int at = wheel_point(stick_x, stick_y);
         if (at < 0 && connected)
             at = wheel_point(pad->rx, pad->ry);
@@ -861,8 +910,10 @@ void panel_app_tick(panel_app *app, const panel_pad *pad, int64_t now) {
         }
     } else if (connected) {
         /* The left stick walks the menus like the arrows. */
-        buttons |= (stick_y < -72 ? PANEL_BTN_UP : 0) | (stick_y > 72 ? PANEL_BTN_DOWN : 0) |
-                   (stick_x < -96 ? PANEL_BTN_LEFT : 0) | (stick_x > 96 ? PANEL_BTN_RIGHT : 0);
+        app->stick_dirs = update_stick_dirs(app->stick_dirs, stick_x, stick_y);
+        buttons |= app->stick_dirs;
+    } else {
+        app->stick_dirs = 0;
     }
 
     const uint32_t arrows = PANEL_BTN_UP | PANEL_BTN_DOWN | PANEL_BTN_LEFT | PANEL_BTN_RIGHT;
@@ -870,11 +921,17 @@ void panel_app_tick(panel_app *app, const panel_pad *pad, int64_t now) {
         poll_keyboard(app, now);
     } else if (connected && now >= app->ime_cooldown_until) {
         uint32_t pressed = buttons & ~app->last_buttons;
-        if ((buttons & arrows) != (app->last_buttons & arrows))
-            app->repeat_at = now + 320;
-        else if ((buttons & arrows) && now >= app->repeat_at) {
-            pressed |= buttons & arrows;
-            app->repeat_at = now + 95;
+        uint32_t cur_arrows = buttons & arrows;
+        if (cur_arrows != (app->last_buttons & arrows)) {
+            app->repeat_at = now + 250;
+            app->repeat_steps = 0;
+        } else if (cur_arrows && now >= app->repeat_at) {
+            int64_t step = repeat_interval_ms(app, cur_arrows);
+            pressed |= cur_arrows;
+            app->repeat_at += step;
+            if (app->repeat_at <= now)
+                app->repeat_at = now + step;
+            app->repeat_steps++;
         }
         if (pressed)
             handle_buttons(app, pressed, now);

@@ -434,14 +434,16 @@ function actions(g, page) {
   return act;
 }
 function byName(a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : a.name.toLowerCase() > b.name.toLowerCase() ? 1 : 0; }
-var shelfSelection = '', shelfGrid = '', shelfStates = '', shelfPlatforms = '';
+var shelfSelection = '', shelfSelectedEl = null, shelfGrid = '', shelfStates = '', shelfPlatforms = '';
 /* The cover that has the focus (or was last opened): the grid's only selection mark,
  * the details live in the dialog a cover opens. */
 function selectCover(tid) {
+  if (shelfSelectedEl && shelfSelectedEl.parentNode && shelfSelectedEl.getAttribute('data-g') !== tid)
+    shelfSelectedEl.setAttribute('aria-pressed', 'false');
   shelfSelection = tid;
-  var covers = $('grid').querySelectorAll('[data-g]');
-  for (var i = 0; i < covers.length; i++)
-    covers[i].setAttribute('aria-pressed', String(covers[i].getAttribute('data-g') === tid));
+  var next = tid ? $('grid').querySelector('[data-g="' + tid + '"]') : null;
+  if (next) next.setAttribute('aria-pressed', 'true');
+  shelfSelectedEl = next;
 }
 function render() {
   var visible = [];
@@ -455,14 +457,14 @@ function render() {
     if (pfilter && (g.platform || 'ps4') !== pfilter) return;
     shown++;
     visible.push(g.title_id);
-    html += '<div class="card"><button type="button" class="art" data-g="' + g.title_id +
+    html += '<div class="card"><button type="button" class="art" aria-pressed="false" data-g="' + g.title_id +
       '"><span class="cover" style="background-image:url(/icon/' + g.title_id + ')"></span><span class="info"><span class="name">' + esc(g.name) + '</span>' +
       (g.state !== 'ready' ? '<span class="badge b-' + esc(g.state) + '">' + esc(label(g.state)) + '</span>' : '') +
       '<span class="more">' + esc([g.storage, g.size ? gb(g.size) : '', g.title_id].filter(Boolean).join(' · ')) + '</span>' +
       '</span></button></div>';
   });
   var focus = document.activeElement.getAttribute('data-g');
-  if (html !== shelfGrid) { $('grid').innerHTML = html; shelfGrid = html; }
+  if (html !== shelfGrid) { $('grid').innerHTML = html; shelfGrid = html; shelfSelectedEl = null; }
   selectCover(visible.indexOf(shelfSelection) >= 0 ? shelfSelection : visible[0] || '');
   if (focus && document.activeElement === document.body) {
     var replacement = $('grid').querySelector('[data-g="' + shelfSelection + '"]');

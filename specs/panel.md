@@ -143,16 +143,25 @@ Source: PS4 rc.3 crash investigation (2026-11-27).
 ### PANEL-12: rendering composites in CPU RAM and updates only damaged double-buffered regions
 
 The PS4 app composites into a cached CPU-RAM shadow framebuffer and caches rasterized glyphs,
-background ground, scaled covers and dimmed wheel pill backdrops. Display-buffer damage is tracked
-independently for both VideoOut buffers across flips so that neither back buffer retains stale pixels
-from two frames ago; only damaged rectangles are streamed write-only to the target display buffer
-with zero reads from VideoOut memory. Input handling, holds and wheel pointing never wait on HTTP
-requests or artwork decoding.
-Check: test (pixel-exact double-buffering equivalence, damage/cache reduction metrics and zero
-blocking calls on input/render in `test/panel_render_test.c`; no NetCtl or IME call blocks the frame
-loop in `test/panel_lane_test.c`). Real frame pacing requires a PS4 smoke test.
+background ground, scaled covers, anti-aliased ring masks, the focused row's tinted backdrop and
+dimmed wheel backdrops. Display-buffer damage is tracked independently for both VideoOut buffers
+across flips so that neither back buffer retains stale pixels from two frames ago; only damaged
+rectangles are streamed write-only to the target display buffer with zero reads from VideoOut
+memory. Navigation inside the library (scrolling closed rows by tight drawn spans, section switches),
+settings (sidebar, category, row and value changes), downloads (destination and progress updates) and
+phone IP arrival update only their changed regions rather than redrawing the full screen. Input
+handling, holds and wheel pointing never wait on HTTP requests or artwork decoding. Held directional
+input repeats after a short initial delay with smooth acceleration on long library lists and analog
+stick hysteresis; holds and scans show immediate visual feedback on press; returning from sub-views,
+sections, search or web detail views preserves the user's selection and scroll position.
+Check: test (pixel-exact double-buffering equivalence, asserted per-scenario damage/cache budgets and
+zero blocking calls on input/render in `test/panel_render_test.c`; interactive workload budgets and
+zero NetCtl/IME loop blocking in `test/panel_lane_test.c`; key-repeat, hysteresis, immediate feedback
+and position preservation in `test/panel_app_test.c` and `test/web/panel.test.js`). Real frame pacing
+requires a PS4 smoke test.
 Source: PS4 rc.3 performance report (slow L2 wheel and UI caused by full-frame redraws, per-frame
-FreeType rasterization and alpha-blending reads on write-combining direct memory) (2026-11-27).
+FreeType rasterization and alpha-blending reads on write-combining direct memory) (2026-11-27);
+owner menu smoothness pass (2026-11-27).
 
 ### PANEL-13: web panels warn when PS4Mount coexistence holds automatic registration
 

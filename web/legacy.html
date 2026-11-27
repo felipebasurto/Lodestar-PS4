@@ -226,27 +226,41 @@ function api(path, method, body, done) {
   };
   x.send(body === undefined ? null : body);
 }
-var currentView = 'v-games';
+var currentView = 'v-games', gamesScrollY = 0;
 function show(view) {
+  if (currentView === 'v-games' && view !== 'v-games')
+    gamesScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
   currentView = view;
   var v = ['v-games', 'v-game', 'v-settings', 'v-pick', 'v-log'];
   for (var i = 0; i < v.length; i++) $(v[i]).className = 'view' + (v[i] === view ? ' on' : '');
+  if (view === 'v-games') {
+    window.scrollTo(0, gamesScrollY);
+    if (tv) {
+      var kept = shelfSelection && $('grid').querySelector('[data-g="' + shelfSelection + '"]');
+      var first = kept || $(view).querySelector('button:not([disabled])');
+      if (first) first.focus();
+    }
+    return;
+  }
   window.scrollTo(0, 0);
   if (tv) {
-    var first = $(view).querySelector('button:not([disabled])');
-    if (first) first.focus();
+    var btn = $(view).querySelector('button:not([disabled])');
+    if (btn) btn.focus();
   }
 }
 function addons(g) { return g.dlc ? (g.dlc === 1 ? t('1 add-on') : t('{0} add-ons', g.dlc)) : t('no add-ons'); }
 function movedBack(g) { return t('Game{0}{1}', g.has_patch ? t(', update') : '', g.dlc ? t(' and {0}', addons(g)) : ''); }
 
-var shelfSelection = '', shelfGrid = '', gameView = '', gameViewHtml = '';
+var shelfSelection = '', shelfSelectedEl = null, shelfGrid = '', gameView = '', gameViewHtml = '';
 /* The cover that has the focus (or was last opened): the grid's only selection mark,
  * the details live on the game page a cover opens. */
 function selectCover(tid) {
+  if (shelfSelectedEl && shelfSelectedEl.parentNode && shelfSelectedEl.getAttribute('data-g') !== tid)
+    shelfSelectedEl.setAttribute('aria-pressed', 'false');
   shelfSelection = tid;
-  var covers = $('grid').querySelectorAll('[data-g]');
-  for (var i = 0; i < covers.length; i++) covers[i].setAttribute('aria-pressed', String(covers[i].getAttribute('data-g') === tid));
+  var next = tid ? $('grid').querySelector('[data-g="' + tid + '"]') : null;
+  if (next) next.setAttribute('aria-pressed', 'true');
+  shelfSelectedEl = next;
 }
 /* The game's page: art, what it is and where its pkgs are, and its actions. */
 function fillGame(tid) {
@@ -281,14 +295,14 @@ function render() {
     g = games[i];
     if (g.title_id === shelfSelection) selected = shelfSelection;
     counts[g.state] = (counts[g.state] || 0) + 1;
-    html += '<div class="card"><button type="button" class="art" data-g="' + g.title_id +
+    html += '<div class="card"><button type="button" class="art" aria-pressed="false" data-g="' + g.title_id +
       '"><span class="cover" style="background-image:url(/icon/' + g.title_id + ')"></span><span class="info"><span class="name">' +
       esc(g.name) + '</span>' +
       (g.state !== 'ready' ? '<span class="badge b-' + esc(g.state) + '">' + esc(label(g.state)) + '</span>' : '') +
       '<span class="more">' + esc([g.storage, g.size ? gb(g.size) : '', g.title_id].filter(Boolean).join(' · ')) + '</span>' +
       '</span></button></div>';
   }
-  if (html !== shelfGrid) { $('grid').innerHTML = html; shelfGrid = html; }
+  if (html !== shelfGrid) { $('grid').innerHTML = html; shelfGrid = html; shelfSelectedEl = null; }
   selectCover(selected || (games.length ? games[0].title_id : ''));
   if (gameView) {
     if (!fillGame(gameView)) { gameView = ''; gameViewHtml = ''; if (currentView === 'v-game') show('v-games'); }

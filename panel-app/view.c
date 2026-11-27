@@ -192,31 +192,135 @@ static void message(canvas c, const char *what, const char *next) {
     text(c, LEFT, 414, 1700, 32, TEXT, next);
 }
 
-static void open_row(const panel_view *v, canvas c, const game *g, int y) {
+static void format_storage_line(const game *g, char *buffer, size_t size) {
+    if (g->bytes)
+        snprintf(buffer, size, "%s%s%.1f GB", g->storage, *g->storage ? " · " : "", g->bytes / 1073741824.0);
+    else
+        snprintf(buffer, size, "%s", g->storage);
+}
+
+static void open_row_left(const panel_view *v, canvas c, const game *g, int y) {
     char buffer[256];
-    shade(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, ORANGE, 22);
-    frame(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, 2, ORANGE);
     cover(v, c, g, LEFT, y + 28, 184);
     bold(c, 296, y + 84, 990, 64, WHITE, *g->name ? g->name : g->id);
     text(c, 296, y + 130, 990, 32, state_color(g->state), game_state_label(v, g->state));
-    if (g->bytes)
-        snprintf(buffer, sizeof(buffer), "%s%s%.1f GB", g->storage, *g->storage ? " · " : "", g->bytes / 1073741824.0);
-    else
-        snprintf(buffer, sizeof(buffer), "%s", g->storage);
+    format_storage_line(g, buffer, sizeof(buffer));
     text(c, 296, y + 170, 990, 28, MUTED, buffer);
     const char *note = *g->issue ? g->issue : state_help(v, g->state);
     if (*note)
         text(c, 296, y + 208, 990, 28, *g->issue || g->state != INTERNAL ? GOLD : MUTED, note);
+}
+
+static int hold_bar_fill_w(int bar_w, int held) {
+    if (bar_w <= 0)
+        return 0;
+    int w = held > 0 ? bar_w * held / 1000 : 0;
+    if (w < 16)
+        w = 16;
+    return w > bar_w ? bar_w : w;
+}
+
+static void draw_hold_bar(canvas c, int x, int y, int bar_w, int held) {
+    fill(c, x, y, bar_w, 8, RULE);
+    fill(c, x, y, hold_bar_fill_w(bar_w, held), 8, ORANGE);
+}
+
+static void open_row(const panel_view *v, canvas c, const game *g, int y) {
+    background_tinted_rect(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, ORANGE, 22);
+    frame(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, 2, ORANGE);
+    open_row_left(v, c, g, y);
     verbs(v, c, g, 1320, y + 68, 520, 1);
     if (v->holding)
-        fill(c, LEFT - EDGE, y + OPEN_ROW - 8, (RIGHT - LEFT + 2 * EDGE) * v->held / 1000, 8, ORANGE);
+        draw_hold_bar(c, LEFT - EDGE, y + OPEN_ROW - 8, RIGHT - LEFT + 2 * EDGE, v->held);
+}
+
+int panel_compute_library_slots(const panel_view *v, panel_slot_span out[PANEL_VISIBLE_ROWS]) {
+    if (!v || v->page != LIBRARY || !v->online || !v->catalog || !v->visible_count)
+        return 0;
+    int first = panel_list_first(v->selected, v->visible_count);
+    int n = 0;
+    for (int i = first, y = LIST_TOP; i < v->visible_count && n < PANEL_VISIBLE_ROWS; i++) {
+        const game *g = &v->catalog->games[v->indices[i]];
+        int is_open = i == v->selected;
+        int height = is_open ? OPEN_ROW : ROW;
+        if (y + height > LIST_BOTTOM)
+            break;
+        panel_slot_span s = {.y = y, .h = height, .is_open = is_open};
+        const char *title = *g->name ? g->name : g->id;
+        if (is_open) {
+            char buffer[256];
+            format_storage_line(g, buffer, sizeof(buffer));
+            int w = bold_width(64, title);
+            int w2 = text_width(32, game_state_label(v, g->state));
+            if (w2 > w) w = w2;
+            int w3 = text_width(28, buffer);
+            if (w3 > w) w = w3;
+            const char *note = *g->issue ? g->issue : state_help(v, g->state);
+            if (*note) {
+                int w4 = text_width(28, note);
+                if (w4 > w) w = w4;
+            }
+            if (w > 990) w = 990;
+            s.left_x1 = 296 + w + 28;
+            if (s.left_x1 > 1314) s.left_x1 = 1314;
+            s.verbs_sig = ((int)g->state << 8) | ((g->in_place ? 1 : 0) << 5) |
+                          ((v->online ? 1 : 0) << 4) | (int)v->holding;
+        } else {
+            int w = text_width(40, title);
+            if (w > 1200) w = 1200;
+            s.left_x1 = 176 + w + 28;
+            if (s.left_x1 > 1404) s.left_x1 = 1404;
+            if (g->state != READY) {
+                int rw = text_width(28, game_state_label(v, g->state));
+                s.right_x0 = RIGHT - rw - 20;
+                if (s.right_x0 < 1404) s.right_x0 = 1404;
+            }
+        }
+        out[n++] = s;
+        y += height;
+    }
+    return n;
+}
+
+void panel_draw_closed_row_clipped(const panel_view *v, canvas c, int vis_index, int y, rect clip) {
+    if (!v || !v->catalog || vis_index < 0 || vis_index >= v->visible_count)
+        return;
+    const game *g = &v->catalog->games[v->indices[vis_index]];
+    canvas sub = canvas_clip(c.pixels, clip);
+    background(sub);
+    if (clip.x < 1404) {
+        cover(v, sub, g, LEFT, y + 14, 64);
+        text(sub, 176, y + 60, 1200, 40, TEXT, *g->name ? g->name : g->id);
+    }
+    if (g->state != READY && clip.x + clip.w > 1404)
+        right_aligned(sub, RIGHT, y + 58, 28, state_color(g->state), game_state_label(v, g->state));
+}
+
+void panel_draw_open_row_content_clipped(const panel_view *v, canvas c, int y, rect clip) {
+    if (!v || !v->catalog || v->selected < 0 || v->selected >= v->visible_count)
+        return;
+    const game *g = &v->catalog->games[v->indices[v->selected]];
+    canvas sub = canvas_clip(c.pixels, clip);
+    background_tinted_rect(sub, clip.x, clip.y, clip.w, clip.h, ORANGE, 22);
+    if (clip.x < 1316)
+        open_row_left(v, sub, g, y);
+    if (clip.x + clip.w > 1316)
+        verbs(v, sub, g, 1320, y + 68, 520, 1);
+}
+
+int panel_list_first(int selected, int visible_count) {
+    if (visible_count <= PANEL_VISIBLE_ROWS || selected <= 2)
+        return 0;
+    int first = selected - 2;
+    int max_first = visible_count - PANEL_VISIBLE_ROWS;
+    return first > max_first ? max_first : first;
 }
 
 static void library_list(const panel_view *v, canvas c) {
     if (!v->online || !v->catalog || !v->visible_count)
         return;
-    /* The focus rests on the third line and the list moves under it. */
-    int first = v->selected > 2 ? v->selected - 2 : 0;
+    /* Keep focus near the third line while keeping the bottom of the viewport filled. */
+    int first = panel_list_first(v->selected, v->visible_count);
     for (int i = first, y = LIST_TOP; i < v->visible_count; i++) {
         const game *g = &v->catalog->games[v->indices[i]];
         int height = i == v->selected ? OPEN_ROW : ROW;
@@ -236,18 +340,8 @@ static void library_list(const panel_view *v, canvas c) {
     }
 }
 
-static void show_library(const panel_view *v, canvas c) {
+static void draw_section_bar(const panel_view *v, canvas c) {
     char buffer[256];
-    header(v, c);
-    if (!v->online || !v->catalog) {
-        message(c, v->catalog ? tr(v, "Connection lost", "Conexión perdida") :
-                v->loading_library ? tr(v, "Connecting to Lodestar…", "Conectando con Lodestar…") :
-                tr(v, "Lodestar is not running", "Lodestar no está en marcha"),
-                tr(v, "Load the Lodestar payload and press Cross to reconnect.",
-                   "Carga el payload de Lodestar y pulsa X para volver a conectar."));
-        return;
-    }
-
     for (int i = 0, x = LEFT; i < SECTIONS; i++) {
         int chosen = (int)v->section == i;
         snprintf(buffer, sizeof(buffer), "%s %d", section_name(v, i), v->counts[i]);
@@ -278,7 +372,9 @@ static void show_library(const panel_view *v, canvas c) {
     } else if (v->catalog->overflow) {
         right_aligned(c, RIGHT, 156, 28, GOLD, tr(v, "Library limit reached", "Se alcanzó el límite de la biblioteca"));
     }
+}
 
+static void draw_library_body(const panel_view *v, canvas c) {
     if (!v->visible_count) {
         if (*v->query)
             message(c, tr(v, "No matching games", "No hay coincidencias"),
@@ -293,6 +389,20 @@ static void show_library(const panel_view *v, canvas c) {
         return;
     }
     library_list(v, c);
+}
+
+static void show_library(const panel_view *v, canvas c) {
+    header(v, c);
+    if (!v->online || !v->catalog) {
+        message(c, v->catalog ? tr(v, "Connection lost", "Conexión perdida") :
+                v->loading_library ? tr(v, "Connecting to Lodestar…", "Conectando con Lodestar…") :
+                tr(v, "Lodestar is not running", "Lodestar no está en marcha"),
+                tr(v, "Load the Lodestar payload and press Cross to reconnect.",
+                   "Carga el payload de Lodestar y pulsa X para volver a conectar."));
+        return;
+    }
+    draw_section_bar(v, c);
+    draw_library_body(v, c);
 }
 
 static void info_row(canvas c, int y, const char *label, const char *value) {
@@ -325,7 +435,7 @@ static void show_detail(const panel_view *v, canvas c) {
         text(c, 548, 664, RIGHT - 548, 28, GOLD, g->issue);
     verbs(v, c, g, 548, 710, 700, 0);
     if (v->holding)
-        fill(c, 548, 860, 700 * v->held / 1000, 8, ORANGE);
+        draw_hold_bar(c, 548, 860, 700, v->held);
 }
 
 #define FIELD(f) #f
@@ -412,6 +522,16 @@ static void draw_setting_help(const panel_view *v, canvas c, int count) {
     }
 }
 
+static void draw_setting_sidebar_item(const panel_view *v, canvas c, int i) {
+    const char *sections[] = {tr(v, "Library", "Biblioteca"), "DLC", tr(v, "Console", "Consola")};
+    int y = 232 + i * 60;
+    int focused = i == v->category && v->in_sidebar;
+    if (focused)
+        fill(c, LEFT - 16, y, 300, 54, ORANGE);
+    (i == v->category ? bold : text)(c, LEFT, y + 40, 270, 38,
+                                     focused ? INK : i == v->category ? WHITE : MUTED, sections[i]);
+}
+
 static void show_settings(const panel_view *v, canvas c) {
     header(v, c);
     heading(c, tr(v, "Settings", "Ajustes"));
@@ -421,19 +541,21 @@ static void show_settings(const panel_view *v, canvas c) {
              tr(v, "Settings are unavailable", "Ajustes no disponibles"));
         return;
     }
-    const char *sections[] = {tr(v, "Library", "Biblioteca"), "DLC", tr(v, "Console", "Consola")};
-    for (int i = 0; i < 3; i++) {
-        int y = 232 + i * 60;
-        int focused = i == v->category && v->in_sidebar;
-        if (focused)
-            fill(c, LEFT - 16, y, 300, 54, ORANGE);
-        (i == v->category ? bold : text)(c, LEFT, y + 40, 270, 38,
-                                         focused ? INK : i == v->category ? WHITE : MUTED, sections[i]);
-    }
+    for (int i = 0; i < 3; i++)
+        draw_setting_sidebar_item(v, c, i);
     int count = setting_start[v->category + 1] - setting_start[v->category];
     for (int i = 0; i <= count; i++)
         draw_setting_row(v, c, i, count);
     draw_setting_help(v, c, count);
+}
+
+static void draw_phone_addr(const panel_view *v, canvas c) {
+    bold(c, LEFT, 412, 1700, 76, ORANGE, *v->local_url ? v->local_url :
+         tr(v, "http://<PS4 IP>:8780", "http://<IP de la PS4>:8780"));
+    if (!*v->local_url)
+        text(c, LEFT, 464, 1500, 32, MUTED,
+             tr(v, "Use the address in the Lodestar startup notification.",
+                "Usa la dirección del aviso de inicio de Lodestar."));
 }
 
 static void show_phone(const panel_view *v, canvas c) {
@@ -441,12 +563,7 @@ static void show_phone(const panel_view *v, canvas c) {
     heading(c, tr(v, "Send packages", "Enviar paquetes"));
     text(c, LEFT, 300, 1500, 40, WHITE,
          tr(v, "Open Lodestar on your phone or computer", "Abre Lodestar en tu móvil u ordenador"));
-    bold(c, LEFT, 412, 1700, 76, ORANGE, *v->local_url ? v->local_url :
-         tr(v, "http://<PS4 IP>:8780", "http://<IP de la PS4>:8780"));
-    if (!*v->local_url)
-        text(c, LEFT, 464, 1500, 32, MUTED,
-             tr(v, "Use the address in the Lodestar startup notification.",
-                "Usa la dirección del aviso de inicio de Lodestar."));
+    draw_phone_addr(v, c);
     text(c, LEFT, 524, 1500, 32, TEXT,
          tr(v, "Send packages, manage downloads and open advanced settings.",
             "Envía paquetes, gestiona descargas y abre los ajustes avanzados."));
@@ -460,27 +577,16 @@ static const char *download_state(const panel_view *v, const char *state) {
     return tr(v, "Queued", "En cola");
 }
 
-static void show_downloads(const panel_view *v, canvas c) {
-    header(v, c);
-    heading(c, tr(v, "Transfers", "Transferencias"));
-    if (!v->links_ready || !v->links->configured) {
-        text(c, LEFT, 300, 1450, 36, WHITE, v->loading_links ?
-             tr(v, "Reading the download queue…", "Leyendo la cola de descargas…") :
-             tr(v, "Transfers are unavailable", "Transferencias no disponibles"));
+static void draw_downloads_dest(const panel_view *v, canvas c) {
+    if (!*v->entered_url)
         return;
-    }
-    if (*v->entered_url) {
-        int d = v->dests && v->dests->count ? (v->dest >= 0 && v->dest < v->dests->count ? v->dest : 0) : 0;
-        text(c, LEFT, 260, RIGHT - LEFT, 34, WHITE, v->entered_url);
-        text(c, LEFT, 310, 1300, 32, ORANGE,
-             v->dests && v->dests->count ? v->dests->items[d].label : !v->dest_ready && (v->loading_destinations) ?
-             tr(v, "Reading destinations…", "Leyendo destinos…") : tr(v, "No destination selected", "Sin destino seleccionado"));
-        if (v->dests && v->dests->count > 1)
-            text(c, LEFT, 352, 1200, 26, MUTED, tr(v, "Left / Right to change drive", "Izquierda / derecha para cambiar de unidad"));
-    } else {
-        text(c, LEFT, 270, 1350, 34, TEXT,
-             tr(v, "Enter a direct URL to your package or archive", "Introduce la URL directa de tu paquete o archivo"));
-    }
+    int d = v->dests && v->dests->count ? (v->dest >= 0 && v->dest < v->dests->count ? v->dest : 0) : 0;
+    text(c, LEFT, 310, 1300, 32, ORANGE,
+         v->dests && v->dests->count ? v->dests->items[d].label : !v->dest_ready && (v->loading_destinations) ?
+         tr(v, "Reading destinations…", "Leyendo destinos…") : tr(v, "No destination selected", "Sin destino seleccionado"));
+}
+
+static void draw_downloads_status(const panel_view *v, canvas c) {
     if (v->links->active) {
         char progress[200];
         bold(c, LEFT, 440, 1350, 40, WHITE, v->links->name);
@@ -512,6 +618,31 @@ static void show_downloads(const panel_view *v, canvas c) {
     }
     if (v->links->count > shown)
         text(c, LEFT, 925, 1600, 26, MUTED, tr(v, "Open the web panel to see all downloads.", "Abre el panel web para ver todas las descargas."));
+}
+
+static void draw_downloads_body(const panel_view *v, canvas c) {
+    if (*v->entered_url) {
+        text(c, LEFT, 260, RIGHT - LEFT, 34, WHITE, v->entered_url);
+        draw_downloads_dest(v, c);
+        if (v->dests && v->dests->count > 1)
+            text(c, LEFT, 352, 1200, 26, MUTED, tr(v, "Left / Right to change drive", "Izquierda / derecha para cambiar de unidad"));
+    } else {
+        text(c, LEFT, 270, 1350, 34, TEXT,
+             tr(v, "Enter a direct URL to your package or archive", "Introduce la URL directa de tu paquete o archivo"));
+    }
+    draw_downloads_status(v, c);
+}
+
+static void show_downloads(const panel_view *v, canvas c) {
+    header(v, c);
+    heading(c, tr(v, "Transfers", "Transferencias"));
+    if (!v->links_ready || !v->links->configured) {
+        text(c, LEFT, 300, 1450, 36, WHITE, v->loading_links ?
+             tr(v, "Reading the download queue…", "Leyendo la cola de descargas…") :
+             tr(v, "Transfers are unavailable", "Transferencias no disponibles"));
+        return;
+    }
+    draw_downloads_body(v, c);
 }
 
 static const char *wheel_name(const panel_view *v, int i) {
@@ -610,6 +741,7 @@ void panel_draw(const panel_view *v, canvas c) {
 
 rect panel_header_rect(void) { return (rect){0, 0, WIDTH, PANEL_HEADER_BOTTOM}; }
 rect panel_footer_rect(void) { return (rect){0, LIST_BOTTOM, WIDTH, HEIGHT - LIST_BOTTOM}; }
+rect panel_section_bar_rect(void) { return (rect){LEFT - 8, 114, WIDTH - (LEFT - 8), 76}; }
 rect panel_list_rect(void) { return (rect){LEFT - EDGE, LIST_TOP, RIGHT - LEFT + 2 * EDGE, LIST_BOTTOM - LIST_TOP}; }
 
 rect panel_wheel_pill_rect(int idx) {
@@ -623,7 +755,7 @@ int panel_open_row_y(const panel_view *v) {
     if (!v || v->page != LIBRARY || !v->online || !v->catalog || !v->visible_count ||
         v->selected < 0 || v->selected >= v->visible_count)
         return -1;
-    int first = v->selected > 2 ? v->selected - 2 : 0;
+    int first = panel_list_first(v->selected, v->visible_count);
     int y = LIST_TOP + (v->selected - first) * ROW;
     return y + OPEN_ROW <= LIST_BOTTOM ? y : -1;
 }
@@ -651,6 +783,14 @@ rect panel_hold_bar_rect(const panel_view *v) {
 
 rect panel_detail_verbs_rect(void) { return (rect){540, 680, 720, 200}; }
 
+rect panel_settings_sidebar_rect(void) { return (rect){LEFT - 16, 232, 300, 180}; }
+
+rect panel_settings_sidebar_item_rect(int category) {
+    return (rect){LEFT - 16, 232 + category * 60, 300, 54};
+}
+
+rect panel_settings_body_rect(void) { return (rect){424, 232, WIDTH - 424, 336}; }
+
 rect panel_settings_row_rect(int row, int count) {
     if (row == count)
         return (rect){424, 256 + 60 * count, 800, 54};
@@ -658,6 +798,11 @@ rect panel_settings_row_rect(int row, int count) {
 }
 
 rect panel_settings_help_rect(void) { return (rect){1264, 232, 600, 120}; }
+
+rect panel_phone_addr_rect(void) { return (rect){LEFT - 8, 330, 1720, 158}; }
+rect panel_downloads_dest_rect(void) { return (rect){LEFT - 8, 278, 1320, 46}; }
+rect panel_downloads_status_rect(void) { return (rect){LEFT - 8, 392, WIDTH - (LEFT - 8), 556}; }
+rect panel_downloads_body_rect(void) { return (rect){LEFT - 8, 220, WIDTH - (LEFT - 8), 732}; }
 
 int panel_find_cover_rect(const panel_view *v, const char *id, rect *out) {
     if (!v || !id || !*id || !out || v->wheel)
@@ -671,7 +816,7 @@ int panel_find_cover_rect(const panel_view *v, const char *id, rect *out) {
     }
     if (v->page != LIBRARY || !v->online || !v->catalog || !v->visible_count)
         return 0;
-    int first = v->selected > 2 ? v->selected - 2 : 0;
+    int first = panel_list_first(v->selected, v->visible_count);
     for (int i = first, y = LIST_TOP; i < v->visible_count; i++) {
         const game *g = &v->catalog->games[v->indices[i]];
         int height = i == v->selected ? OPEN_ROW : ROW;
@@ -705,10 +850,25 @@ void panel_draw_footer_region(const panel_view *v, canvas c) {
     footer(v, sub);
 }
 
+void panel_draw_section_bar_region(const panel_view *v, canvas c) {
+    if (!v->online || !v->catalog)
+        return;
+    rect r = panel_section_bar_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    draw_section_bar(v, sub);
+}
+
 void panel_draw_library_list_region(const panel_view *v, canvas c, rect clip) {
     canvas sub = canvas_clip(c.pixels, clip);
     background(sub);
     library_list(v, sub);
+}
+
+void panel_draw_library_body_region(const panel_view *v, canvas c, rect clip) {
+    canvas sub = canvas_clip(c.pixels, clip);
+    background(sub);
+    draw_library_body(v, sub);
 }
 
 void panel_draw_open_row_region(const panel_view *v, canvas c) {
@@ -716,7 +876,6 @@ void panel_draw_open_row_region(const panel_view *v, canvas c) {
     if (r.w <= 0 || !v->focused)
         return;
     canvas sub = canvas_clip(c.pixels, r);
-    background(sub);
     open_row(v, sub, v->focused, r.y);
 }
 
@@ -727,8 +886,8 @@ void panel_draw_hold_bar_delta(const panel_view *v, canvas c, int prev_held, rec
             *out_damage = (rect){0, 0, 0, 0};
         return;
     }
-    int prev_w = prev_held > 0 ? bar.w * prev_held / 1000 : 0;
-    int cur_w = v->held > 0 ? bar.w * v->held / 1000 : 0;
+    int prev_w = hold_bar_fill_w(bar.w, prev_held);
+    int cur_w = hold_bar_fill_w(bar.w, v->held);
     if (cur_w <= prev_w) {
         if (out_damage)
             *out_damage = (rect){0, 0, 0, 0};
@@ -802,7 +961,34 @@ void panel_draw_detail_verbs_region(const panel_view *v, canvas c) {
     background(sub);
     verbs(v, sub, v->focused, 548, 710, 700, 0);
     if (v->holding)
-        fill(sub, 548, 860, 700 * v->held / 1000, 8, ORANGE);
+        draw_hold_bar(sub, 548, 860, 700, v->held);
+}
+
+void panel_draw_settings_sidebar_region(const panel_view *v, canvas c) {
+    rect r = panel_settings_sidebar_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    for (int i = 0; i < 3; i++)
+        draw_setting_sidebar_item(v, sub, i);
+}
+
+void panel_draw_settings_sidebar_item_region(const panel_view *v, canvas c, int category) {
+    if (category < 0 || category > 2)
+        return;
+    rect r = panel_settings_sidebar_item_rect(category);
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    draw_setting_sidebar_item(v, sub, category);
+}
+
+void panel_draw_settings_body_region(const panel_view *v, canvas c) {
+    rect r = panel_settings_body_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    int count = setting_start[v->category + 1] - setting_start[v->category];
+    for (int i = 0; i <= count; i++)
+        draw_setting_row(v, sub, i, count);
+    draw_setting_help(v, sub, count);
 }
 
 void panel_draw_settings_row_region(const panel_view *v, canvas c, int row) {
@@ -821,4 +1007,36 @@ void panel_draw_settings_help_region(const panel_view *v, canvas c) {
     canvas sub = canvas_clip(c.pixels, r);
     background(sub);
     draw_setting_help(v, sub, count);
+}
+
+void panel_draw_phone_addr_region(const panel_view *v, canvas c) {
+    rect r = panel_phone_addr_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    draw_phone_addr(v, sub);
+}
+
+void panel_draw_downloads_dest_region(const panel_view *v, canvas c) {
+    rect r = panel_downloads_dest_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    draw_downloads_dest(v, sub);
+}
+
+void panel_draw_downloads_status_region(const panel_view *v, canvas c) {
+    if (!v->links_ready || !v->links || !v->links->configured)
+        return;
+    rect r = panel_downloads_status_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    draw_downloads_status(v, sub);
+}
+
+void panel_draw_downloads_body_region(const panel_view *v, canvas c) {
+    if (!v->links_ready || !v->links || !v->links->configured)
+        return;
+    rect r = panel_downloads_body_rect();
+    canvas sub = canvas_clip(c.pixels, r);
+    background(sub);
+    draw_downloads_body(v, sub);
 }

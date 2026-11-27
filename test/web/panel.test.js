@@ -762,6 +762,43 @@ function tKeys(file) {
     'legacy panel shows English PS4Mount coexistence banner (PANEL-13)');
   COEXIST = { ps4mount_installed: false, ps4mount_autorun: false, ps4mount_state: false, auto_register_blocked: false, reasons: [] };
   REPLY_LANG = undefined;
+
+  // --- PANEL-12: O(1) cover selection and preserved legacy scroll/focus on Back
+  p = page('legacy.html', { suffix: '#app=1' }); ({ w, d, reqs } = p);
+  await tick();
+  {
+    const cards = Array.from(d.querySelectorAll('#grid [data-g]'));
+    ok(cards.length >= 2, 'legacy grid has multiple games for selection/scroll check');
+    const second = cards[1];
+    const secondId = second.getAttribute('data-g');
+    let scrollHistory = [];
+    w.scrollTo = (x, y) => { w.pageYOffset = y; scrollHistory.push(y); };
+    w.pageYOffset = 420;
+    second.click();
+    await tick();
+    ok(d.getElementById('v-game').className.includes('on'), 'clicking second cover opens game detail view');
+    ok(scrollHistory[scrollHistory.length - 1] === 0, 'opening detail view scrolls to top');
+    d.getElementById('g-back').click();
+    await tick();
+    ok(d.getElementById('v-games').className.includes('on'), 'Back returns to games view');
+    ok(scrollHistory[scrollHistory.length - 1] === 420, 'Back restores saved scroll position in legacy panel');
+    ok(d.activeElement && d.activeElement.getAttribute('data-g') === secondId,
+      'Back restores controller focus to previously selected cover');
+    ok(second.getAttribute('aria-pressed') === 'true' && cards[0].getAttribute('aria-pressed') === 'false',
+      'O(1) selectCover keeps aria-pressed accurate on legacy panel');
+  }
+  p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
+  await tick();
+  {
+    const cards = Array.from(d.querySelectorAll('#grid [data-g]'));
+    ok(cards.length >= 2, 'modern grid has multiple games for O(1) selectCover check');
+    w.selectCover(cards[1].getAttribute('data-g'));
+    ok(cards[1].getAttribute('aria-pressed') === 'true' && cards[0].getAttribute('aria-pressed') === 'false',
+      'O(1) selectCover sets new cover pressed and clears previous cover in modern panel');
+    w.selectCover(cards[0].getAttribute('data-g'));
+    ok(cards[0].getAttribute('aria-pressed') === 'true' && cards[1].getAttribute('aria-pressed') === 'false',
+      'O(1) selectCover switches back cleanly without stale pressed state');
+  }
 })()
   /* jsdom keeps the windows' own timers: end the process, with the code ok() left */
   .then(() => process.exit(process.exitCode || 0), (e) => { console.error(e); process.exit(1); });

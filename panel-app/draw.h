@@ -56,9 +56,11 @@ void line(canvas c, int x1, int y1, int x2, int y2, uint32_t color);
 void text(canvas c, int x, int y, int width, int size, uint32_t color, const char *label);
 void bold(canvas c, int x, int y, int width, int size, uint32_t color, const char *label);
 int text_width(int size, const char *label);
+int bold_width(int size, const char *label);
 void brand(canvas c, int x, int y);
 void background(canvas c);
 void background_rect(canvas c, int x, int y, int w, int h);
+void background_tinted_rect(canvas c, int x, int y, int w, int h, uint32_t color, unsigned alpha);
 void image(canvas c, int x, int y, int size, const uint32_t *pixels);
 void image_art(canvas c, int x, int y, int size, const uint32_t *pixels,
                const uint32_t *thumb64, int opaque, uint32_t art_gen);
