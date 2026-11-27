@@ -146,6 +146,26 @@ int main(void) {
         rmdir(old);
     }
 
+    fprintf(stderr, "log_append_line without stdout hijack\n");
+    {
+        char apath[] = "/tmp/ps4mount_app_XXXXXX";
+        int afd = mkstemp(apath);
+        CHECK(afd >= 0);
+        close(afd);
+        CHECK(!log_append_line(apath, "[main] instance lock port 9032 unavailable"));
+        FILE *af = fopen(apath, "r");
+        CHECK(af != NULL);
+        int ok_line = 0;
+        if (af) {
+            if (fgets(line, sizeof(line), af))
+                ok_line = matches("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3} ", line) &&
+                          strstr(line, "instance lock port 9032 unavailable") != NULL;
+            fclose(af);
+        }
+        CHECK(ok_line);
+        unlink(apath);
+    }
+
     fprintf(stderr, "%d checks, %d failed\n", g_checks, g_failed);
     return g_failed != 0;
 }

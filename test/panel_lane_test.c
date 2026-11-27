@@ -1083,6 +1083,20 @@ int main(void) {
            (unsigned long long)m.blocking_netctl_calls, (unsigned long long)m.blocking_usleep_calls,
            (unsigned long long)m.blocking_ime_calls, life.netctl_without_sysmodule);
 
+    /* Scenario 8: P4N-28 / H1b: reject user_id <= 0xFF (including 0) from sceUserServiceGetInitialUser. */
+    printf("panel scenario: reject invalid initial user id (P4N-28 / H1b)\n");
+    static const int32_t bad_users[] = {0, -1, 0xFE, 0xFF};
+    for (size_t i = 0; i < sizeof(bad_users) / sizeof(bad_users[0]); i++) {
+        panel_host_server_reset();
+        panel_host_reset_fakes();
+        panel_host_set_initial_user(0, bad_users[i]);
+        rc = panel_host_run(NULL, NULL, &snap, &m, &life);
+        CHECK(rc != 0, "invalid initial user 0x%x rejected with error code", (unsigned)bad_users[i]);
+        CHECK(life.load_exec_calls > 0, "invalid initial user exited via LoadExec(exit)");
+        CHECK(life.pad_opens == 0, "invalid initial user did not open pad");
+        CHECK(life.video_opens == 0, "invalid initial user did not open VideoOut");
+    }
+
     panel_host_server_stop();
     free(g_png_fixture);
 

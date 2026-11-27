@@ -82,18 +82,19 @@ static inline int remove_detached_ok(int app_mounted, int patch_mounted, int add
     return !app_mounted && !patch_mounted && !addcont_mounted;
 }
 
-/* Pending user-delete outcome. report is -1 when no uninstall result line arrived, 0 for a
- * zero/success result and 1 for nonzero/failure. db_state is 0 unknown, 1 registered and 2
- * confirmed unregistered by a successful fresh read. seen_registered means a successful fresh read
- * saw the title registered after the delete intent began, so later absence is a transition rather
- * than pre-existing state. Returns 1 commit destructive local state, -1 rollback only generated
- * pending state, 0 keep waiting. Time can expire pending state only
- * toward rollback: elapsed time is never evidence that user data may be deleted. */
+/* Pending user-delete outcome (DEL-6). report is -1 when no uninstall result line arrived,
+ * 0 for a zero/success result and 1 for nonzero/failure. db_state is 0 unknown, 1 registered
+ * and 2 confirmed unregistered by a successful fresh read. seen_registered means a successful
+ * fresh read saw the title registered after the delete intent began, so later absence is a
+ * transition rather than pre-existing state. Returns 1 commit destructive local state,
+ * -1 rollback only generated pending state, 0 keep waiting. An unbound report==0 line never
+ * commits deletion on its own (it does not carry a title id); only db_state == 2 && seen_registered
+ * commits. Time can expire pending state only toward rollback. */
 #define DELETE_RESULT_SETTLE_SEC 2L
 #define DELETE_PENDING_MAX_SEC 600L
 static inline int delete_pending_decision(int report, int db_state, int seen_registered, long since_report,
                                           long since_intent) {
-    if (report == 0 || (db_state == 2 && seen_registered))
+    if (db_state == 2 && seen_registered)
         return 1;
     if (report == 1 && since_report >= DELETE_RESULT_SETTLE_SEC)
         return -1;

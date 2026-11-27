@@ -472,10 +472,11 @@ static int app_session(ps4_sys *sys) {
     applog_write(&sys->log, "init", "modules ft=0x%x ime=0x%x netctl=0x%x",
                  (unsigned)ft_rc, (unsigned)ime_rc, (unsigned)net_rc);
 
+    sys->user = -1;
     rc = sceUserServiceGetInitialUser(&sys->user);
-    if (rc < 0) {
+    if (rc != 0 || sys->user <= 0xFF) {
         reason = "init_user";
-        code = rc;
+        code = rc != 0 ? rc : -1;
         goto done;
     }
     rc = scePadInit();

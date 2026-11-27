@@ -286,3 +286,5 @@ inst_poll_t dbguard_install_poll(int db_corrupt, int install_busy, int install_r
     if (idle_sec >= 30) return INST_POLL_DONE;
     return INST_POLL_CONTINUE;
 }
+
+int dbguard_can_unmask(int masked, int install_busy) { return masked && !install_busy; }

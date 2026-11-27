@@ -289,10 +289,13 @@ must never be called if the query returns a non-zero status or an invalid user I
 or the panel app is already open (or open-app inspection fails), or unless `app.db` freshly confirms the
 panel app is registered. The exact return code and user value are logged. When no valid foreground user is
 available, Lodestar skips auto-opening and leaves clear instructions in the log, console notification and
-panel notices telling the user to open Lodestar manually or use the web panel.
+panel notices telling the user to open Lodestar manually or use the web panel. The native panel app
+(`panel-app/main.c`) applies the same user-ID check to `sceUserServiceGetInitialUser`, rejecting non-zero
+return codes or `user <= 0xFF` before opening the pad or IME dialog, and `install_pkg` (`src/install.c`)
+rejects `user <= 0xFF` as defense in depth.
 The user predicate is REG-6. Check: test (system boundary, database-corruption regression on firmware 14.00).
-Test: `test/fw_sim.c` (`boot_launch_user`, `boot_panel_app_plan`, built with `-DSTRICT_FIRST_RUN_SAFETY`);
-compile boundary `test/sdkcheck.sh`.
+Test: `test/fw_sim.c` (`boot_launch_user`, `boot_panel_app_plan`, built with `-DSTRICT_FIRST_RUN_SAFETY`),
+`test/panel_lane_test.c` (invalid initial user id 0); compile boundary `test/sdkcheck.sh`.
 Source: firmware 14.00 rc.3 hardware incident (2026-11-27): auto-opening with unchecked `user = 0` was
 followed 200 ms later by `DbCorruptionOccured ... app.db` / `no such table: tbl_appbrowse_0000000000`.
 

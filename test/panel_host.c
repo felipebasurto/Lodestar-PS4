@@ -185,10 +185,14 @@ static wchar_t g_ime_script_text[512];
 static wchar_t *g_ime_buf = NULL;
 static uint32_t g_ime_max_len = 0;
 static int g_ime_open = 0;
+static int g_init_user_rc = 0;
+static int32_t g_init_user_id = 0x10000000;
 
 void panel_host_reset_fakes(void) {
     memset(&g_life, 0, sizeof(g_life));
     g_lang = 1;
+    g_init_user_rc = 0;
+    g_init_user_id = 0x10000000;
     snprintf(g_ip, sizeof(g_ip), "192.168.1.42");
     g_flip_delay = 0;
     g_flip_pending_ticks = 0;
@@ -212,6 +216,10 @@ void panel_host_reset_fakes(void) {
 }
 
 void panel_host_set_language(int lang_code) { g_lang = lang_code; }
+void panel_host_set_initial_user(int rc, int32_t user_id) {
+    g_init_user_rc = rc;
+    g_init_user_id = user_id;
+}
 void panel_host_set_ip(const char *ip) { snprintf(g_ip, sizeof(g_ip), "%s", ip ? ip : ""); }
 void panel_host_set_flip_delay(int ticks_pending) { g_flip_delay = ticks_pending; }
 
@@ -231,8 +239,8 @@ int sceUserServiceInitialize(const OrbisUserServiceInitializeParams *params) {
 }
 int sceUserServiceGetInitialUser(int32_t *userId) {
     if (userId)
-        *userId = 0x10000000;
-    return 0;
+        *userId = g_init_user_id;
+    return g_init_user_rc;
 }
 int sceSystemServiceParamGetInt(int32_t paramId, int32_t *value) {
     if (paramId == ORBIS_SYSTEM_SERVICE_PARAM_ID_LANG && value)

@@ -51,6 +51,23 @@ int log_write_lines(int fd, int *at_start, const char *buf, size_t len, const ch
     return 0;
 }
 
+int log_append_line(const char *path, const char *line) {
+    if (!path || !*path || !line)
+        return -1;
+    int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd < 0)
+        return -1;
+    char stamp[40];
+    log_stamp(stamp, sizeof(stamp));
+    int at_start = 1;
+    size_t len = strlen(line);
+    int rc = log_write_lines(fd, &at_start, line, len, stamp);
+    if (!rc && (!len || line[len - 1] != '\n'))
+        rc = write_all(fd, "\n", 1);
+    close(fd);
+    return rc;
+}
+
 static int g_pipe_read = -1, g_file = -1, g_saved_stdout = -1;
 static pthread_t g_thread;
 static int g_running;

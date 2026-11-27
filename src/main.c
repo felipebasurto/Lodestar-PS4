@@ -2604,28 +2604,36 @@ static void refresh_sandboxes(void) {
     if (g_sandboxes && time(NULL) == g_sandboxes_at)
         return;
     g_sandboxes_at = time(NULL);
-    g_nsandboxes = 0;
     int n = getfsstat(NULL, 0, MNT_NOWAIT);
     if (n <= 0)
         return;
-    struct statfs *list = mem_alloc(sizeof(*list) * (size_t)(n + 16));
-    char (*ids)[10] = realloc(g_sandboxes, sizeof(*ids) * (size_t)(n + 16));
-    if (ids)
-        g_sandboxes = ids;
+    int cap = n + 16;
+    struct statfs *list = mem_alloc(sizeof(*list) * (size_t)cap);
+    char (*ids)[10] = malloc(sizeof(*ids) * (size_t)cap);
     if (!list || !ids) {
+        free(ids);
         mem_free(list);
         return;
     }
     scan_note_mount_read();
-    n = getfsstat(list, (long)(sizeof(*list) * (size_t)(n + 16)), MNT_NOWAIT);
+    n = getfsstat(list, (long)(sizeof(*list) * (size_t)cap), MNT_NOWAIT);
+    if (n < 0) {
+        free(ids);
+        mem_free(list);
+        return;
+    }
+    int found = 0;
     static const char prefix[] = "/mnt/sandbox/pfsmnt/";
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n && found < cap; i++) {
         const char *on = list[i].f_mntonname;
         if (strlen(on) != sizeof(prefix) - 1 + 9 + 5 || strncmp(on, prefix, sizeof(prefix) - 1) ||
             strcmp(on + sizeof(prefix) - 1 + 9, "-app0"))
             continue;
-        snprintf(g_sandboxes[g_nsandboxes++], 10, "%.9s", on + sizeof(prefix) - 1);
+        snprintf(ids[found++], 10, "%.9s", on + sizeof(prefix) - 1);
     }
+    free(g_sandboxes);
+    g_sandboxes = ids;
+    g_nsandboxes = found;
     mem_free(list);
 }
 
@@ -3440,6 +3448,10 @@ static int unmask_user_app(char (*tids)[10], int n) {
 
 /* A daemon stopped while /user/app showed only the new games: show all of them again. */
 static int unmask_leftover(void) {
+    if (__atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE)) {
+        printf("[reg] %s still running; leaving /user/app masked\n", reg_mode_name());
+        return -1;
+    }
     static char tids[MAX_TITLES][10];
     int n = 0;
     DIR *d = opendir(STAGE_DIR);
@@ -3469,7 +3481,7 @@ static int mask_user_app(char (*tids)[10], int n) {
     char new_tids[MAX_TITLES][10];
     int nn = 0;
     for (int i = 0; i < n && nn < MAX_TITLES; i++)
-        if (!db_is_registered(tids[i])) {
+        if (db_confirms_unregistered(tids[i])) {
             char p[PATH_MAX];
             snprintf(p, sizeof(p), STAGE_DIR "/%s", tids[i]);
             if (mkdir(p, 0777) && errno != EEXIST)
@@ -3498,7 +3510,7 @@ static int install_all(char (*tids)[10], int n) {
         return -1;
     int need = 0;
     for (int i = 0; i < n; i++)
-        need += !db_is_registered(tids[i]);
+        need += db_confirms_unregistered(tids[i]);
     if (!need)
         return 0;
     int masked = mask_user_app(tids, n);
@@ -3508,7 +3520,7 @@ static int install_all(char (*tids)[10], int n) {
         return -1;
     }
     if (install_all_start(tids, n)) {
-        if (masked)
+        if (dbguard_can_unmask(masked, __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE)))
             unmask_user_app(tids, n);
         return -1;
     }
@@ -3522,22 +3534,30 @@ static int install_all(char (*tids)[10], int n) {
         int corrupt = dbguard_halt_active();
         int now = 0;
         for (int i = 0; i < n; i++)
-            now += db_is_registered(tids[i]);
+            now += db_confirms_registered(tids[i]);
         idle = now > done ? 0 : idle + 1;
         done = now;
         inst_poll_t act = dbguard_install_poll(corrupt, busy, rc, done, n, idle);
         if (act == INST_POLL_ABORT_DB_ERROR) {
             aborted = 1;
-            if (masked) {
+            /* REG-9: wait briefly for a live installer call to finish before unmasking;
+             * never force-unmount /user/app while AppInstallAll is still running. */
+            for (int w = 0; masked && __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE) && w < 5; w++)
+                pump_events(1000);
+            busy = __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE);
+            if (dbguard_can_unmask(masked, busy)) {
                 if (unmask_user_app(tids, n))
                     unmask_fail = 1;
                 masked = 0;
+            } else if (masked) {
+                unmask_fail = 1;
+                g_masked = 1;
             }
-            printf("[reg] database error/corruption during %s (rc=0x%08x); /user/app %s, aborting batch\n",
-                   reg_mode_name(), (unsigned)rc, unmask_fail ? "STILL MASKED" : "restored");
+            printf("[reg] database error/corruption during %s (rc=0x%08x, busy=%d); /user/app %s, aborting batch\n",
+                   reg_mode_name(), (unsigned)rc, busy, unmask_fail ? "STILL MASKED" : "restored");
             break;
         }
-        if (masked && !busy) {
+        if (dbguard_can_unmask(masked, busy)) {
             if (unmask_user_app(tids, n))
                 unmask_fail = 1;
             masked = 0;
@@ -3546,7 +3566,7 @@ static int install_all(char (*tids)[10], int n) {
             break;
     }
     /* the rows can be there before AppInstallAll returns: the other games stay hidden
-     * until it does (at most two minutes), unless a DB corruption/error demands immediate unmask */
+     * until it does (at most two minutes). Never force-unmount while still busy (REG-9). */
     for (int i = 0; !aborted && masked && __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE) && i < 120; i++) {
         pump_events(1000);
         if (dbguard_halt_active()) {
@@ -3554,9 +3574,17 @@ static int install_all(char (*tids)[10], int n) {
             break;
         }
     }
-    if (masked && unmask_user_app(tids, n))
-        unmask_fail = 1;
     int busy = __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE);
+    if (dbguard_can_unmask(masked, busy)) {
+        if (unmask_user_app(tids, n))
+            unmask_fail = 1;
+        masked = 0;
+    } else if (masked) {
+        unmask_fail = 1;
+        g_masked = 1;
+        printf("[reg] %s still running after wait; leaving /user/app masked rather than forcing unmount\n",
+               reg_mode_name());
+    }
     int rc = __atomic_load_n(&g_install_rc, __ATOMIC_ACQUIRE);
     if (!busy && dbguard_observe_rc(&g_dbguard, rc, reg_mode_name()))
         dbguard_halt_active();
@@ -3577,7 +3605,7 @@ static int install_all(char (*tids)[10], int n) {
  * is tried again later. */
 static int register_finish(title_src_t *t) {
     const char *tid = t->app.title_id;
-    if (!db_is_registered(tid)) {
+    if (!db_confirms_registered(tid)) {
         printf("[reg] %s: not registered by the system\n", tid);
         return -1;
     }
@@ -6138,6 +6166,15 @@ int app_remove(const char *tid, char *msg, size_t cap) {
         snprintf(msg, cap, "%s", TR("Close the game before removing it", "Cierra el juego antes de quitarlo"));
         return -1;
     }
+    int reg = db_confirms_registered(tid);
+    int unreg = !reg && db_confirms_unregistered(tid);
+    if (!reg && !unreg) {
+        snprintf(msg, cap,
+                 TR("Could not read app.db for %s; nothing was removed",
+                    "No se pudo leer app.db para %s; no se quitó nada"),
+                 tid);
+        return -1;
+    }
     char dtids[MAX_DLC_TIDS][10];
     int ndtids = removal_dlc_tids(root, tid, m, dtids);
     unmount_title(tid, dtids, ndtids);
@@ -6153,7 +6190,7 @@ int app_remove(const char *tid, char *msg, size_t cap) {
     snprintf(path, sizeof(path), STATE_DIR "/%s.removed", tid);
     write_file(path, tid, strlen(tid), 0666);
     unlink(srcpath);
-    int rc = db_is_registered(tid) ? uninstall_title(tid) : 0;
+    int rc = reg ? uninstall_title(tid) : 0;
     if (!rc) {
         clean_holds(tid, dtids, ndtids);
         /* the task goes with it: BGFT keeps the state of an id for the whole boot, and a
@@ -6204,15 +6241,20 @@ static void readd_title(const char *tid) {
            g_readd_why);
     int rc = app_remove(tid, msg, sizeof(msg));
     printf("[reg] %s: removed to add it again: %s\n", tid, msg);
-    if (g_readd_badpatch) {
-        /* the removal cleared it: the game comes back without the update */
-        g_readd_badpatch = 0;
-        write_badpatch(tid, g_readd_patch);
-        g_readd_patch[0] = 0;
-    }
-    if (!rc)
+    if (!rc) {
+        if (g_readd_badpatch) {
+            /* the removal cleared it: the game comes back without the update */
+            g_readd_badpatch = 0;
+            write_badpatch(tid, g_readd_patch);
+            g_readd_patch[0] = 0;
+        }
         wait_db_quiet(3, 30);
-    app_add(tid, msg, sizeof(msg));
+        app_add_internal(tid, msg, sizeof(msg), 0);
+    } else {
+        g_readd_badpatch = 0;
+        g_readd_patch[0] = 0;
+        printf("[reg] %s: skipping re-add because remove failed\n", tid);
+    }
     g_readd_active[0] = 0;
 }
 
@@ -6433,8 +6475,10 @@ static int open_apps(uint32_t *ids, char (*tids)[10], int max, int panel) {
     }
     for (size_t off = 0; off + sizeof(struct kinfo_proc) <= len;) {
         struct kinfo_proc *ki = (struct kinfo_proc *)(buf + off);
-        if (ki->ki_structsize < (int)sizeof(*ki) || (size_t)ki->ki_structsize > len - off)
-            break;
+        if (ki->ki_structsize < (int)sizeof(*ki) || (size_t)ki->ki_structsize > len - off) {
+            mem_free(buf);
+            return -1;
+        }
         app_info_t info;
         memset(&info, 0, sizeof(info));
         if (!strcmp(ki->ki_comm, "eboot.bin") && !sceKernelGetAppInfo(ki->ki_pid, &info) && info.app_id &&
@@ -7622,6 +7666,8 @@ static int g_klog = -1, g_web = -1;
 /* Closes the ports and the log before main returns: the process stays (it is the
  * loader's) and anything left open in it would keep the next PS4Mount out. */
 static void shutdown_daemon(int lock) {
+    if (user_app_masked() && !__atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE))
+        unmask_leftover();
     if (g_web >= 0)
         close(g_web);
     web_stop(); /* before subsystems and log: no worker may still call links or hold a queued fd */
@@ -7697,11 +7743,16 @@ static void report_lock_conflict(int bind_errno, int after_rest) {
     if (bind_errno == EADDRINUSE)
         probe_local_lodestar(probe, sizeof(probe));
     lock_conflict_t kind = lock_conflict_classify(bind_errno, probe);
-    printf("[main] instance lock port %d unavailable (pid %d, errno=%d %s, probe=%s): %s\n",
-           LOCK_PORT, (int)getpid(), bind_errno, strerror(bind_errno),
-           kind == LOCK_CONFLICT_LODESTAR_RUNNING ? "lodestar-panel" :
-           bind_errno == EADDRINUSE ? "no-lodestar-reply" : "skipped",
-           after_rest ? "stopping after rest mode" : "this load ends here");
+    char line[256];
+    snprintf(line, sizeof(line), "[main] instance lock port %d unavailable (pid %d, errno=%d %s, probe=%s): %s\n",
+             LOCK_PORT, (int)getpid(), bind_errno, strerror(bind_errno),
+             kind == LOCK_CONFLICT_LODESTAR_RUNNING ? "lodestar-panel" :
+             bind_errno == EADDRINUSE ? "no-lodestar-reply" : "skipped",
+             after_rest ? "stopping after rest mode" : "this load ends here");
+    if (after_rest)
+        printf("%s", line);
+    else
+        log_append_line(STATE_DIR "/log.txt", line);
     if (kind == LOCK_CONFLICT_LODESTAR_RUNNING) {
         if (after_rest)
             notify_kind(NOTIFY_WARN, "%s",
@@ -7849,7 +7900,7 @@ static int g_live; /* klogsrv replays its backlog first: live after the first qu
 static void keep_awake(void) {
     static time_t last;
     static int on;
-    int active = links_active();
+    int active = links_active() || __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE) || g_ndlc_pending > 0;
     if (active != on) {
         on = active;
         printf("[power] %s\n", on ? "keeping the console out of rest mode while it transfers" : "rest mode allowed again");
@@ -7985,21 +8036,20 @@ static void notify_running(void) {
 
 int main(void) {
     mkdirs(STATE_DIR, 0777);
-    /* the log goes to a file, every line with its time; when it cannot be opened, stdout
-     * stays as it was. Opened first of all: a load that ends before the panel is up is
-     * only seen here */
-    log_start(STATE_DIR "/log.txt");
-    setvbuf(stdout, NULL, _IOLBF, 0);
-    dbguard_init(&g_dbguard, DBGUARD_MMS_DIR);
+    /* Acquire the single-instance lock before redirecting process-wide stdout so a
+     * duplicate payload load never disturbs an already-running daemon's log pipe. */
     int lock_err = 0;
     int lock = single_instance(&lock_err);
     if (boot_lock_state(lock) == BOOT_LOCK_CONFLICT) {
         apply_lang(); /* the running daemon may be either product: use the console's language */
         report_lock_conflict(lock_err, 0);
-        dbguard_destroy(&g_dbguard);
-        log_stop();
         return 0;
     }
+    /* the log goes to a file, every line with its time; when it cannot be opened, stdout
+     * stays as it was. */
+    log_start(STATE_DIR "/log.txt");
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    dbguard_init(&g_dbguard, DBGUARD_MMS_DIR);
     user_service_init_t us_init = {0x2BC};
     int us_rc = sceUserServiceInitialize(&us_init);
     int ai_rc = sceAppInstUtilInitialize();

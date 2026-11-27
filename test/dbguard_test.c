@@ -364,11 +364,20 @@ static void test_operational_inventory(void) {
     rmdir(dir);
 }
 
+/* REG-9 / H5: never unmount /user/app while AppInstallAll is still busy. */
+static void test_can_unmask_while_busy(void) {
+    CHECK(dbguard_can_unmask(0, 0) == 0, "unmasked does not unmask");
+    CHECK(dbguard_can_unmask(0, 1) == 0, "unmasked while busy does not unmask");
+    CHECK(dbguard_can_unmask(1, 1) == 0, "masked while AppInstallAll busy MUST NOT force-unmount /user/app");
+    CHECK(dbguard_can_unmask(1, 0) == 1, "masked once AppInstallAll finished may unmask");
+}
+
 int main(void) {
     test_corrupt_marker_startup_and_midbatch();
     test_klog_corruption_during_registration();
     test_first_start_pilot_breaker();
     test_staging_unmount_and_db_error_abort();
+    test_can_unmask_while_busy();
     test_operational_inventory();
 
     printf("dbguard_test: %d passed, %d failed\n", g_pass, g_fail);

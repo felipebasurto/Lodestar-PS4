@@ -68,6 +68,7 @@ int panel_host_server_has_req(const char *method, const char *path_prefix, const
 /* Fake hardware configuration */
 void panel_host_reset_fakes(void);
 void panel_host_set_language(int lang_code);
+void panel_host_set_initial_user(int rc, int32_t user_id);
 void panel_host_set_ip(const char *ip);
 void panel_host_set_flip_delay(int ticks_pending);
 void panel_host_set_ime_script(int init_rc, int frames_running, int endstatus, const wchar_t *text);

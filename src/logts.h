@@ -21,3 +21,6 @@ void log_stamp(char *out, size_t n);
 /* Writes buf to fd, putting stamp before every line; *at_start tracks whether the next
  * byte begins a line (start with 1). Returns 0, or -1 when a write failed. */
 int log_write_lines(int fd, int *at_start, const char *buf, size_t len, const char *stamp);
+/* Appends one timestamped line directly to path without redirecting stdout or starting a
+ * thread (used when a duplicate instance exits on lock conflict). Returns 0 or -1. */
+int log_append_line(const char *path, const char *line);

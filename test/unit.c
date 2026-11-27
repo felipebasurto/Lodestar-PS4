@@ -907,8 +907,9 @@ static void test_delete_window(void) {
     CHECK(!delete_content_id_plain("UP0000/CUSA00001"));
     CHECK(!delete_content_id_plain(""));
 
-    /* DEL-6: intent waits; only explicit success or a confirmed registered-to-absent
-     * transition commits. Failure and age can only roll generated pending state back. */
+    /* DEL-6: intent waits; only a confirmed registered-to-absent app.db transition
+     * commits. An unbound AppUnInstallMainExecute ret = [0] line never commits deletion
+     * on its own. Failure and age can only roll generated pending state back. */
     static const struct {
         int report, db, seen;
         long since_report, since_intent, want;
@@ -917,8 +918,11 @@ static void test_delete_window(void) {
         {-1, 1, 0, 0, 0, 0},  /* still registered is not failure proof */
         {-1, 2, 0, 0, 0, 0},  /* absence without a seen transition may be pre-existing */
         {-1, 2, 1, 0, 0, 1},  /* normal successful PS4 delete writes no result line */
-        {0, 0, 0, 0, 0, 1},   /* explicit zero result is positive commit evidence */
-        {0, 1, 0, 0, 0, 1},
+        {0, 0, 0, 0, 0, 0},   /* unbound zero result with unknown db must NOT delete user files */
+        {0, 1, 0, 0, 0, 0},   /* unbound zero result while still registered must NOT delete */
+        {0, 1, 1, 0, 0, 0},   /* unbound zero result while still registered (after seen) must NOT delete */
+        {0, 2, 0, 0, 0, 0},   /* zero result without confirmed registered->absent transition must NOT delete */
+        {0, 2, 1, 0, 0, 1},   /* confirmed app.db transition commits */
         {1, 0, 0, 0, 0, 0},   /* let the database settle after a nonzero result */
         {1, 0, 0, DELETE_RESULT_SETTLE_SEC - 1, 0, 0},
         {1, 0, 0, DELETE_RESULT_SETTLE_SEC, 0, -1},

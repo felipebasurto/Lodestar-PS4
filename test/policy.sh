@@ -20,9 +20,11 @@ for f in "${SRC[@]}"; do
     awk '/(write_file|unlink|remove|rename)\(|open\([^)]*O_(WRONLY|RDWR)|fopen\([^)]*"[wa]/ && /priv\/mms/ {print FILENAME":"NR": "$0; bad=1} END {exit bad}' "$f" ||
         rule "a write or delete into /system_data/priv/mms"
 done
-# Foreground user must never be queried unchecked (REG-6).
+# Foreground user must never be queried unchecked (REG-6 / P4N-28).
 grep -n 'sceUserServiceGetForegroundUser(' "${SRC[@]}" | grep -vE 'int rc = sceUserServiceGetForegroundUser\(|int sceUserServiceGetForegroundUser\(' &&
     rule "unchecked sceUserServiceGetForegroundUser() call (it must go through foreground_user_id: rc checked, user a real profile)"
+grep -q 'sys->user <= 0xFF' panel-app/main.c ||
+    rule "panel-app/main.c must reject user <= 0xFF from sceUserServiceGetInitialUser (P4N-28)"
 
 # No shell, no other programs: the payload has no business running commands.
 grep -nE '\b(system|popen|execl|execlp|execle|execv|execvp|execve)\s*\(' "${SRC[@]}" && rule "running commands"

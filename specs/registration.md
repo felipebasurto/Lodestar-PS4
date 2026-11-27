@@ -110,14 +110,18 @@ registered ~20 titles in 4 batches while the panel app was crashing and `app.db-
 ### REG-9: staging errors and DB errors prioritize restoring `/user/app` and abort the batch
 Staging must not mask `/user/app` while any application (including the panel app) is open.
 If any database corruption signal or database-layer installer error (`0x80F5xxxx` / `0x809C11xx`)
-appears during staging or `AppInstallAll`, Lodestar immediately aborts the wait, prioritizes
-unmounting staged child mounts and `/user/app` (gentle retries followed by `MNT_FORCE`), and
-aborts the batch without running `register_finish` or subsequent groups. If `/user/app`
-cannot be proven unmasked, Lodestar must keep its masked flag set, leave `STAGE_DIR` intact
-rather than clearing it while mounted, report the fault, and abort the batch.
+appears during staging or `AppInstallAll`, Lodestar immediately aborts the wait, unmounts staged
+child mounts and `/user/app` once `AppInstallAll` is no longer busy (gentle retries followed by
+`MNT_FORCE`), and aborts the batch without running `register_finish` or subsequent groups.
+Lodestar must never unmount or force-unmount `/user/app` while `AppInstallAll` is still running
+(`dbguard_can_unmask` requires `masked && !install_busy`); if the installer has not returned by the
+end of the wait (or after a short grace wait on DB-error abort), or if `/user/app` cannot be proven
+unmasked, Lodestar must keep its masked flag set, leave `STAGE_DIR` intact rather than clearing it
+while mounted, report the fault, and abort the batch.
 Check: test (keep bar 2: data loss; keep bar 3: ordering). Test: `test/dbguard_test.c`;
 compile boundary `test/sdkcheck.sh`.
-Source: forensic staging/unmount race audit on firmware 14.00 incident.
+Source: forensic staging/unmount race audit on firmware 14.00 incident; live-installer unmount fix
+(`hazards/boot-registration` H5), 2026-11-27.
 
 ### REG-10: operational inventory is persisted under `/data/lodestar` before registration
 Before registration operations, Lodestar atomically writes its own operational inventory to
@@ -130,14 +134,19 @@ Check: test (keep bar 1: external file format; keep bar 2: recovery/data safety)
 Source: post-rebuild recovery requirement after firmware 14.00 database rebuild.
 
 ### REG-11: open-app detection, param.sfo checks and version-mismatch re-add fail closed
-- `open_apps` / `open_games` return a negative value when `sysctl` or the buffer allocation fails instead of `0`
-  ("no apps open"), so staging masks, the panel auto-launch, restore and migration fail closed.
+- `open_apps` / `open_games` return a negative value when `sysctl`, buffer allocation, or `kinfo_proc`
+  framing fails instead of `0` ("no apps open"), so staging masks, the panel auto-launch, restore and
+  migration fail closed. `refresh_sandboxes` preserves its prior snapshot when `getfsstat` or allocation fails.
 - `enforce_patch_sfo` ignores an empty `sfo_len` and compares a `param.sfo` larger than 8 KiB through mapped
   allocation instead of rewriting it on every scan.
 - `scan_root` requires `db_confirms_registered(tid)` before queuing a version-mismatch remove and re-add, so a stale
   `app.db` cache cannot trigger a destructive re-registration.
+- `readd_title` skips `write_badpatch` and `app_add` when `app_remove` fails.
+- `app_remove` requires fresh `db_confirms_registered(tid)` or `db_confirms_unregistered(tid)` before unmounting
+  or removing holds, and `mask_user_app` / `install_all` / `register_finish` use fresh confirmation rather than
+  stale cache lookups.
 Check: read (system-facing kernel/DB boundary compiled through `test/sdkcheck.sh`).
-Source: upstream vs Lodestar focused registration audit, 2026-11-27.
+Source: upstream vs Lodestar focused registration audit and `hazards/boot-registration` H6/H7/H8 fixes, 2026-11-27.
 
 ### REG-12: automatic registration is held while PS4Mount is installed or in AutoRun
 When `coexist_block_auto_register` reports that PS4Mount (`Vld439/PS4Mount-PS4`) is installed or active in

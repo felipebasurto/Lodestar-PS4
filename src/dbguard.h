@@ -121,3 +121,6 @@ typedef enum {
 /* Decision for one iteration of the AppInstallAll wait loop (REG-7 / REG-9). */
 inst_poll_t dbguard_install_poll(int db_corrupt, int install_busy, int install_rc,
                                  int done, int total, int idle_sec);
+
+/* REG-9: /user/app may be unmounted only once AppInstallAll is no longer busy. */
+int dbguard_can_unmask(int masked, int install_busy);
