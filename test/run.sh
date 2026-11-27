@@ -144,6 +144,9 @@ python3 -I test/driveaudit_test.py
 echo "== exFAT offline extent mapper (tools/exfatmap.py)"
 python3 -I test/exfatmap_test.py
 
+echo "== boot and registration hazards (expected-fail cases are bugs still on this tree)"
+python3 -I test/hazard_boot_test.py
+
 echo "== downloads from links"
 $CC $FLAGS $BRF $LAF -Itest -o "$B/links_test" test/links_test.c src/links.c src/rar5dec.c src/https.c src/json.c src/lang.c src/build.c src/mem.c \
     src/crypto.c src/check.c src/pkg.c src/la_alloc.c "$BR/libbearssl.a" "$LA/libarchive.a" -lpthread

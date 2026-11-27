@@ -6405,8 +6405,10 @@ static int first_start(void) {
     return !found;
 }
 
-static void config_save(void) {
-    setup_set(0); /* the settings were chosen: games are added from now on */
+/* P4N-32: consent ends only after config.txt is the new file. write_file truncates,
+ * so a short write must not land on CONFIG_PATH: first_start() treats any existing
+ * file as "the settings were chosen". */
+static int config_save(void) {
     buf_t b = {0};
     buf_printf(&b, "ver=3\nbatch=%d\nbatch_size=%d\ndlc=%d\ndlc_mode=%s\ndlc_big=%d\nrestore_batch=%d\ninternal=%d\norganize=%d\nlang=%s\n",
                g_cfg.batch, g_cfg.batch_size, g_cfg.dlc, dlc_mode_name(g_cfg.dlc_mode), g_cfg.dlc_big, g_cfg.restore_batch,
@@ -6414,8 +6416,20 @@ static void config_save(void) {
     buf_printf(&b, "klog=%d\nautorun=%d\n", g_cfg.klog, g_cfg.autorun);
     for (int i = 0; i < g_cfg.npaths; i++)
         buf_printf(&b, "path=%s\n", g_cfg.paths[i]);
-    write_file(CONFIG_PATH, b.data, b.len, 0666);
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", CONFIG_PATH);
+    int rc = -1;
+    if (b.data && b.len && !write_file(tmp, b.data, b.len, 0666) && !rename(tmp, CONFIG_PATH))
+        rc = 0;
+    else
+        unlink(tmp);
     buf_free(&b);
+    if (rc) {
+        printf("[config] settings were not saved\n");
+        return -1;
+    }
+    setup_set(0); /* on disk: games may be added from now on */
+    return 0;
 }
 
 static void config_load(void) {
@@ -6624,6 +6638,8 @@ int app_config_set(const char *body, char *msg, size_t cap) {
         return -1;
     }
     int autorun_changed = c.autorun != g_cfg.autorun;
+    config_t previous;
+    cfg_snapshot(&previous);
     if (autorun_changed && autorun_apply(c.autorun)) {
         printf("[config] autorun %s: could not update payloads.ini\n", c.autorun ? "on" : "off");
         snprintf(msg, cap, "%s", TR("Not saved: could not update GoldHEN's AutoRun list",
@@ -6632,7 +6648,15 @@ int app_config_set(const char *body, char *msg, size_t cap) {
     }
     config_publish(&c);
     apply_lang();
-    config_save();
+    if (config_save()) {
+        config_publish(&previous);
+        apply_lang();
+        if (autorun_changed && autorun_apply(previous.autorun))
+            printf("[config] autorun: could not restore GoldHEN's AutoRun list after a failed save\n");
+        snprintf(msg, cap, "%s", TR("Not saved: the settings file could not be written",
+                                    "No se guardó: no se pudo escribir el archivo de ajustes"));
+        return -1;
+    }
     printf("[config] saved: batch=%d batch_size=%d dlc=%d restore_batch=%d organize=%d folders=%d\n", c.batch,
            c.batch_size, c.dlc, c.restore_batch, c.organize, c.npaths);
     if (was_organize && !c.organize) /* turned off: send the organized games back to where they were */
@@ -7531,8 +7555,10 @@ int main(void) {
         if (scan_due(time(NULL)) && !g_deleting) {
             time_t seen = setup_seen_at();
             if (setup_active() && time(NULL) >= (seen > g_setup_start ? seen : g_setup_start) + SETUP_WAIT) {
-                printf("[main] first start: nobody at the panel, the default settings are saved\n");
-                config_save();
+                if (config_save())
+                    printf("[main] first start: default settings were not saved; no game is added yet\n");
+                else
+                    printf("[main] first start: nobody at the panel, the default settings are saved\n");
             }
             int manual = 0, hard = 0;
             scan_trigger_t trig = SCAN_TRIG_ROUTINE;

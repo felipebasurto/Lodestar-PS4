@@ -277,6 +277,22 @@ cleanup must never use PS4Mount's `.src`, `.removed` or hold files as Lodestar e
 Check: test for port/manifest and ownership decision tables; read for the console-wide service interlock.
 Source: user hardware coexistence requirement, 2026-11-26.
 
+### P4N-32: first-run consent ends only when config.txt is the new file
+The first start stays open until the settings have been written. `config_save` writes a temporary file
+in the same directory and renames it onto `/data/lodestar/config.txt`. `setup_set(0)` runs only after
+that rename succeeds. A failed or short write deletes the temporary file, leaves any previous
+`config.txt` untouched, returns an error, and puts the in-memory settings (and GoldHEN's AutoRun
+list, if this save changed it) back. Callers use that return: the panel does not say the settings
+were saved, and the first-run timeout does not open registration, when the write failed. A partial
+`config.txt` must not be left behind, because `first_start` treats an existing `config.txt` as consent.
+
+This rule does not remove the 120 second timeout. Whether that timeout may choose the defaults is a
+separate decision, tracked by the open first-run PRs. P4N-2 is unchanged: a failed database read is
+still unknown, never proof that a title is absent.
+Check: test (`test/hazard_api.py` consent rule and `test/hazard_boot_test.py`).
+Source: `write_file` uses `O_TRUNC` and returns -1 on a short write; host analysis of the
+2026-11-27 firmware 14.00 run.
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,

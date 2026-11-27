@@ -1,0 +1,15 @@
+# Known discarded or too-weak returns of sceUserService*, sceLncUtil* and sceAppInstUtil*
+# on this tree. test/hazard_api.py --policy fails when a line appears or disappears.
+# A disappeared line is a fix: delete it here in the same change. Do not add a line
+# to silence a new call.
+src/main.c:2224: sceUserServiceGetForegroundUser return discarded
+src/main.c:2224: sceUserServiceGetForegroundUser reads into a user id initialized to 0
+src/main.c:6878: sceUserServiceGetForegroundUser return discarded
+src/main.c:6878: sceUserServiceGetForegroundUser reads into a user id initialized to 0
+src/main.c:7025: sceUserServiceGetForegroundUser return discarded
+src/main.c:7025: sceUserServiceGetForegroundUser reads into a user id initialized to 0
+src/main.c:7027: sceLncUtilLaunchApp return printf-only
+src/main.c:7482: sceUserServiceInitialize return discarded
+src/main.c:7483: sceAppInstUtilInitialize return discarded
+panel-app/main.c:834: sceUserServiceInitialize return discarded
+panel-app/main.c:839: sceUserServiceGetInitialUser return is checked but user id 0 is still accepted

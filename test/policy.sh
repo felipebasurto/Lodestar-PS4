@@ -87,5 +87,12 @@ grep -nE '\bnotify\("' src/main.c | grep -vE 'notify\("%s(: %s)?"' && rule "a no
 awk '/^static const char \*pkg_url\(/ {inside=1} inside && /^\}/ {inside=0; next} /sys_path\(/ && !inside && !/^static const char \*sys_path\(/ {print FILENAME":"NR": "$0; bad=1} END {exit bad}' src/main.c ||
     rule "a pkg path handed to the system without pkg_url(): over 95 bytes it is cut"
 
+# The 2026-11-27 home-menu wipe started from a discarded sceUserServiceGetForegroundUser
+# whose out-parameter had been set to 0. A new discarded sceUserService*, sceLncUtil* or
+# sceAppInstUtil* return fails here. Fixing one fails too, until test/hazard_api_baseline.txt
+# drops that line. Separately, config_save must rename config.txt into place before it
+# ends first-run consent (P4N-32); that one is not in the baseline.
+python3 -I test/hazard_api.py --policy || rule "ignored sceUserService/sceLncUtil/sceAppInstUtil return, or first-run consent cleared before the settings file is written"
+
 [ $fail = 0 ] && echo "policy: all rules hold"
 exit $fail
