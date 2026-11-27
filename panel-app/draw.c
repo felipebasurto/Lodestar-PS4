@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef PANEL_HOST_TEST
+#include "panel_metrics.h"
+#endif
 
 /* Barlow Condensed for the menus; Roboto covers the scripts it has no glyphs for. */
 enum { MEDIUM, BOLD, FALLBACK, FACES };
@@ -106,6 +109,9 @@ static void point(canvas c, int x, int y, uint32_t color, unsigned alpha) {
     if ((unsigned)x < WIDTH && (unsigned)y < HEIGHT) {
         uint32_t *dest = c.pixels + y * WIDTH + x;
         *dest = blend(*dest, color, alpha);
+#ifdef PANEL_HOST_TEST
+        panel_metrics_on_fb_write(4);
+#endif
     }
 }
 
@@ -113,12 +119,20 @@ void fill(canvas c, int x, int y, int w, int h, uint32_t color) {
     int right = x + w < WIDTH ? x + w : WIDTH, bottom = y + h < HEIGHT ? y + h : HEIGHT;
     x = x < 0 ? 0 : x;
     y = y < 0 ? 0 : y;
+#ifdef PANEL_HOST_TEST
+    if (right > x && bottom > y)
+        panel_metrics_on_fb_write((size_t)(right - x) * (size_t)(bottom - y) * 4);
+#endif
     for (; y < bottom; y++)
         for (int i = x; i < right; i++)
             c.pixels[y * WIDTH + i] = 0xff000000 | color;
 }
 
 void shade(canvas c, int x, int y, int w, int h, uint32_t color, unsigned alpha) {
+#ifdef PANEL_HOST_TEST
+    if (w >= WIDTH && h >= HEIGHT)
+        panel_metrics_on_full_frame_shade();
+#endif
     for (int row = y; row < y + h; row++)
         for (int col = x; col < x + w; col++)
             point(c, col, row, color, alpha);
@@ -184,6 +198,9 @@ static int write_label(canvas c, int x, int y, int width, int size, uint32_t col
         FT_Face face = glyph_face(style, size, &cp);
         if (!face || FT_Load_Char(face, cp, FT_LOAD_RENDER | FT_LOAD_NO_BITMAP))
             continue;
+#ifdef PANEL_HOST_TEST
+        panel_metrics_on_text_raster(c.pixels != NULL);
+#endif
         FT_GlyphSlot glyph = face->glyph;
         int advance = (int)(glyph->advance.x >> 6);
         if (x + advance > right || (*label && x + advance + size / 2 > right)) {
@@ -227,10 +244,18 @@ static void paint_ground(uint32_t *pixels) {
 }
 
 void background(canvas c) {
-    if (ground)
+    if (ground) {
+#ifdef PANEL_HOST_TEST
+        panel_metrics_on_full_frame_copy((size_t)WIDTH * HEIGHT * sizeof(*c.pixels));
+        panel_metrics_on_fb_write((size_t)WIDTH * HEIGHT * sizeof(*c.pixels));
+#endif
         memcpy(c.pixels, ground, (size_t)WIDTH * HEIGHT * sizeof(*c.pixels));
-    else
+    } else {
+#ifdef PANEL_HOST_TEST
+        panel_metrics_on_full_frame_copy((size_t)WIDTH * HEIGHT * sizeof(*c.pixels));
+#endif
         fill(c, 0, 0, WIDTH, HEIGHT, 0x0a0b0d);
+    }
 }
 
 void brand(canvas c, int x, int y) {
@@ -244,6 +269,9 @@ void brand(canvas c, int x, int y) {
 void image(canvas c, int x, int y, int size, const uint32_t *pixels) {
     if (!pixels)
         return;
+#ifdef PANEL_HOST_TEST
+    panel_metrics_on_art_scale(size);
+#endif
     for (int row = 0; row < size; row++) {
         for (int col = 0; col < size; col++) {
             uint32_t src = pixels[(row * ART_SIZE / size) * ART_SIZE + col * ART_SIZE / size];

@@ -72,6 +72,24 @@ int main(void) {
     CHECK(!db_confirms_registered("CUSA00001"));
     CHECK(!exists(APP_DB)); /* opening read-only never creates it */
 
+    printf("inconsistent schema (missing tbl_appinfo)\n");
+    {
+        sqlite3 *bad;
+        CHECK(sqlite3_open(APP_DB, &bad) == SQLITE_OK);
+        exec(bad, "CREATE TABLE tbl_other(id INT); INSERT INTO tbl_other VALUES(1);");
+        sqlite3_close(bad);
+        uint8_t b0[32], b1[32];
+        file_hash(APP_DB, b0);
+        next_second();
+        CHECK(!db_is_registered("CUSA00001"));
+        CHECK(!db_ready()); /* valid sqlite file without tbl_appinfo must not mark DB ready */
+        CHECK(!db_confirms_registered("CUSA00001"));
+        CHECK(!db_confirms_unregistered("CUSA00001"));
+        file_hash(APP_DB, b1);
+        CHECK(!memcmp(b0, b1, 32)); /* never modified */
+        unlink(APP_DB);
+    }
+
     printf("titles\n");
     sqlite3 *w;
     CHECK(sqlite3_open(APP_DB, &w) == SQLITE_OK);

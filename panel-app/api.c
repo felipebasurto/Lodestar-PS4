@@ -14,6 +14,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef PANEL_HOST_TEST
+extern int panel_host_api_port(void);
+#define API_CONNECT_PORT panel_host_api_port()
+#else
+#define API_CONNECT_PORT API_PORT
+#endif
+
 static int64_t now_ms(void) {
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
@@ -62,7 +69,7 @@ response api_exchange(int fd, const char *path, const char *form, size_t limit, 
     int len = snprintf(header, sizeof(header),
                        "%s %s HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nConnection: close\r\n"
                        "%sContent-Length: %zu\r\n\r\n",
-                       form ? "POST" : "GET", path, API_PORT,
+                       form ? "POST" : "GET", path, API_CONNECT_PORT,
                        form ? "X-Lodestar: 1\r\nContent-Type: application/x-www-form-urlencoded\r\n" : "",
                        form_size);
     if (len < 0 || (size_t)len >= sizeof(header) || !send_all(fd, header, (size_t)len, until) ||
@@ -132,7 +139,7 @@ response api_request(const char *path, const char *form, size_t limit, int timeo
     setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
 #endif
     struct sockaddr_in loopback = {
-        .sin_family = AF_INET, .sin_port = htons(API_PORT), .sin_addr.s_addr = htonl(INADDR_LOOPBACK)
+        .sin_family = AF_INET, .sin_port = htons((uint16_t)API_CONNECT_PORT), .sin_addr.s_addr = htonl(INADDR_LOOPBACK)
     };
     response res = {0};
     if (fcntl(fd, F_SETFL, O_NONBLOCK) == 0) {

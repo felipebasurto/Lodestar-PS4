@@ -57,6 +57,7 @@
 #include "links.h"
 #include "fw.h"
 #include "https.h"
+#include "bootplan.h"
 #include "install.h"
 #include "klogdup.h"
 #include "lang.h"
@@ -3307,7 +3308,7 @@ static void unmask_user_app(char (*tids)[10], int n) {
     }
     if (user_app_masked() && unmount_tracked("/user/app", MNT_FORCE))
         printf("[reg] unmount /user/app: %s\n", strerror(errno));
-    if (user_app_masked())
+    if (!boot_stage_unmask_ok(user_app_masked()))
         printf("[reg] /user/app still shows only the new games\n");
     g_masked = 0;
     stage_clear();
@@ -3333,7 +3334,7 @@ static void unmask_leftover(void) {
 static int mask_user_app(char (*tids)[10], int n) {
     uint32_t ids[4];
     char open[4][10];
-    if (g_reg_mode != REG_ALL || open_games(ids, open, 4))
+    if (!boot_stage_mask_allowed(g_reg_mode, open_games(ids, open, 4), n))
         return 0; /* an open game keeps its folder in use: plain AppInstallAll */
     if (user_app_masked())
         unmask_leftover();
@@ -4328,8 +4329,9 @@ static void scan_root(const char *root, int fresh, int reconnected) {
 
     /* New or changed games, in groups: one AppInstallAll per group and a quiet
      * period between groups, so the system is never flooded with registrations. */
-    int size = g_cfg.batch && g_cfg.batch_size > 0 ? g_cfg.batch_size : pending;
-    int groups = (pending + size - 1) / size, grouped = groups > 1, done = 0, ok = 0, group = 0;
+    int size = 0, groups = 0;
+    boot_batch_plan(pending, g_cfg.batch, g_cfg.batch_size, &size, &groups);
+    int grouped = groups > 1, done = 0, ok = 0, group = 0;
     int restart = 0; /* added games that wait for a restart (also when an earlier load marked it) */
     if (grouped)
         notify_detail(TR("%s: adding %d PS4 games in %d groups of up to %d", "%s: añadiendo %d juego(s) de PS4 en %d grupo(s) de hasta %d"),
@@ -4716,7 +4718,7 @@ static int scan_all(int hard) {
     char root[PATH_MAX];
     emu_sync();
     release_dlc_mounts();
-    if (!db_ready()) {
+    if (!boot_db_usable(db_ready(), 0, 1)) {
         /* every game would look unregistered and be added again: wait for a good read */
         printf("[scan] the system's app.db could not be read: the scan waits\n");
         return 0;
@@ -6391,8 +6393,9 @@ static int clean_scan_path(const char *in, char *out, size_t n, char *why, size_
  * are saved once, so a drive plugged in already is not added whole with the defaults. A
  * console that ran an older version without ever saving them has catalogs or games. */
 static int first_start(void) {
-    if (exists(CONFIG_PATH))
-        return 0;
+    int has_config = exists(CONFIG_PATH);
+    if (has_config)
+        return boot_first_start(1, 0);
     DIR *d = opendir(STATE_DIR);
     struct dirent *e;
     int found = 0;
@@ -6402,7 +6405,7 @@ static int first_start(void) {
     }
     if (d)
         closedir(d);
-    return !found;
+    return boot_first_start(0, found);
 }
 
 static void config_save(void) {
@@ -6987,24 +6990,33 @@ static void panel_app_step(void) {
     if (!start)
         start = time(NULL);
     int have = installed_internally(PANEL_APP_TID);
-    if (have && !exists(PANEL_APP_DONE)) {
+    int done_marker = exists(PANEL_APP_DONE);
+    int db_reg = have && setup_active() && !opened ? db_is_registered(PANEL_APP_TID) : 0;
+    uint32_t ids[1];
+    char tids[1][10];
+    int game_open = (have && setup_active() && !opened && db_reg) ? open_games(ids, tids, 1) : 0;
+    boot_panel_step_t plan = boot_panel_app_plan(
+        have, done_marker, setup_active(), opened, db_reg, game_open,
+        __atomic_load_n(&g_panel_fetching, __ATOMIC_ACQUIRE), (long)(time(NULL) - start), PANEL_APP_DELAY,
+        upload_active(), install_waiting());
+    if (plan.mark_done) {
         int fd = open(PANEL_APP_DONE, O_WRONLY | O_CREAT, 0666);
         if (fd >= 0)
             close(fd);
     }
-    if (have && setup_active() && !opened && db_is_registered(PANEL_APP_TID)) {
-        uint32_t ids[1];
-        char tids[1][10];
+    if (plan.set_opened)
         opened = 1;
-        if (!open_games(ids, tids, 1)) {
-            int32_t user = 0;
-            sceUserServiceGetForegroundUser(&user);
-            lnc_param_t lp = {sizeof(lp), (uint32_t)user, 0, 0, 0};
-            printf("[panel-app] opened for the first start: 0x%x\n", (unsigned)sceLncUtilLaunchApp(PANEL_APP_TID, NULL, &lp));
+    if (plan.launch_app) {
+        int32_t user = 0;
+        int fg_rc = sceUserServiceGetForegroundUser(&user);
+        uint32_t launch_user = 0;
+        if (boot_panel_launch_user(fg_rc, user, &launch_user)) {
+            lnc_param_t lp = {sizeof(lp), launch_user, 0, 0, 0};
+            printf("[panel-app] opened for the first start: 0x%x\n",
+                   (unsigned)sceLncUtilLaunchApp(PANEL_APP_TID, NULL, &lp));
         }
     }
-    if (have || exists(PANEL_APP_DONE) || __atomic_load_n(&g_panel_fetching, __ATOMIC_ACQUIRE) ||
-        time(NULL) - start < PANEL_APP_DELAY || upload_active() || install_waiting())
+    if (!plan.start_fetch)
         return;
     pthread_t th;
     __atomic_store_n(&g_panel_fetching, 1, __ATOMIC_RELEASE);
@@ -7446,7 +7458,7 @@ int main(void) {
     log_start(STATE_DIR "/log.txt");
     setvbuf(stdout, NULL, _IOLBF, 0);
     int lock = single_instance();
-    if (lock < 0) {
+    if (boot_lock_state(lock) == BOOT_LOCK_CONFLICT) {
         apply_lang(); /* the running daemon may be either product: use the console's language */
         printf("[main] another mount daemon is running: this load ends here\n");
         notify_kind(NOTIFY_WARN, "%s",
@@ -7530,7 +7542,7 @@ int main(void) {
         panel_app_step();
         if (scan_due(time(NULL)) && !g_deleting) {
             time_t seen = setup_seen_at();
-            if (setup_active() && time(NULL) >= (seen > g_setup_start ? seen : g_setup_start) + SETUP_WAIT) {
+            if (boot_setup_timeout_expired(setup_active(), time(NULL), g_setup_start, seen, SETUP_WAIT)) {
                 printf("[main] first start: nobody at the panel, the default settings are saved\n");
                 config_save();
             }
@@ -7540,11 +7552,12 @@ int main(void) {
             g_scan_manual_active = manual;
             int scanned = 1, ran_scan = 0;
             uint64_t scan_t0 = 0;
-            if (setup_active()) {
+            boot_scan_gate_t gate = boot_scan_gate(0, setup_active(), g_reg_mode);
+            if (gate == BOOT_SCAN_WAIT_SETUP) {
                 if (manual)
                     notify("%s", TR("Save the settings in the app or the panel first: no game is added until then",
                                     "Guarda primero los ajustes en la app o en el panel: hasta entonces no se añade ningún juego"));
-            } else if (g_reg_mode != REG_NONE) {
+            } else if (gate == BOOT_SCAN_RUN) {
                 memset(&g_scan_m, 0, sizeof(g_scan_m));
                 g_scan_m.active = 1;
                 g_scan_m.seq = scan_seq;
