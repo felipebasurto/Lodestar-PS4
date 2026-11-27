@@ -109,7 +109,8 @@ var LANGS = {
     'Restart to play': 'Reinicia para jugar',
     'Running': 'Abierto',
     'Not in library': 'Fuera de la biblioteca',
-    'On console storage': 'En el almacenamiento de la consola',
+    'Ready to play': 'Listo para jugar',
+    'Installed on console': 'Instalado en la consola',
     'free': 'libre',
     'All platforms': 'Todas las plataformas',
     'PS4 games': 'Juegos de PS4',
@@ -130,8 +131,8 @@ var LANGS = {
       'Payload encontrado: {0}. Activa Ajustes > GoldHEN > PayLoader > Enable AutoRun. Mantén L1 al arrancar para saltar AutoRun.',
     'Payload file not found. Copy lodestar-ps4.bin to /data/payloads/ or /data/GoldHEN/payloads/ to enable AutoRun.':
       'No se encontró el archivo del payload. Copia lodestar-ps4.bin a /data/payloads/ o /data/GoldHEN/payloads/ para activar AutoRun.',
-    'Adding': 'Añadiéndose',
-    'On another drive': 'En otra unidad',
+    'Waiting to be added': 'Pendiente de añadir',
+    'Another copy is active': 'Hay otra copia activa',
     'Drive not connected': 'Unidad no conectada',
     /* game cards and pages */
     'Add to library': 'Añadir a la biblioteca',
@@ -147,7 +148,11 @@ var LANGS = {
     'Game{0}{1}': 'Juego{0}{1}',
     ', update': ', actualización',
     ' and {0}': ' y {0}',
-    'Added. Restart the console once to play it.': 'Añadido. Reinicia la consola una vez para jugarlo.',
+    'Restart the console once to play it (not rest mode), then make sure Lodestar is loaded.':
+      'Reinicia la consola una vez para jugarlo (no vale el modo reposo) y asegúrate de que Lodestar está cargado.',
+    'Another copy of this game is in use. Keep only one.': 'Se está usando otra copia de este juego. Deja solo una.',
+    'Lodestar still has to add it. If it stays like this, check the log.': 'Lodestar todavía tiene que añadirlo. Si sigue así, mira el log.',
+    'Installed the normal way. Lodestar leaves it alone.': 'Instalado de la forma normal. Lodestar no lo toca.',
     'On {0}, which is not connected. Connect it to play.': 'En {0}, que no está conectado. Conéctalo para jugar.',
     '{0} game(s)': '{0} juego(s)',
     'State': 'Estado',
@@ -230,10 +235,10 @@ var LANGS = {
     'Restoring {0} of {1}: {2}': 'Restaurando {0} de {1}: {2}',
     'Installing add-ons…': 'Instalando DLC…',
     'Working…': 'Trabajando…',
-    '1 game needs a one-time console restart to start: {0}':
-      '1 juego necesita un reinicio único de la consola para empezar: {0}',
-    '{0} games need a one-time console restart to start: {1}':
-      '{0} juegos necesitan un reinicio único de la consola para empezar: {1}',
+    'Restart the console once to play {0} (not rest mode), then make sure Lodestar is loaded.':
+      'Reinicia la consola una vez para jugar a {0} (no vale el modo reposo) y asegúrate de que Lodestar está cargado.',
+    'Restart the console once to play these {0} games: {1}. Rest mode does not count; then make sure Lodestar is loaded.':
+      'Reinicia la consola una vez para jugar a estos {0} juegos: {1}. El modo reposo no vale; después, asegúrate de que Lodestar está cargado.',
     ' +{0} more': ' +{0} más',
     'Show games': 'Mostrar juegos',
     'Show all': 'Mostrar todos',

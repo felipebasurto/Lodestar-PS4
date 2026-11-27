@@ -37,6 +37,19 @@ never traps the controller.
 Check: test for reaching details, filtering and Back (`test/web/panel.test.js`), read for hierarchy.
 Source: user (2026-11-26): a clean, well organised interface; user (2026-11-27): lighter.
 
+### PANEL-9: the same words everywhere, and every notice says what to do
+
+The web panels and the PS4 app give each game state the same name. Opening a game that waits for a
+restart, whose drive is away, that has another active copy, that is still to be added or that is
+installed on the console says what that means and what to do. While any game waits for a restart,
+both panels' libraries say so at the top: restart the console (rest mode does not count) and have
+Lodestar loaded afterwards. The console's notification for it asks to load Lodestar again unless it
+starts with GoldHEN. A warning says what happened and, when the user can do something, what.
+Check: test for the web names and restart notices (`test/web/panel.test.js`), read for the app and
+the notifications.
+Source: user (2026-11-27): do what is best for the user with the state names, warnings and restart
+notices.
+
 ### PANEL-4: write requests come only from local network addresses
 
 The panel has no password. A write request must carry the panel header and come from loopback,

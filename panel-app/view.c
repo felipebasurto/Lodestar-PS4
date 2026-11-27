@@ -25,12 +25,28 @@ static const char *game_state_label(const panel_view *v, enum game_state state) 
     case READY: return tr(v, "Ready to play", "Listo para jugar");
     case RESTART: return tr(v, "Restart to play", "Reinicia para jugar");
     case RUNNING: return tr(v, "Running", "Abierto");
-    case REMOVED: return tr(v, "Removed from library", "Fuera de la biblioteca");
-    case OFFLINE: return tr(v, "Drive disconnected", "Unidad no conectada");
+    case REMOVED: return tr(v, "Not in library", "Fuera de la biblioteca");
+    case OFFLINE: return tr(v, "Drive not connected", "Unidad no conectada");
     case INTERNAL: return tr(v, "Installed on console", "Instalado en la consola");
     case PENDING: return tr(v, "Waiting to be added", "Pendiente de añadir");
     case DUPLICATE: return tr(v, "Another copy is active", "Hay otra copia activa");
     default: return tr(v, "Unknown state", "Estado desconocido");
+    }
+}
+
+/* What a state that needs explaining means and what to do about it (PANEL-9). */
+static const char *state_help(const panel_view *v, enum game_state state) {
+    switch (state) {
+    case RESTART: return tr(v, "Restart the console once (not rest mode), then make sure Lodestar is loaded.",
+                            "Reinicia la consola una vez (no vale el reposo) y comprueba que Lodestar está cargado.");
+    case OFFLINE: return tr(v, "Connect its drive to play it.", "Conecta su unidad para jugarlo.");
+    case DUPLICATE: return tr(v, "Another copy of this game is in use. Keep only one.",
+                              "Se está usando otra copia de este juego. Deja solo una.");
+    case PENDING: return tr(v, "Lodestar still has to add it. If it stays like this, check the log.",
+                            "Lodestar todavía tiene que añadirlo. Si sigue así, mira el log.");
+    case INTERNAL: return tr(v, "Installed the normal way. Lodestar leaves it alone.",
+                             "Instalado de la forma normal. Lodestar no lo toca.");
+    default: return "";
     }
 }
 
@@ -177,8 +193,9 @@ static void open_row(const panel_view *v, canvas c, const game *g, int y) {
     else
         snprintf(buffer, sizeof(buffer), "%s", g->storage);
     text(c, 296, y + 170, 990, 28, MUTED, buffer);
-    if (*g->issue)
-        text(c, 296, y + 208, 990, 28, GOLD, g->issue);
+    const char *note = *g->issue ? g->issue : state_help(v, g->state);
+    if (*note)
+        text(c, 296, y + 208, 990, 28, *g->issue || g->state != INTERNAL ? GOLD : MUTED, note);
     verbs(v, c, g, 1320, y + 68, 520, 1);
     if (v->holding)
         fill(c, LEFT - EDGE, y + OPEN_ROW - 8, (RIGHT - LEFT + 2 * EDGE) * v->held / 1000, 8, ORANGE);
@@ -205,6 +222,9 @@ static void show_library(const panel_view *v, canvas c) {
             fill(c, x, 170, width, 3, ORANGE);
         x += width + 48;
     }
+    int restarts = 0;
+    for (int i = 0; i < v->catalog->count; i++)
+        restarts += v->catalog->games[i].state == RESTART;
     if (*v->query) {
         snprintf(buffer, sizeof(buffer), tr(v, "Search: %s", "Búsqueda: %s"), v->query);
         int width = text_width(32, buffer);
@@ -212,6 +232,14 @@ static void show_library(const panel_view *v, canvas c) {
     } else if (v->catalog->setup) {
         right_aligned(c, RIGHT, 156, 28, GOLD,
                       tr(v, "First start: hold L2, open Settings and save.", "Primer inicio: mantén L2, abre Ajustes y guarda."));
+    } else if (restarts) {
+        if (restarts == 1)
+            snprintf(buffer, sizeof(buffer), "%s", tr(v, "1 game waits: restart the console (not rest mode)",
+                                                      "1 juego espera: reinicia la consola (no vale el reposo)"));
+        else
+            snprintf(buffer, sizeof(buffer), tr(v, "%d games wait: restart the console (not rest mode)",
+                                                "%d juegos esperan: reinicia la consola (no vale el reposo)"), restarts);
+        right_aligned(c, RIGHT, 156, 28, GOLD, buffer);
     } else if (v->catalog->overflow) {
         right_aligned(c, RIGHT, 156, 28, GOLD, tr(v, "Library limit reached", "Se alcanzó el límite de la biblioteca"));
     }
@@ -225,8 +253,8 @@ static void show_library(const panel_view *v, canvas c) {
                     tr(v, "L1 and R1 change section.", "L1 y R1 cambian de sección."));
         else
             message(c, tr(v, "No games found", "No se encontraron juegos"),
-                    tr(v, "Connect a USB drive with your packages, then hold L2 and scan for games.",
-                       "Conecta un USB con tus paquetes, mantén L2 y busca juegos."));
+                    tr(v, "Put your packages in the Lodestar folder of a USB drive, then hold L2 and scan.",
+                       "Pon tus paquetes en la carpeta Lodestar de un USB, mantén L2 y busca juegos."));
         return;
     }
     /* The focus rests on the third line and the list moves under it. */
@@ -271,8 +299,11 @@ static void show_detail(const panel_view *v, canvas c) {
     info_row(c, 530, tr(v, "Size", "Tamaño"), g->bytes ? buffer : "");
     snprintf(buffer, sizeof(buffer), "%s%s%s", g->storage, *g->storage && *g->source ? " · " : "", g->source);
     info_row(c, 580, tr(v, "Storage", "Ubicación"), buffer);
+    const char *help = state_help(v, g->state);
+    if (*help)
+        text(c, 548, 628, RIGHT - 548, 28, g->state == INTERNAL ? MUTED : GOLD, help);
     if (*g->issue)
-        text(c, 548, 636, RIGHT - 548, 28, GOLD, g->issue);
+        text(c, 548, 664, RIGHT - 548, 28, GOLD, g->issue);
     verbs(v, c, g, 548, 710, 700, 0);
     if (v->holding)
         fill(c, 548, 860, 700 * v->held / 1000, 8, ORANGE);

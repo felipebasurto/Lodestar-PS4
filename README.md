@@ -85,7 +85,7 @@ La explicación completa, con capturas de cada pantalla, está en la **[guía de
    - **En un USB:** en la carpeta `Lodestar` de la unidad, y conéctalo.
    - **En la memoria interna:** en `/data/Lodestar`, por FTP.
    - **Desde el panel:** con **Enviar paquetes**, por la red local.
-5. Si un juego queda como **Reinicia para jugar**, reinicia una vez y vuelve a cargar Lodestar.
+5. Si un juego queda como **Reinicia para jugar**, reinicia una vez (el modo reposo no vale) y vuelve a cargar Lodestar.
 6. Juega desde la pantalla de inicio.
 
 > [!IMPORTANT]
@@ -117,7 +117,7 @@ La compilación y las pruebas de host están verificadas. La [validación en una
 Para el móvil y el PC: `http://<IP de la PS4>:8780`. No tiene contraseña.
 
 - **Arriba**: **Buscar juegos** (vuelve a mirar las unidades), **Enviar paquetes**, **Importar desde URL**, la campana de notificaciones y **Más** (Ajustes, Quitar varios, Log y Detener).
-- **Encima de la biblioteca**: el buscador, los filtros por estado (Listo, Reinicia para jugar, Unidad no conectada…) y por plataforma, y el espacio libre de cada unidad.
+- **Encima de la biblioteca**: el buscador, los filtros por estado (Listo para jugar, Reinicia para jugar, Unidad no conectada…) y por plataforma, y el espacio libre de cada unidad.
 - **La biblioteca**: un juego por fila, ordenados por título; la fila elegida crece. Al pulsar un juego se abre su ficha: versión, DLC, firmware que necesita, dónde están sus pkgs y las acciones (quitar o añadir a la biblioteca, restaurar sus archivos originales).
 - **Ajustes**: biblioteca (carpetas, organizar, memoria interna, grupos), DLC, consola (idioma, AutoRun, log del sistema), lo que Lodestar ocupa en la consola y restaurar archivos originales.
 
@@ -308,7 +308,7 @@ The full explanation, with a screenshot of every screen, is in the **[user guide
    - **USB:** in the drive's `Lodestar` folder, then connect it.
    - **Internal storage:** in `/data/Lodestar`, over FTP.
    - **Panel:** with **Send packages**, over the local network.
-5. If a game shows **Restart to play**, restart once and load Lodestar again.
+5. If a game shows **Restart to play**, restart once (rest mode does not count) and load Lodestar again.
 6. Play from the home screen.
 
 > [!IMPORTANT]
@@ -340,7 +340,7 @@ The package builds and the host checks pass. [PS4 hardware validation](https://g
 For phones and PCs: `http://<PS4 IP>:8780`. It has no password.
 
 - **Top**: **Scan for games** (looks at the drives again), **Send packages**, **Import from URL**, the notifications bell and **More** (Settings, Remove several, Log and Stop).
-- **Above the library**: the search field, the filters by state (Ready, Restart to play, Drive not connected…) and by platform, and each drive's free space.
+- **Above the library**: the search field, the filters by state (Ready to play, Restart to play, Drive not connected…) and by platform, and each drive's free space.
 - **The library**: one game per row, in title order; the chosen row grows. Choosing a game opens its details: version, add-ons, required firmware, where its pkgs are, and its actions (remove from or add to the library, restore its original files).
 - **Settings**: library (folders, organize, internal storage, groups), add-ons, console (language, AutoRun, system log), what Lodestar keeps on the console, and restoring original files.
 

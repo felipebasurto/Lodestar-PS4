@@ -106,7 +106,7 @@ function tKeys(file) {
     ok(keys.length > 20 && !missing.length, f + ': every t() text has a Spanish one' + (missing.length ? ': ' + JSON.stringify(missing) : ''));
     ok(built.every((c) => /^t\(labels\[/.test(c) || /^t\(c\.kind\)/.test(c)), f + ': t() of a computed text only for states and pkg kinds: ' + built.join(' '));
   });
-  ['Ready', 'Restart to play', 'Running', 'Not in library', 'On console storage', 'Adding', 'On another drive', 'Drive not connected',
+  ['Ready to play', 'Restart to play', 'Running', 'Not in library', 'Installed on console', 'Waiting to be added', 'Another copy is active', 'Drive not connected',
     'game', 'update', 'add-on', 'other'].forEach((k) => ok(!!L.es[k], 'Spanish for "' + k + '"'));
   Object.keys(L.es).forEach((k) => {
     // the same ones; a translation may use one twice ("de {0} en {0}")
@@ -144,7 +144,7 @@ function tKeys(file) {
     ok(c.querySelector('.badge').textContent === 'Restart to play' && c.getAttribute('aria-pressed') === 'true' &&
       d.getElementById('gamedlg').hasAttribute('open') && d.getElementById('g-name').textContent === 'Moving Out 2',
       'a cover opens the game page');
-    ok(d.getElementById('g-facts').textContent.includes('Restart the console once'), 'the restart note is on the game page');
+    ok(d.getElementById('g-facts').textContent.includes('Restart the console once to play it (not rest mode), then make sure Lodestar is loaded.'), 'the restart note is on the game page');
     c.focus(); d.getElementById('gamedlg').close(); await w.load();
     ok(d.activeElement === c && c.getAttribute('aria-pressed') === 'true' && reqs.filter(r => r.method === 'POST').length === writes,
       'refresh keeps the selected cover and focus without writing to the console'); }
@@ -400,12 +400,13 @@ function tKeys(file) {
   LINKS = { configured: false };
 
   // --- restart banner, live activity, notifications, dlc_mode settings
+  // (PANEL-9: the state names and what the restart notices ask)
   p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
   await tick();
   {
     const rb = d.getElementById('restart-banner');
     ok(rb && !rb.hidden, 'restart banner is up while a game waits for the restart');
-    ok(rb.textContent.includes('1 game needs a one-time console restart to start: Moving Out 2'), 'banner says which game needs a restart');
+    ok(rb.textContent.includes('Restart the console once to play Moving Out 2 (not rest mode)'), 'banner says which game needs a restart');
     ok(d.querySelectorAll('.card').length === 6, 'the grid still shows everything');
     d.getElementById('q').value = 'a search with no results';
     d.getElementById('q').dispatchEvent(new w.Event('input'));
@@ -639,7 +640,7 @@ function tKeys(file) {
   await tick();
   ok(d.querySelectorAll('.card').length === 6 && d.getElementById('ver').textContent === 'Lodestar test', 'legacy lists the games');
   ok(d.querySelector('h1').textContent === 'Lodestar', 'legacy names Lodestar');
-  ok(d.body.textContent.includes('Restart to play') && d.getElementById('restart-banner').textContent.includes('one-time console restart'), 'legacy shows the restart state');
+  ok(d.body.textContent.includes('Restart to play') && d.getElementById('restart-banner').textContent.includes('Restart the console once to play'), 'legacy shows the restart state');
   ok(!/=>|\blet\b|\bconst\b|`|fetch\(|showModal|<dialog/.test(fs.readFileSync(W + 'legacy.html', 'utf8').split('<script>')[1]), 'legacy script is ES5 without fetch or dialog');
   d.getElementById('nav-settings').click(); await tick();
   ok(d.getElementById('v-settings').className.includes('on') && d.getElementById('s-rsize').value === '5', 'legacy settings page with group 5');

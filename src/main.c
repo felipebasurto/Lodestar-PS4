@@ -1143,7 +1143,8 @@ static void refuse_patch(const char *tid, const char *patch_path, const char *na
     if (write_badpatch(tid, patch_path))
         return;
     printf("[reg] %s: the system refuses update %s: left out until the pkg changes\n", tid, patch_path);
-    notify_kind(NOTIFY_WARN, TR("%s: the update is left out, the system refuses it", "%s: se deja fuera la actualización, el sistema la rechaza"),
+    notify_kind(NOTIFY_WARN, TR("%s: the system refuses the update, so the game is added without it",
+                                      "%s: el sistema rechaza la actualización, así que el juego se añade sin ella"),
            name && name[0] ? name : tid);
 }
 
@@ -1953,6 +1954,12 @@ static int needs_reboot(const char *tid) {
     unlink(p); /* booted since: BGFT has read the task */
     pthread_mutex_unlock(&g_reboot_mu);
     return 0;
+}
+
+/* Mounts do not survive the restart a new game needs (PANEL-9): without AutoRun the user
+ * has to load Lodestar again before playing. */
+static const char *after_restart(void) {
+    return g_cfg.autorun ? "" : TR(" Then load Lodestar again", " Después vuelve a cargar Lodestar");
 }
 
 static void mark_reboot(const char *tid) {
@@ -4305,7 +4312,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         }
         if (mount_info(info)) {
             if (!m || !m->mount_warned)
-                notify_kind(NOTIFY_WARN, TR("Failed to mount %s (%s)", "No se pudo montar %s (%s)"), info->name, t->tid);
+                notify_kind(NOTIFY_WARN, TR("Could not mount %s (%s). It is tried again on the next scan",
+                                           "No se pudo montar %s (%s). Se vuelve a intentar en la próxima búsqueda"), info->name, t->tid);
             if (m)
                 m->mount_warned = 1;
         } else if (m) {
@@ -4417,13 +4425,13 @@ static void scan_root(const char *root, int fresh, int reconnected) {
                 restart += reboot;
                 if (!grouped && reboot) {
                     if (pending == 1)
-            notify_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it",
-                                                    "%s añadido. Reinicia la consola una vez para jugarlo"),
-                                    t->name);
+                        notify_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it.%s",
+                                                    "%s añadido. Reinicia la consola una vez para jugarlo.%s"),
+                                    t->name, after_restart());
                     else
-                        notify_detail_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it",
-                                                           "%s añadido. Reinicia la consola una vez para jugarlo"),
-                                           t->name);
+                        notify_detail_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it.%s",
+                                                           "%s añadido. Reinicia la consola una vez para jugarlo.%s"),
+                                           t->name, after_restart());
                 } else if (!grouped) {
                     if (pending == 1)
             notify_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
@@ -4440,12 +4448,13 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     free(prepared);
     bgftscan_free(&g_bgftscan); /* the epoch ends after registration mutations are reconciled */
     if (pending > 1)
-        notify_kind(NOTIFY_READY, TR("%s: %d of %d game(s) added%s", "%s: %d de %d juego(s) añadido(s)%s"), label, ok,
+        notify_kind(NOTIFY_READY, TR("%s: %d of %d game(s) added%s%s", "%s: %d de %d juego(s) añadido(s)%s%s"), label, ok,
                     pending,
-                    restart           ? TR(". Restart the console once to play the new ones",
-                                           ". Reinicia la consola una vez para jugar los nuevos")
+                    restart           ? TR(". Restart the console once to play the new ones.",
+                                           ". Reinicia la consola una vez para jugar los nuevos.")
                     : ok == pending ? TR(", ready to play", ", listos para jugar")
-                                    : "");
+                                    : "",
+                    restart ? after_restart() : "");
     activity_clear();
 }
 
@@ -6162,7 +6171,8 @@ static void run_restore(char (*only)[10], int nonly, int remember) {
     }
     if (close_open_games()) {
         notify_kind(NOTIFY_WARN, "%s",
-                    TR("The open game did not close; no files were restored", "El juego abierto no se cerró; no se restauró ningún archivo"));
+                    TR("The open game did not close, so no files were restored. Close it and try again",
+                                           "El juego abierto no se cerró y no se restauró ningún archivo. Ciérralo e inténtalo otra vez"));
         return;
     }
     int size = g_cfg.restore_batch;
@@ -7408,10 +7418,10 @@ static const char *panel_url(char *out, size_t n) {
 static void notify_running(void) {
     char url[48];
     if (setup_active() && g_reg_mode != REG_NONE && g_web >= 0)
-        notify(TR(VERSION ": first start. Choose the settings in the panel (%s) and press Save. Without it, the games "
-                          "are added with the default settings in 2 minutes.",
-                  VERSION ": primera vez. Elige los ajustes en el panel (%s) y pulsa Guardar. Si no, en 2 minutos se "
-                          "añaden los juegos con los ajustes por defecto."),
+        notify(TR(VERSION ": first start. Choose the settings in the Lodestar app or at %s and save them. Without it, "
+                          "the games are added with the default settings in 2 minutes.",
+                  VERSION ": primera vez. Elige los ajustes en la app Lodestar o en %s y guárdalos. Si no, en 2 minutos "
+                          "se añaden los juegos con los ajustes por defecto."),
                panel_url(url, sizeof(url)));
     else if (g_reg_mode == REG_ALL && g_web >= 0)
         notify(TR(VERSION " running. Panel at %s", VERSION " en marcha. Panel en %s"), panel_url(url, sizeof(url)));
@@ -7483,7 +7493,8 @@ int main(void) {
             close(lock);
             if ((lock = single_instance()) < 0) {
                 notify_kind(NOTIFY_WARN, "%s",
-                            TR(VERSION " stopped: another mount daemon is running", VERSION " detenido: hay otro gestor de montaje en marcha"));
+                            TR(VERSION " stopped: another mount daemon is running. Stop it and load Lodestar again",
+                               VERSION " detenido: hay otro gestor de montaje en marcha. Deténlo y vuelve a cargar Lodestar"));
                 shutdown_daemon(-1);
                 return 0;
             }
@@ -7531,8 +7542,8 @@ int main(void) {
             uint64_t scan_t0 = 0;
             if (setup_active()) {
                 if (manual)
-                    notify("%s", TR("Save the settings in the panel first: no game is added until then",
-                                    "Guarda primero los ajustes en el panel: hasta entonces no se añade ningún juego"));
+                    notify("%s", TR("Save the settings in the app or the panel first: no game is added until then",
+                                    "Guarda primero los ajustes en la app o en el panel: hasta entonces no se añade ningún juego"));
             } else if (g_reg_mode != REG_NONE) {
                 memset(&g_scan_m, 0, sizeof(g_scan_m));
                 g_scan_m.active = 1;

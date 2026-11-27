@@ -34,7 +34,7 @@ Necesitas una PS4 con jailbreak y GoldHEN, y paquetes `.pkg` que tengas derecho 
 3. La app se instala sola unos segundos después, si la consola tiene internet y existe una release de esa versión, y se abre en el primer arranque. Si no aparece, instala `lodestar-panel.pkg` con el instalador de paquetes de GoldHEN. Se llama **Lodestar** en la pantalla de inicio.
 4. **Elige los ajustes y guarda.** En el primer arranque no se añade ningún juego hasta que guardas. En la app: mantén **L2**, elige **Ajustes**, revisa y baja hasta **Guardar ajustes**. Si nadie abre la app ni el panel durante 2 minutos, se usan los ajustes por defecto.
 5. Pon los juegos como explica [la sección siguiente](#dónde-poner-los-juegos) y conecta el USB.
-6. Si un juego queda como **Reinicia para jugar**, reinicia la consola una vez y vuelve a cargar Lodestar.
+6. Si un juego queda como **Reinicia para jugar**, reinicia la consola una vez (**el modo reposo no vale**) y vuelve a cargar Lodestar.
 7. Juega desde la pantalla de inicio, como con cualquier otro juego.
 
 **Después de cada arranque** de la consola hay que cargar Lodestar otra vez. Para que se cargue solo, activa **Ajustes → Consola → Arrancar con GoldHEN** (el `.bin` tiene que estar en `/data/payloads/`).
@@ -171,16 +171,20 @@ En un ordenador, las flechas recorren la lista y **Intro** abre la ficha. En el 
 
 ## Estados de un juego
 
-| En la app | En el panel web | Qué significa | Qué hacer |
-| --- | --- | --- | --- |
-| (sin etiqueta) / Listo para jugar | Listo | Se puede jugar | Nada |
-| Reinicia para jugar | Reinicia para jugar | La consola lo prepara al arrancar | Reiniciar una vez y cargar Lodestar |
-| Abierto | Abierto | El juego está en marcha | Ciérralo para quitarlo |
-| Pendiente de añadir | Añadiéndose | Lodestar lo tiene pendiente | Esperar; si no cambia, mirar el log |
-| Fuera de la biblioteca | Fuera de la biblioteca | Lo quitaste | **Añadir a la biblioteca** cuando quieras |
-| Unidad no conectada | Unidad no conectada | Falta el disco con sus paquetes | Conectarlo |
-| Instalado en la consola | En el almacenamiento de la consola | Está instalado de la forma normal. Lodestar no lo toca | Nada |
-| Hay otra copia activa | En otra unidad | El mismo juego se está sirviendo desde otra unidad | Dejar una sola copia |
+La app y el panel web usan los mismos nombres. Al abrir un juego que necesita atención, ahí mismo dice qué hacer.
+
+| Estado | Qué significa | Qué hacer |
+| --- | --- | --- |
+| **Listo para jugar** (sin etiqueta en la lista) | Se puede jugar | Nada |
+| **Reinicia para jugar** | La consola lo prepara al arrancar | Reiniciar una vez (**el modo reposo no vale**) y tener Lodestar cargado después |
+| **Abierto** | El juego está en marcha | Ciérralo para quitarlo |
+| **Pendiente de añadir** | Lodestar todavía tiene que añadirlo | Esperar; si sigue así, mirar el log |
+| **Fuera de la biblioteca** | Lo quitaste | **Añadir a la biblioteca** cuando quieras |
+| **Unidad no conectada** | Falta el disco con sus paquetes | Conectarlo |
+| **Instalado en la consola** | Está instalado de la forma normal. Lodestar no lo toca | Nada |
+| **Hay otra copia activa** | Se está usando otra copia del mismo juego | Dejar una sola |
+
+Mientras haya juegos esperando un reinicio, la app y el panel lo avisan encima de la biblioteca.
 
 ## Quitar, restaurar y borrar
 

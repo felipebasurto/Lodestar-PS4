@@ -34,7 +34,7 @@ You need a jailbroken PS4 with GoldHEN, and `.pkg` files you are allowed to use.
 3. The app installs itself a few seconds later, if the console has internet and there is a release for that version, and opens on the first start. If it does not appear, install `lodestar-panel.pkg` with GoldHEN's Package Installer. It is called **Lodestar** on the home screen.
 4. **Choose the settings and save.** On the first start no game is added until you save. In the app: hold **L2**, choose **Settings**, review them and go down to **Save settings**. If nobody opens the app or the panel for 2 minutes, the default settings are used.
 5. Add games as described in [the next section](#where-to-put-games) and connect the drive.
-6. If a game shows **Restart to play**, restart the console once and load Lodestar again.
+6. If a game shows **Restart to play**, restart the console once (**rest mode does not count**) and load Lodestar again.
 7. Play from the home screen, like any other game.
 
 **After every boot** Lodestar has to be loaded again. To load it automatically, turn on **Settings → Console → Start with GoldHEN** (the `.bin` must be in `/data/payloads/`).
@@ -171,16 +171,20 @@ On a computer, the arrows walk the list and **Enter** opens the details. In the 
 
 ## Game states
 
-| In the app | In the web panel | What it means | What to do |
-| --- | --- | --- | --- |
-| (no label) / Ready to play | Ready | It can be played | Nothing |
-| Restart to play | Restart to play | The console prepares it at boot | Restart once and load Lodestar |
-| Running | Running | The game is open | Close it to remove it |
-| Waiting to be added | Adding | Lodestar still has to add it | Wait; if it stays, read the log |
-| Removed from library | Not in library | You removed it | **Add to library** whenever you like |
-| Drive disconnected | Drive not connected | The drive with its packages is missing | Connect it |
-| Installed on console | On console storage | Installed the normal way. Lodestar leaves it alone | Nothing |
-| Another copy is active | On another drive | The same game is being served from another drive | Keep a single copy |
+The app and the web panel use the same names. Opening a game that needs attention tells you what to do.
+
+| State | What it means | What to do |
+| --- | --- | --- |
+| **Ready to play** (no label in the list) | It can be played | Nothing |
+| **Restart to play** | The console prepares it at boot | Restart once (**rest mode does not count**) and have Lodestar loaded afterwards |
+| **Running** | The game is open | Close it to remove it |
+| **Waiting to be added** | Lodestar still has to add it | Wait; if it stays like this, read the log |
+| **Not in library** | You removed it | **Add to library** whenever you like |
+| **Drive not connected** | The drive with its packages is missing | Connect it |
+| **Installed on console** | Installed the normal way. Lodestar leaves it alone | Nothing |
+| **Another copy is active** | Another copy of the same game is in use | Keep only one |
+
+While any game waits for a restart, the app and the panel say so above the library.
 
 ## Remove, restore and delete
 

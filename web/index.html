@@ -362,7 +362,16 @@ form.settings input.num{width:6em}
 <!--LANG-->
 <script>
 var games = [], busy = {};
-var labels = {ready: 'Ready', restart: 'Restart to play', running: 'Running', removed: 'Not in library', internal: 'On console storage', pending: 'Adding', duplicate: 'On another drive', offline: 'Drive not connected'};
+var labels = {ready: 'Ready to play', restart: 'Restart to play', running: 'Running', removed: 'Not in library', internal: 'Installed on console', pending: 'Waiting to be added', duplicate: 'Another copy is active', offline: 'Drive not connected'};
+/* What a state that needs explaining means and what to do about it (PANEL-9). */
+function stateHelp(g) {
+  if (g.state === 'restart') return t('Restart the console once to play it (not rest mode), then make sure Lodestar is loaded.');
+  if (g.state === 'offline') return t('On {0}, which is not connected. Connect it to play.', g.storage);
+  if (g.state === 'duplicate') return t('Another copy of this game is in use. Keep only one.');
+  if (g.state === 'pending') return t('Lodestar still has to add it. If it stays like this, check the log.');
+  if (g.state === 'internal') return t('Installed the normal way. Lodestar leaves it alone.');
+  return '';
+}
 var drives = [];
 var notices = [], activity = {}, actBusy = false;
 function label(state) { return labels[state] ? t(labels[state]) : state; }
@@ -484,8 +493,7 @@ function showGame(tid) {
     [t('Add-ons'), g.dlc ? String(g.dlc) : t('none')], [t('Needs firmware'), g.system_ver || t('unknown')], [t('Size'), gb(g.size)],
     [t('On'), (g.storage || '') + ' · ' + g.source]];
   $('g-facts').innerHTML = f.map(function (x) { return '<dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd>'; }).join('') +
-    (g.state === 'restart' ? '<dt></dt><dd class="warn">' + t('Added. Restart the console once to play it.') + '</dd>' : '') +
-    (g.state === 'offline' ? '<dt></dt><dd class="warn">' + esc(t('On {0}, which is not connected. Connect it to play.', g.storage)) + '</dd>' : '') +
+    (stateHelp(g) ? '<dt></dt><dd class="warn">' + esc(stateHelp(g)) + '</dd>' : '') +
     (g.update_issue ? '<dt></dt><dd class="warn">' + esc(g.update_issue) + '</dd>' : '');
   $('g-actions').innerHTML = actions(g, true);
   $('gamedlg').showModal();
@@ -586,8 +594,8 @@ function renderRestart() {
   if (!rn.length) return;
   var names = rn.slice(0, 4).map(function (g) { return g.name; }).join(', ') + (rn.length > 4 ? t(' +{0} more', rn.length - 4) : '');
   $('rb-main').textContent = rn.length === 1 ?
-    t('1 game needs a one-time console restart to start: {0}', rn[0].name) :
-    t('{0} games need a one-time console restart to start: {1}', rn.length, names);
+    t('Restart the console once to play {0} (not rest mode), then make sure Lodestar is loaded.', rn[0].name) :
+    t('Restart the console once to play these {0} games: {1}. Rest mode does not count; then make sure Lodestar is loaded.', rn.length, names);
   $('restart-filter').textContent = filter === 'restart' ? t('Show all') : t('Show games');
 }
 
