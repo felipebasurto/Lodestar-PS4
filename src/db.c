@@ -4,11 +4,13 @@
 /* The system databases are written by the system alone: ShellCore keeps them open
  * with its own cache, and rows written from outside make it flag them as corrupted. */
 #include "db.h"
+#include "dbsnap.h"
 
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #include "sqlite3.h"
@@ -16,6 +18,11 @@
 #ifndef APP_DB
 #define APP_DB "/system_data/priv/mms/app.db"
 #endif
+
+static int db_journal_active(void) {
+    struct stat st;
+    return stat(APP_DB "-journal", &st) == 0 || stat(APP_DB "-wal", &st) == 0;
+}
 
 /* Titles registered in app.db, read in one query at most once a second. The file is
  * opened without locks (nolock=1): a shared lock held here, even for a moment, can make
@@ -61,6 +68,7 @@ static void refresh(void) {
         return;
     g_read_at = time(NULL);
     g_read_valid = 0;
+    int journal = db_journal_active();
     sqlite3 *db = NULL;
     if (sqlite3_open_v2("file:" APP_DB "?mode=ro&nolock=1", &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, NULL) !=
         SQLITE_OK) {
@@ -119,7 +127,8 @@ static void refresh(void) {
         }
     }
     sqlite3_close(db);
-    if (ok) { /* a read that met a write in progress keeps the last list */
+    journal |= db_journal_active();
+    if (db_snapshot_publish(ok, g_read_ok, g_ntitles, n, journal)) {
         title_row_t *prev = g_titles;
         int prev_cap = g_cap;
         g_titles = g_next;
@@ -129,6 +138,13 @@ static void refresh(void) {
         g_ntitles = n;
         index_titles();
         g_read_ok = g_read_valid = 1;
+    } else if (ok) {
+        static int reject_logged;
+        if (!reject_logged) {
+            reject_logged = 1;
+            printf("[db] %s: holding snapshot (rows=%d, prior=%d, journal=%d)\n", APP_DB, n,
+                   g_read_ok ? g_ntitles : -1, journal);
+        }
     }
 }
 

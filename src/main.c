@@ -56,6 +56,7 @@
 #include "dbguard.h"
 #include "delete.h"
 #include "dlcvec.h"
+#include "durable.h"
 #include "inventory.h"
 #include "links.h"
 #include "fw.h"
@@ -519,21 +520,7 @@ static void mkdirs(const char *path, mode_t mode) {
 }
 
 static int write_file(const char *path, const void *data, size_t len, mode_t mode) {
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
-    if (fd < 0)
-        return -1;
-    const uint8_t *p = data;
-    while (len) {
-        ssize_t n = write(fd, p, len);
-        if (n <= 0) {
-            close(fd);
-            return -1;
-        }
-        p += n;
-        len -= (size_t)n;
-    }
-    close(fd);
-    return 0;
+    return durable_replace(path, data, len, mode);
 }
 
 static int mounted_from(const char *mountpoint, char *from, size_t n) {
@@ -6821,8 +6808,7 @@ static int first_start(void) {
     return boot_first_start(0, found);
 }
 
-static void config_save(void) {
-    setup_set(0); /* the settings were chosen explicitly: games are added from now on */
+static int config_save(void) {
     buf_t b = {0};
     buf_printf(&b, "ver=3\nbatch=%d\nbatch_size=%d\ndlc=%d\ndlc_mode=%s\ndlc_big=%d\nrestore_batch=%d\ninternal=%d\norganize=%d\nlang=%s\n",
                g_cfg.batch, g_cfg.batch_size, g_cfg.dlc, dlc_mode_name(g_cfg.dlc_mode), g_cfg.dlc_big, g_cfg.restore_batch,
@@ -6830,8 +6816,14 @@ static void config_save(void) {
     buf_printf(&b, "klog=%d\nautorun=%d\n", g_cfg.klog, g_cfg.autorun);
     for (int i = 0; i < g_cfg.npaths; i++)
         buf_printf(&b, "path=%s\n", g_cfg.paths[i]);
-    write_file(CONFIG_PATH, b.data, b.len, 0666);
+    int rc = (!b.data || !b.len || write_file(CONFIG_PATH, b.data, b.len, 0666)) ? -1 : 0;
     buf_free(&b);
+    if (rc) {
+        printf("[config] failed to save %s\n", CONFIG_PATH);
+        return -1;
+    }
+    setup_set(0); /* settings are durably saved: games may be added from now on (P4N-33) */
+    return 0;
 }
 
 static void config_load(void) {
@@ -7050,9 +7042,17 @@ int app_config_set(const char *body, char *msg, size_t cap) {
                                     "No se guardó: no se pudo actualizar la lista de AutoRun de GoldHEN"));
         return -1;
     }
+    config_t previous = g_cfg;
     config_publish(&c);
     apply_lang();
-    config_save();
+    if (config_save()) {
+        config_publish(&previous);
+        apply_lang();
+        if (autorun_changed)
+            autorun_apply(previous.autorun);
+        snprintf(msg, cap, "%s", TR("Not saved: could not write settings file", "No se guardó: no se pudo escribir el archivo de ajustes"));
+        return -1;
+    }
     printf("[config] saved: batch=%d batch_size=%d dlc=%d restore_batch=%d organize=%d folders=%d\n", c.batch,
            c.batch_size, c.dlc, c.restore_batch, c.organize, c.npaths);
     if (was_organize && !c.organize) { /* turned off: send the organized games back to where they were */

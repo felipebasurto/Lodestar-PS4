@@ -352,6 +352,17 @@ Check: test (keep bar 2: data/system safety; keep bar 5: cross-product conflict)
 `test/web/panel.test.js`; compile boundary `test/sdkcheck.sh`.
 Source: environment coexistence hazard review (`hazards/environment`), 2026-11-27.
 
+### P4N-33: settings save writes atomically before clearing first-start setup
+`config_save()` writes `/data/lodestar/config.txt` atomically through `write_file()` (`durable_replace`,
+SYS-2), checks that the buffer was built and the atomic rename succeeded, and calls `setup_set(0)` only
+after the file is durably in place. If saving fails, `app_config_set()` restores the previous in-memory
+settings, language and GoldHEN AutoRun state, logs the failure, and returns a Spanish/English error to
+the panel instead of dropping first-start protection or leaving half-written configuration on disk.
+Check: test (keep bar 2: data safety; keep bar 3: ordering). Test: `test/sysstate_test.c`; compile
+boundary `test/sdkcheck.sh`.
+Source: boot/registration hazard review (`hazards/boot-registration`), 2026-11-27 (renumbered from
+`P4N-32` to avoid colliding with the PS4Mount coexistence guard).
+
 ## Toshiba reference profile (not a compatibility requirement)
 
 The user's library disk observed on 2026-11-25: external USB 3.0 enclosure, 1.0 TB, exFAT, volume `TOSHIBA`,
