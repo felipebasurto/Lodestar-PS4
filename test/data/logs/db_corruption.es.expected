@@ -1,0 +1,23 @@
+Archivo: test/data/logs/db_corruption.log  (6 líneas)
+Desde 2026-11-27 10:00:00 hasta 2026-11-27 10:00:18
+
+== Versión y consola
+  [main] start (lock 7, pid 512)
+  [main] firmware 14.00 (0x14000000), InstallAll present, TitleDir present, UnInstall present, registration: AppInstallAll
+  1 arranque(s) de Lodestar en este log
+
+== Líneas por módulo
+  [klog] 3  [main] 2  [db] 1
+
+== Qué hay que mirar
+  [ERROR] El sistema consultó la tabla del usuario 0 (tbl_appbrowse_0000000000), que no existe en app.db. Suele ocurrir si un lanzamiento de app o una consulta pasa user_id=0 sin usuario válido en primer plano. Revisa la línea temporal: qué llamada ocurrió justo antes; Lodestar nunca escribe app.db.
+        1 vez/veces; primera línea: [klog] [SceShellCore] no such table: tbl_appbrowse_0000000000
+  [ERROR] El sistema (ShellCore/DBR) registró un evento de corrupción de base de datos (DbCorruptionOccured / 0x80f50061 / 0x809c110e) y deja la marca del sistema app.db-corrupt para reconstruir al reiniciar. Es una marca propia del sistema, no un archivo creado por Lodestar. Revisa la línea temporal del log: si precedió una consulta a tbl_appbrowse_0000000000, un registro BGFT/AppInstallAll o si la marca ya existía al arrancar.
+        2 vez/veces; primera línea: [klog] [SceShellCore] [AppBrowseAccessor] app.db error 0x809c110e
+  [WARN] Se detectó la marca del sistema app.db-corrupt. Es una marca del propio sistema que indica que reconstruirá app.db en el próximo reinicio; Lodestar nunca la crea, modifica ni borra. Importa la línea temporal: distingue si ya existía antes de arrancar Lodestar o si apareció durante la sesión y qué evento del sistema ocurrió justo antes.
+        1 vez/veces; primera línea: [db] system corruption marker detected (/system_data/priv/mms/app.db-corrupt): already existed at startup; Lodestar never writes or repairs system databases
+
+== Archivos temporales que Lodestar borró de la memoria interna
+  Ninguno.
+
+Resultado: 2 error(es) y 1 aviso(s) conocidos. Léelos arriba.

@@ -17,6 +17,7 @@
 #include "check.h"
 #include "crypto.h"
 #include "emu.h"
+#include "firstrun.h"
 #include "lang.h"
 #include "mem.h"
 #include "pkgmake.h"
@@ -1545,6 +1546,92 @@ static void test_telemetry(void) {
     CHECK(!strcmp(line, "[api] games wall_ms=19 titles=21 usb_stats=3 fp_app=1 fp_patch=1 fp_ac=1 cache_miss=1"));
 }
 
+/* P4N-28 (specs/ps4-native.md): fail-closed UserService validation and panel auto-launch decision. */
+static void test_firstrun_launch(void) {
+    printf("firstrun: fail-closed panel launch without zero/invalid user\n");
+    CHECK(!user_id_valid(0));
+    CHECK(!user_id_valid(-1));
+    CHECK(!user_id_valid(-2147483647));
+    CHECK(!user_id_valid(1));
+    CHECK(!user_id_valid(0xFE)); /* SCE_USER_SERVICE_USER_ID_EVERYONE */
+    CHECK(!user_id_valid(0xFF)); /* SCE_USER_SERVICE_USER_ID_SYSTEM */
+    CHECK(user_id_valid(0x100));
+    CHECK(user_id_valid(0x1B421304)); /* real local PS4 user id */
+
+    /* UserService error or invalid user ID MUST never allow launch */
+    CHECK(panel_launch_decide(1, 1, 0, 1, 0, 0, -1, 0x1B421304) == PANEL_LAUNCH_SKIP_NO_USER);
+    CHECK(panel_launch_decide(1, 1, 0, 1, 0, 0, (int)0x80960002, 0x1B421304) == PANEL_LAUNCH_SKIP_NO_USER);
+    CHECK(panel_launch_decide(1, 1, 0, 1, 0, 0, 0, 0) == PANEL_LAUNCH_SKIP_NO_USER);
+    CHECK(panel_launch_decide(1, 1, 0, 1, 0, 0, 0, -1) == PANEL_LAUNCH_SKIP_NO_USER);
+    CHECK(panel_launch_decide(1, 1, 0, 1, 0, 0, 0, 0xFE) == PANEL_LAUNCH_SKIP_NO_USER);
+    CHECK(panel_launch_decide(1, 1, 0, 1, 0, 0, 0, 0xFF) == PANEL_LAUNCH_SKIP_NO_USER);
+
+    /* Open game, unreadable process table (< 0), or panel already open -> busy, do not launch */
+    CHECK(panel_launch_decide(1, 1, 0, 1, 1, 0, 0, 0x1B421304) == PANEL_LAUNCH_SKIP_BUSY);
+    CHECK(panel_launch_decide(1, 1, 0, 1, -1, 0, 0, 0x1B421304) == PANEL_LAUNCH_SKIP_BUSY);
+    CHECK(panel_launch_decide(1, 1, 0, 1, 0, 1, 0, 0x1B421304) == PANEL_LAUNCH_SKIP_BUSY);
+    CHECK(panel_launch_decide(1, 1, 0, 1, 0, -1, 0, 0x1B421304) == PANEL_LAUNCH_SKIP_BUSY);
+
+    /* Preconditions not met -> wait */
+    CHECK(panel_launch_decide(0, 1, 0, 1, 0, 0, 0, 0x1B421304) == PANEL_LAUNCH_WAIT);
+    CHECK(panel_launch_decide(1, 0, 0, 1, 0, 0, 0, 0x1B421304) == PANEL_LAUNCH_WAIT);
+    CHECK(panel_launch_decide(1, 1, 1, 1, 0, 0, 0, 0x1B421304) == PANEL_LAUNCH_WAIT);
+    CHECK(panel_launch_decide(1, 1, 0, 0, 0, 0, 0, 0x1B421304) == PANEL_LAUNCH_WAIT);
+
+    /* All checks green + valid non-zero foreground user -> launch */
+    CHECK(panel_launch_decide(1, 1, 0, 1, 0, 0, 0, 0x1B421304) == PANEL_LAUNCH_OPEN);
+}
+
+/* P4N-29 (specs/ps4-native.md): first-run consent state machine (no timed auto-adoption). */
+static void test_firstrun_state(void) {
+    printf("firstrun: consent state machine across timeouts, app crash, small/large library\n");
+    firstrun_state_t s;
+
+    /* 1. No interaction at all: even past 120s and hours later, small or large library stays blocked */
+    firstrun_init(&s, 1, 1000);
+    CHECK(firstrun_awaiting_consent(&s));
+    CHECK(firstrun_scan_decision(&s, 1000, 1) == FIRSTRUN_SCAN_BLOCK);
+    CHECK(firstrun_scan_decision(&s, 1120, 3) == FIRSTRUN_SCAN_BLOCK);   /* old 120s timeout */
+    CHECK(firstrun_scan_decision(&s, 1300, 20) == FIRSTRUN_SCAN_BLOCK);  /* 20 preexisting games */
+    CHECK(firstrun_scan_decision(&s, 90000, 200) == FIRSTRUN_SCAN_BLOCK); /* large library */
+    CHECK(firstrun_awaiting_consent(&s));
+
+    /* 2. App opened and closed / crashed without saving settings: never triggers mass adoption */
+    firstrun_init(&s, 1, 2000);
+    firstrun_on_panel_seen(&s, 2010);
+    CHECK(s.panel_seen == 1);
+    CHECK(firstrun_scan_decision(&s, 2015, 20) == FIRSTRUN_SCAN_BLOCK);
+    firstrun_on_panel_closed(&s);
+    CHECK(firstrun_scan_decision(&s, 2130, 20) == FIRSTRUN_SCAN_BLOCK); /* 120s after panel seen */
+    CHECK(firstrun_scan_decision(&s, 6000, 20) == FIRSTRUN_SCAN_BLOCK); /* long after crash/close */
+    CHECK(firstrun_awaiting_consent(&s));
+
+    /* 3. User explicitly saves settings: transitions to ready, allows initial & subsequent scans */
+    firstrun_on_settings_saved(&s);
+    CHECK(!firstrun_awaiting_consent(&s));
+    CHECK(firstrun_scan_decision(&s, 6001, 20) == FIRSTRUN_SCAN_ALLOW);
+    CHECK(firstrun_scan_decision(&s, 6060, 21) == FIRSTRUN_SCAN_ALLOW); /* newly added pkg later */
+
+    /* 4. Preexisting configured installation (not first start): scans allowed immediately */
+    firstrun_init(&s, 0, 7000);
+    CHECK(!firstrun_awaiting_consent(&s));
+    CHECK(firstrun_scan_decision(&s, 7000, 1) == FIRSTRUN_SCAN_ALLOW);
+    CHECK(firstrun_scan_decision(&s, 7005, 25) == FIRSTRUN_SCAN_ALLOW);
+}
+
+/* P4N-31 (specs/ps4-native.md): instance lock conflict classification. */
+static void test_lock_conflict(void) {
+    printf("firstrun: lock port 9032 conflict classification\n");
+    const char *lodestar_reply = "HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n"
+                                 "{\"product\":\"Lodestar\",\"version\":\"Lodestar 0.1.2\"}";
+    CHECK(lock_conflict_classify(EADDRINUSE, lodestar_reply) == LOCK_CONFLICT_LODESTAR_RUNNING);
+    CHECK(lock_conflict_classify(EADDRINUSE, "") == LOCK_CONFLICT_OTHER_OR_UNKNOWN);
+    CHECK(lock_conflict_classify(EADDRINUSE, NULL) == LOCK_CONFLICT_OTHER_OR_UNKNOWN);
+    CHECK(lock_conflict_classify(EADDRINUSE, "{\"product\":\"Other\"}") == LOCK_CONFLICT_OTHER_OR_UNKNOWN);
+    CHECK(lock_conflict_classify(EACCES, lodestar_reply) == LOCK_CONFLICT_SYS_ERROR);
+    CHECK(lock_conflict_classify(EPERM, NULL) == LOCK_CONFLICT_SYS_ERROR);
+}
+
 int main(void) {
     test_crypto();
     test_app_json();
@@ -1575,6 +1662,9 @@ int main(void) {
     test_scanreq();
     test_scanfilter();
     test_telemetry();
+    test_firstrun_launch();
+    test_firstrun_state();
+    test_lock_conflict();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;
 }

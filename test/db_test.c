@@ -169,6 +169,26 @@ int main(void) {
     file_hash(APP_DB, after);
     CHECK(!memcmp(before, after, 32)); /* never "repaired" by us */
 
+    /* P4N-30 (specs/ps4-native.md): read-only app.db-corrupt marker detection */
+    printf("app.db-corrupt marker detection (read-only)\n");
+    unlink(APP_DB "-corrupt");
+    CHECK(!strcmp(db_corrupt_marker_path(), APP_DB "-corrupt"));
+    CHECK(!db_corrupt_marker_present());
+    CHECK(!exists(APP_DB "-corrupt")); /* checking never creates the marker */
+    FILE *mf = fopen(APP_DB "-corrupt", "wb");
+    CHECK(mf != NULL);
+    if (mf) {
+        fwrite("system-marker", 1, 13, mf);
+        fclose(mf);
+    }
+    uint8_t m_before[32], m_after[32];
+    file_hash(APP_DB "-corrupt", m_before);
+    CHECK(db_corrupt_marker_present());
+    CHECK(exists(APP_DB "-corrupt")); /* never deleted or repaired */
+    file_hash(APP_DB "-corrupt", m_after);
+    CHECK(!memcmp(m_before, m_after, 32));
+    unlink(APP_DB "-corrupt");
+
     unlink(APP_DB);
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed != 0;
