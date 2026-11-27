@@ -1,0 +1,22 @@
+Archivo: test/data/logs/db_corrupt.log  (4 líneas)
+Desde 2026-11-27 10:00:00 hasta 2026-11-27 10:00:00
+
+== Versión y consola
+  [main] start (lock 4, pid 51, userSvc=0x0, appInst=0x0)
+  1 arranque(s) de Lodestar en este log
+
+== Líneas por módulo
+  [main] 1  [fw] 1  [klog] 1  [dbguard] 1
+
+== Qué hay que mirar
+  [ERROR] Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar. No borres los marcadores ni escribas bases del sistema a mano; inspecciona /data/lodestar/inventory.tsv y el log.
+        1 vez/veces; primera línea: [dbguard] HALT: system database flagged as damaged (klog: DbCorruptionOccured /system_data/priv/mms/app.db) - base del sistema marcada como danada: no sigas reg
+  [ERROR] El sistema consultó la tabla del usuario 0 (tbl_appbrowse_0000000000), que no existe en app.db. Suele ocurrir si un lanzamiento de app o una consulta pasa user_id=0 sin usuario válido en primer plano. Revisa la línea temporal: qué llamada ocurrió justo antes; Lodestar nunca escribe app.db.
+        1 vez/veces; primera línea: [klog] [SceShellCore] DbCorruptionOccured /system_data/priv/mms/app.db detail: no such table: tbl_appbrowse_0000000000
+  [ERROR] El sistema (ShellCore/DBR) registró un evento de corrupción de base de datos (DbCorruptionOccured / 0x80f50061 / 0x809c110e) y deja la marca del sistema app.db-corrupt para reconstruir al reiniciar. Es una marca propia del sistema, no un archivo creado por Lodestar. Revisa la línea temporal del log: si precedió una consulta a tbl_appbrowse_0000000000, un registro BGFT/AppInstallAll o si la marca ya existía al arrancar.
+        2 vez/veces; primera línea: [klog] [SceShellCore] DbCorruptionOccured /system_data/priv/mms/app.db detail: no such table: tbl_appbrowse_0000000000
+
+== Archivos temporales que Lodestar borró de la memoria interna
+  Ninguno.
+
+Resultado: 3 error(es) y 0 aviso(s) conocidos. Léelos arriba.

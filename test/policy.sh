@@ -14,12 +14,17 @@ grep -nE 'sqlite3_(exec|blob_open|backup_init)\b' "${SRC[@]}" && rule "sqlite3 c
 grep -nE 'SQLITE_OPEN_(READWRITE|CREATE)' "${SRC[@]}" && rule "a database opened for writing"
 grep -nE 'sqlite3_prepare' "${SRC[@]}" | grep -vE 'sqlite3_prepare(_v2)?\([^,]+, "SELECT ' && rule "SQL other than SELECT"
 grep -n 'sqlite3_open' "${SRC[@]}" | grep -v 'mode=ro&nolock=1' && rule "every sqlite3_open must use mode=ro&nolock=1"
-grep -nE '"/system_data/priv/mms/[^"]*"' "${SRC[@]}" | grep -vE 'APP_DB|db_mtime|static const char \*files|"/system_data/priv/mms/[a-z]+\.db(-journal)?"' &&
+grep -nE '"/system_data/priv/mms/[^"]*"' "${SRC[@]}" | grep -vE 'APP_DB|db_mtime|static const char \*files|DBGUARD_MMS_DIR|"/system_data/priv/mms/[a-z]+\.db(-(journal|corrupt))?"' &&
     rule "a path into the system database folder outside the read-only uses"
 for f in "${SRC[@]}"; do
-    awk '/write_file\(|open\([^)]*O_(WRONLY|RDWR)/ && /priv\/mms/ {print FILENAME":"NR": "$0; bad=1} END {exit bad}' "$f" ||
-        rule "a write into /system_data/priv/mms"
+    awk '/(write_file|unlink|remove|rename)\(|open\([^)]*O_(WRONLY|RDWR)|fopen\([^)]*"[wa]/ && /priv\/mms/ {print FILENAME":"NR": "$0; bad=1} END {exit bad}' "$f" ||
+        rule "a write or delete into /system_data/priv/mms"
 done
+# Foreground user must never be queried unchecked (REG-6 / P4N-28).
+grep -n 'sceUserServiceGetForegroundUser(' "${SRC[@]}" | grep -vE 'int rc = sceUserServiceGetForegroundUser\(|int sceUserServiceGetForegroundUser\(' &&
+    rule "unchecked sceUserServiceGetForegroundUser() call (it must go through foreground_user_id: rc checked, user a real profile)"
+grep -q 'sys->user <= 0xFF' panel-app/main.c ||
+    rule "panel-app/main.c must reject user <= 0xFF from sceUserServiceGetInitialUser (P4N-28)"
 
 # No shell, no other programs: the payload has no business running commands.
 grep -nE '\b(system|popen|execl|execlp|execle|execv|execvp|execve)\s*\(' "${SRC[@]}" && rule "running commands"
@@ -86,6 +91,92 @@ grep -nE '\bnotify\("' src/main.c | grep -vE 'notify\("%s(: %s)?"' && rule "a no
 # link instead when the pkg's own path does not fit (shortpath.h).
 awk '/^static const char \*pkg_url\(/ {inside=1} inside && /^\}/ {inside=0; next} /sys_path\(/ && !inside && !/^static const char \*sys_path\(/ {print FILENAME":"NR": "$0; bad=1} END {exit bad}' src/main.c ||
     rule "a pkg path handed to the system without pkg_url(): over 95 bytes it is cut"
+
+# PANEL-10: The native PS4 title (LODS00001) must never terminate through libc exit/_exit/abort
+# or by returning from main() (crt1 invokes libkernel:_exit -> ExceptionCode 12 / SIGSYS on PS4).
+# It must always tear down cleanly (no detached threads) and exit via sceSystemServiceLoadExec.
+PANEL_SRC=(panel-app/*.c panel-app/*.h)
+grep -nE '\b(system|popen|execl|execlp|execle|execv|execvp|execve)\s*\(' "${PANEL_SRC[@]}" &&
+    rule "panel-app: running external commands"
+grep -nE '\b(strcpy|strcat|sprintf|gets|vsprintf)\s*\(' "${PANEL_SRC[@]}" &&
+    rule "panel-app: unbounded string function (use snprintf/memcpy with a size)"
+python3 -I - "${PANEL_SRC[@]}" <<'PY' || rule "panel-app violates PANEL-10 process lifecycle rules"
+import re, sys
+
+def strip_comments_and_strings(src):
+    out = []
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+        if c == '/' and i + 1 < n and src[i + 1] == '/':
+            while i < n and src[i] != '\n':
+                i += 1
+        elif c == '/' and i + 1 < n and src[i + 1] == '*':
+            i += 2
+            while i + 1 < n and not (src[i] == '*' and src[i + 1] == '/'):
+                if src[i] == '\n':
+                    out.append('\n')
+                i += 1
+            i += 2
+        elif c in ('"', "'"):
+            q = c
+            out.append(c)
+            i += 1
+            while i < n and src[i] != q:
+                if src[i] == '\\' and i + 1 < n:
+                    i += 2
+                else:
+                    if src[i] == '\n':
+                        out.append('\n')
+                    i += 1
+            if i < n:
+                out.append(q)
+                i += 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+bad = 0
+forbid_calls = re.compile(r'\b(exit|_exit|_Exit|quick_exit|abort|pthread_detach)\s*\(')
+
+for path in sys.argv[1:]:
+    raw = open(path, encoding="utf-8").read()
+    code = strip_comments_and_strings(raw)
+    for m in forbid_calls.finditer(code):
+        line = code.count('\n', 0, m.start()) + 1
+        print(f"{path}:{line}: forbidden call '{m.group(1)}(' (PANEL-10)")
+        bad = 1
+
+    if path == "panel-app/main.c":
+        if 'sceSystemServiceLoadExec("exit", NULL)' not in raw:
+            print(f"{path}: missing sceSystemServiceLoadExec(\"exit\", NULL) (PANEL-10)")
+            bad = 1
+        m = re.search(r'\bint\s+main\s*\([^)]*\)\s*\{', code)
+        if not m:
+            print(f"{path}: main() definition not found")
+            bad = 1
+        else:
+            depth, i = 1, m.end()
+            while depth and i < len(code):
+                if code[i] == '{':
+                    depth += 1
+                elif code[i] == '}':
+                    depth -= 1
+                i += 1
+            body = code[m.end():i - 1]
+            for rm in re.finditer(r'\breturn\b', body):
+                line = code.count('\n', 0, m.end() + rm.start()) + 1
+                print(f"{path}:{line}: return inside main() reaches crt1/_exit -> SIGSYS (PANEL-10)")
+                bad = 1
+
+    if path == "panel-app/art.c":
+        if not re.search(r'#\s*define\s+STBI_ASSERT\b', raw):
+            print(f"{path}: must define STBI_ASSERT before stb_image.h so abort/__assert_fail is not linked (PANEL-10)")
+            bad = 1
+
+sys.exit(bad)
+PY
 
 [ $fail = 0 ] && echo "policy: all rules hold"
 exit $fail

@@ -32,7 +32,7 @@ Necesitas una PS4 con jailbreak y GoldHEN, y paquetes `.pkg` que tengas derecho 
 1. Copia `lodestar-ps4.bin` a `/data/payloads/` de la consola (por FTP, por ejemplo).
 2. Carga el payload desde el Payloader de GoldHEN o desde Payload Guest. Sale una notificación con la dirección del panel.
 3. La app se instala sola unos segundos después, si la consola tiene internet y existe una release de esa versión, y se abre en el primer arranque. Si no aparece, instala `lodestar-panel.pkg` con el instalador de paquetes de GoldHEN. Se llama **Lodestar** en la pantalla de inicio.
-4. **Elige los ajustes y guarda.** En el primer arranque no se añade ningún juego hasta que guardas. En la app: mantén **L2**, elige **Ajustes**, revisa y baja hasta **Guardar ajustes**. Si nadie abre la app ni el panel durante 2 minutos, se usan los ajustes por defecto.
+4. **Elige los ajustes y guarda.** En el primer arranque no se añade ningún juego existente hasta que guardas explícitamente (no hay guardado automático por tiempo). En la app: mantén **L2**, elige **Ajustes**, revisa y baja hasta **Guardar ajustes**, o hazlo desde el panel web.
 5. Pon los juegos como explica [la sección siguiente](#dónde-poner-los-juegos) y conecta el USB.
 6. Si un juego queda como **Reinicia para jugar**, reinicia la consola una vez (**el modo reposo no vale**) y vuelve a cargar Lodestar.
 7. Juega desde la pantalla de inicio, como con cualquier otro juego.

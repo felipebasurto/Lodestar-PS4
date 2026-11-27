@@ -80,7 +80,7 @@ La explicación completa, con capturas de cada pantalla, está en la **[guía de
 
 1. **Descarga** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.3/lodestar-ps4.bin) y cópialo en **`/data/payloads/`** de la consola.
 2. **Carga Lodestar.** Aparece una notificación con `Lodestar <versión> en marcha` y la dirección del panel. Hay que repetirlo **después de cada arranque**, salvo que actives **Arrancar con GoldHEN**.
-3. **Abre la app o el panel** (`http://<IP de la PS4>:8780`), elige los ajustes y **guarda**. Hasta entonces no se añade ningún juego; si nadie los abre en 2 minutos, se usan los ajustes por defecto.
+3. **Abre la app o el panel** (`http://<IP de la PS4>:8780`), elige los ajustes y **guarda**. Hasta que guardes explícitamente, no se añade ni registra ningún juego existente.
 4. **Pon los juegos** (con su actualización y sus DLC):
    - **En un USB:** en la carpeta `Lodestar` de la unidad, y conéctalo.
    - **En la memoria interna:** en `/data/Lodestar`, por FTP.
@@ -303,7 +303,7 @@ The full explanation, with a screenshot of every screen, is in the **[user guide
 
 1. **Download** [`lodestar-ps4.bin`](https://github.com/felipebasurto/Lodestar-PS4/releases/download/v3.1.0-rc.3/lodestar-ps4.bin) and copy it to **`/data/payloads/`** on the console.
 2. **Load Lodestar.** A notification shows `Lodestar <version> running` and the panel address. Do it again **after every boot**, unless you turn on **Start with GoldHEN**.
-3. **Open the app or the panel** (`http://<PS4 IP>:8780`), choose the settings and **save**. No game is added until then; if nobody opens either for 2 minutes, the default settings are used.
+3. **Open the app or the panel** (`http://<PS4 IP>:8780`), choose the settings and **save**. No existing game is added or registered automatically until you explicitly save.
 4. **Add games** (with their update and add-ons):
    - **USB:** in the drive's `Lodestar` folder, then connect it.
    - **Internal storage:** in `/data/Lodestar`, over FTP.

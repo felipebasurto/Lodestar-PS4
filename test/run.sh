@@ -101,12 +101,24 @@ $CC $FLAGS -o "$B/titlecache_test" test/titlecache_test.c src/titlecache.c src/m
 "$B/titlecache_test"
 
 echo "== firmware simulation"
-$CC $FLAGS -o "$B/fw_sim" test/fw_sim.c src/fw.c
+$CC $FLAGS -DSTRICT_FIRST_RUN_SAFETY -o "$B/fw_sim" test/fw_sim.c src/fw.c
 "$B/fw_sim"
 
 echo "== system database"
 $CC $FLAGS -Ithird_party/sqlite -DAPP_DB="\"$B/app.db\"" -o "$B/db_test" test/db_test.c src/db.c src/crypto.c src/mem.c src/la_alloc.c "$SQ"
 "$B/db_test"
+
+echo "== system-state durability & snapshot safety (SYS-1, SYS-2, P4N-33)"
+$CC $FLAGS -o "$B/sysstate_test" test/sysstate_test.c src/durable.c
+"$B/sysstate_test"
+
+echo "== database guardrails & circuit breakers (REG-7..REG-10)"
+$CC $FLAGS -pthread -o "$B/dbguard_test" test/dbguard_test.c src/dbguard.c src/inventory.c src/mem.c
+"$B/dbguard_test"
+
+echo "== PS4Mount coexistence guard (P4N-32, REG-12)"
+$CC $FLAGS -o "$B/env_test" test/env_test.c src/coexist.c src/autorun.c src/build.c src/crypto.c src/mem.c
+"$B/env_test"
 
 echo "== web panel server"
 $CC $FLAGS -Itest -o "$B/http_test" test/http_test.c test/stubs.c src/web.c src/lang.c src/build.c src/mem.c src/crypto.c -lpthread
@@ -116,9 +128,20 @@ echo "== native panel API (PANEL-5) =="
 $CC $FLAGS -pthread -o "$B/panel_api_test" test/panel_api_test.c panel-app/api.c src/json.c
 "$B/panel_api_test"
 
-echo "== native panel hold to confirm (PANEL-8) =="
-$CC $FLAGS -o "$B/panel_lane_test" test/panel_lane_test.c panel-app/lane.c
+echo "== native panel host gauntlet & hold to confirm (PANEL-8) =="
+$CC $FLAGS -pthread -DPANEL_HOST_TEST -Itest/panel_fakes -Itest -Wno-unknown-pragmas \
+    -o "$B/panel_lane_test" test/panel_lane_test.c test/panel_host.c \
+    panel-app/main.c panel-app/app.c panel-app/applog.c panel-app/render.c panel-app/view.c panel-app/lane.c \
+    panel-app/draw.c panel-app/art.c panel-app/api.c src/json.c -lm
 "$B/panel_lane_test"
+
+echo "== native panel app lifecycle, concurrency, logging and fuzz (PANEL-10/11/12) =="
+$CC $FLAGS -DPANEL_MOCK_FONT -pthread -o "$B/panel_app_test" test/panel_app_test.c panel-app/app.c panel-app/applog.c panel-app/api.c panel-app/view.c panel-app/draw.c panel-app/art.c panel-app/lane.c src/json.c -lm
+"$B/panel_app_test"
+
+echo "== native panel double-buffered renderer exactness and benchmark (PANEL-12) =="
+$CC $FLAGS -DPANEL_MOCK_FONT -o "$B/panel_render_test" test/panel_render_test.c panel-app/render.c panel-app/view.c panel-app/draw.c panel-app/art.c panel-app/lane.c -lm
+"$B/panel_render_test"
 
 echo "== pkgs sent from the panel"
 $CC $FLAGS -Itest -o "$B/upload_test" test/upload_test.c src/upload.c src/lang.c src/mem.c src/check.c src/pkg.c src/build.c src/crypto.c -lpthread

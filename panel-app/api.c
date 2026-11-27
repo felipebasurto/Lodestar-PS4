@@ -14,28 +14,49 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef PANEL_HOST_TEST
+extern int panel_host_api_port(void);
+#define API_CONNECT_PORT panel_host_api_port()
+#else
+#define API_CONNECT_PORT API_PORT
+#endif
+
 static int64_t now_ms(void) {
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (int64_t)t.tv_sec * 1000 + t.tv_nsec / 1000000;
 }
 
-static int wait_io(int fd, short events, int64_t until) {
+static int stopped(const int *stop) {
+    return stop && __atomic_load_n(stop, __ATOMIC_ACQUIRE);
+}
+
+static int wait_io(int fd, short events, int64_t until, const int *stop) {
     struct pollfd p = {.fd = fd, .events = events};
     int64_t left;
-    while ((left = until - now_ms()) > 0) {
-        int n = poll(&p, 1, (int)left);
-        if (n >= 0)
-            return n > 0 && (p.revents & (events | POLLHUP | POLLERR));
+    while (!stopped(stop) && (left = until - now_ms()) > 0) {
+        int slice = (stop && left > 50) ? 50 : (int)left;
+        int n = poll(&p, 1, slice);
+        if (n > 0)
+            return !stopped(stop) && (p.revents & (events | POLLHUP | POLLERR));
+        if (n == 0) {
+            if (!stop)
+                return 0;
+            continue;
+        }
         if (errno != EINTR)
             break;
     }
     return 0;
 }
 
-static int send_all(int fd, const char *p, size_t size, int64_t until) {
-    while (size && wait_io(fd, POLLOUT, until)) {
-        ssize_t n = send(fd, p, size, 0);
+static int send_all(int fd, const char *p, size_t size, int64_t until, const int *stop) {
+    int flags = 0;
+#ifdef MSG_NOSIGNAL
+    flags |= MSG_NOSIGNAL;
+#endif
+    while (size && wait_io(fd, POLLOUT, until, stop)) {
+        ssize_t n = send(fd, p, size, flags);
         if (n < 0 && (errno == EAGAIN || errno == EINTR))
             continue;
         if (n <= 0)
@@ -46,8 +67,8 @@ static int send_all(int fd, const char *p, size_t size, int64_t until) {
     return size == 0;
 }
 
-static ssize_t receive(int fd, char *buf, size_t size, int64_t until) {
-    while (wait_io(fd, POLLIN, until)) {
+static ssize_t receive(int fd, char *buf, size_t size, int64_t until, const int *stop) {
+    while (wait_io(fd, POLLIN, until, stop)) {
         ssize_t n = recv(fd, buf, size, 0);
         if (n >= 0 || (errno != EAGAIN && errno != EINTR))
             return n;
@@ -55,24 +76,26 @@ static ssize_t receive(int fd, char *buf, size_t size, int64_t until) {
     return -1;
 }
 
-response api_exchange(int fd, const char *path, const char *form, size_t limit, int timeout_ms) {
+response api_exchange_ex(int fd, const char *path, const char *form, size_t limit, int timeout_ms, const int *stop) {
+    if (stopped(stop))
+        return (response){0};
     int64_t until = now_ms() + timeout_ms;
     char header[2048];
     size_t form_size = form ? strlen(form) : 0;
     int len = snprintf(header, sizeof(header),
                        "%s %s HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nConnection: close\r\n"
                        "%sContent-Length: %zu\r\n\r\n",
-                       form ? "POST" : "GET", path, API_PORT,
+                       form ? "POST" : "GET", path, API_CONNECT_PORT,
                        form ? "X-Lodestar: 1\r\nContent-Type: application/x-www-form-urlencoded\r\n" : "",
                        form_size);
-    if (len < 0 || (size_t)len >= sizeof(header) || !send_all(fd, header, (size_t)len, until) ||
-        (form_size && !send_all(fd, form, form_size, until)))
+    if (len < 0 || (size_t)len >= sizeof(header) || !send_all(fd, header, (size_t)len, until, stop) ||
+        (form_size && !send_all(fd, form, form_size, until, stop)))
         return (response){0};
 
     size_t used = 0;
     char *start = NULL;
     while (!start && used < sizeof(header) - 1) {
-        ssize_t n = receive(fd, header + used, sizeof(header) - 1 - used, until);
+        ssize_t n = receive(fd, header + used, sizeof(header) - 1 - used, until, stop);
         if (n <= 0)
             return (response){0};
         used += (size_t)n;
@@ -83,7 +106,8 @@ response api_exchange(int fd, const char *path, const char *form, size_t limit, 
     if (!start || sscanf(header, "HTTP/1.%*1[01] %3d", &status) != 1 || status < 100 || status > 599)
         return (response){0};
     long long length = -1;
-    for (const char *p = strchr(header, '\n') + 1; p < start; p = strchr(p, '\n') + 1) {
+    const char *first_nl = strchr(header, '\n');
+    for (const char *p = first_nl ? first_nl + 1 : start; p < start;) {
         if (!strncasecmp(p, "Transfer-Encoding:", 18))
             return (response){0};
         if (!strncasecmp(p, "Content-Length:", 15)) {
@@ -100,6 +124,10 @@ response api_exchange(int fd, const char *path, const char *form, size_t limit, 
             if (errno || *end != '\r')
                 return (response){0};
         }
+        const char *nl = strchr(p, '\n');
+        if (!nl)
+            break;
+        p = nl + 1;
     }
     if (length < 0 || (unsigned long long)length > limit)
         return (response){0};
@@ -112,7 +140,7 @@ response api_exchange(int fd, const char *path, const char *form, size_t limit, 
         return (response){0};
     memcpy(body, start, have);
     while (have < (size_t)length) {
-        ssize_t n = receive(fd, body + have, (size_t)length - have, until);
+        ssize_t n = receive(fd, body + have, (size_t)length - have, until, stop);
         if (n <= 0) {
             free(body);
             return (response){0};
@@ -123,7 +151,13 @@ response api_exchange(int fd, const char *path, const char *form, size_t limit, 
     return (response){.status = status, .size = have, .body = body};
 }
 
-response api_request(const char *path, const char *form, size_t limit, int timeout_ms) {
+response api_exchange(int fd, const char *path, const char *form, size_t limit, int timeout_ms) {
+    return api_exchange_ex(fd, path, form, limit, timeout_ms, NULL);
+}
+
+response api_request_ex(const char *path, const char *form, size_t limit, int timeout_ms, const int *stop) {
+    if (stopped(stop))
+        return (response){0};
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0)
         return (response){0};
@@ -132,21 +166,26 @@ response api_request(const char *path, const char *form, size_t limit, int timeo
     setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
 #endif
     struct sockaddr_in loopback = {
-        .sin_family = AF_INET, .sin_port = htons(API_PORT), .sin_addr.s_addr = htonl(INADDR_LOOPBACK)
+        .sin_family = AF_INET, .sin_port = htons((uint16_t)API_CONNECT_PORT), .sin_addr.s_addr = htonl(INADDR_LOOPBACK)
     };
     response res = {0};
-    if (fcntl(fd, F_SETFL, O_NONBLOCK) == 0) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0) {
         int rc = connect(fd, (struct sockaddr *)&loopback, sizeof(loopback));
-        if (rc < 0 && errno == EINPROGRESS && wait_io(fd, POLLOUT, now_ms() + 1000)) {
+        if (rc < 0 && errno == EINPROGRESS && wait_io(fd, POLLOUT, now_ms() + 1000, stop)) {
             int error = 0;
             socklen_t len = sizeof(error);
             rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len) || error ? -1 : 0;
         }
-        if (!rc)
-            res = api_exchange(fd, path, form, limit, timeout_ms);
+        if (!rc && !stopped(stop))
+            res = api_exchange_ex(fd, path, form, limit, timeout_ms, stop);
     }
     close(fd);
     return res;
+}
+
+response api_request(const char *path, const char *form, size_t limit, int timeout_ms) {
+    return api_request_ex(path, form, limit, timeout_ms, NULL);
 }
 
 static int object(const response *res, int status, jv_t *root) {

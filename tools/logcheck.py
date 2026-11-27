@@ -23,6 +23,9 @@ STAMP = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ ")
 # (id, pattern, level, Spanish, English). Level: ERROR stops something working, WARN is a
 # thing to look at, INFO is the project telling what it did.
 SIGNATURES = [
+    ("db_halt", r"^HALT: system database flagged", "ERROR",
+     "Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar. No borres los marcadores ni escribas bases del sistema a mano; inspecciona /data/lodestar/inventory.tsv y el log.",
+     "System database flagged as damaged: do not keep registering; restart/recover before continuing. Do not delete markers or edit system databases by hand; inspect /data/lodestar/inventory.tsv and the log."),
     ("content_url", r"invalid content_url", "ERROR",
      "El instalador del sistema (BGFT) rechazó la ruta del pkg. Pasa si la ruta es demasiado larga (más de 95 bytes) o pasa por /data en vez de /user/data. Mueve el pkg a una carpeta con nombre corto.",
      "The system's installer (BGFT) refused the pkg's path: too long (over 95 bytes) or through /data instead of /user/data. Move the pkg to a folder with a short name."),
@@ -68,6 +71,15 @@ SIGNATURES = [
     ("appdb", r"app\.db could not be read", "WARN",
      "No se pudo leer la base de datos de apps del sistema (solo lectura): el escaneo espera y vuelve a intentarlo.",
      "The system's app database could not be read (read-only): the scan waits and tries again."),
+    ("tbl_appbrowse_zero", r"tbl_appbrowse_0000000000", "ERROR",
+     "El sistema consultó la tabla del usuario 0 (tbl_appbrowse_0000000000), que no existe en app.db. Suele ocurrir si un lanzamiento de app o una consulta pasa user_id=0 sin usuario válido en primer plano. Revisa la línea temporal: qué llamada ocurrió justo antes; Lodestar nunca escribe app.db.",
+     "The system queried user 0's browse table (tbl_appbrowse_0000000000), which does not exist in app.db. This usually happens when an app launch or query passes user_id=0 without a valid foreground user. Check the timeline: look at what ran immediately before; Lodestar never writes app.db."),
+    ("db_corruption_event", r"DbCorruptionOccur(?:r)?ed|0x80f50061|80f50061|0x809c110e|809c110e", "ERROR",
+     "El sistema (ShellCore/DBR) registró un evento de corrupción de base de datos (DbCorruptionOccured / 0x80f50061 / 0x809c110e) y deja la marca del sistema app.db-corrupt para reconstruir al reiniciar. Es una marca propia del sistema, no un archivo creado por Lodestar. Revisa la línea temporal del log: si precedió una consulta a tbl_appbrowse_0000000000, un registro BGFT/AppInstallAll o si la marca ya existía al arrancar.",
+     "The system (ShellCore/DBR) logged a database corruption event (DbCorruptionOccured / 0x80f50061 / 0x809c110e) and sets the system marker app.db-corrupt to rebuild on reboot. This is a system-owned marker, not written by Lodestar. Check the log timeline: whether it was preceded by a tbl_appbrowse_0000000000 query, a BGFT/AppInstallAll registration, or whether the marker already existed at startup."),
+    ("appdb_corrupt_marker", r"app\.db-corrupt", "WARN",
+     "Se detectó la marca del sistema app.db-corrupt. Es una marca del propio sistema que indica que reconstruirá app.db en el próximo reinicio; Lodestar nunca la crea, modifica ni borra. Importa la línea temporal: distingue si ya existía antes de arrancar Lodestar o si apareció durante la sesión y qué evento del sistema ocurrió justo antes.",
+     "The system marker app.db-corrupt was detected. It is a system-owned marker telling the console to rebuild app.db on the next reboot; Lodestar never creates, modifies, or deletes it. Timeline matters: note whether it already existed before Lodestar started or appeared during the run and which system event preceded it."),
     ("memory", r"no memory", "ERROR",
      "Se quedó sin memoria (el payload dispone de muy poca). Reinicia la consola y guarda el log.",
      "Out of memory (the payload has very little). Restart the console and keep the log."),

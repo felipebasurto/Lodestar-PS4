@@ -63,8 +63,10 @@ var LANGS = {
     '{0} removed; not removed: {1}': '{0} quitado(s); sin quitar: {1}',
     '{0} game(s) removed from the library': '{0} juego(s) quitado(s) de la biblioteca',
     'Removing {0} of {1}…': 'Quitando {0} de {1}…',
-    'First start: review Settings and press Save. No game is added while this page is open. If it stays closed for 2 minutes, the default settings are used.':
-      'Primer arranque: revisa los Ajustes y pulsa Guardar. Mientras esta página esté abierta no se añade ningún juego. Si queda cerrada 2 minutos, se usan los ajustes por defecto.',
+    'First start: review Settings and press Save before existing games are added. Nothing is registered automatically until you save.':
+      'Primer arranque: revisa los Ajustes y pulsa Guardar antes de añadir los juegos existentes. No se registra nada automáticamente hasta que guardes.',
+    'System database flagged as damaged: do not keep registering; restart/recover before continuing':
+      'Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar',
     'Language': 'Idioma',
     'Restore original files': 'Restaurar archivos originales',
     'Takes games off the console and puts their pkgs (game, update and add-ons) back where they were, with the names they had. Nothing is deleted. The open game is closed first.':
@@ -245,7 +247,11 @@ var LANGS = {
     'Warning': 'Aviso',
     'Drive': 'Unidad',
     'Info': 'Info',
-    'No notifications yet.': 'Aún no hay notificaciones.'
+    'No notifications yet.': 'Aún no hay notificaciones.',
+    'PS4Mount is still installed or active in GoldHEN AutoRun: automatic game registration is paused.':
+      'PS4Mount sigue instalado o activo en AutoRun de GoldHEN: el registro automático de juegos está en pausa.',
+    'Remove PS4Mount or disable it in payloads.ini before continuing so your shared library is not registered twice. Lodestar never deletes PS4Mount files.':
+      'Quita PS4Mount o desactívalo en payloads.ini antes de continuar para no registrar dos veces tu biblioteca compartida. Lodestar nunca borra archivos de PS4Mount.'
   }
 };
 var LANG = 'en';

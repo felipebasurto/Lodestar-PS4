@@ -17,6 +17,7 @@
 #include "check.h"
 #include "crypto.h"
 #include "emu.h"
+#include "bootplan.h"
 #include "lang.h"
 #include "mem.h"
 #include "pkgmake.h"
@@ -906,8 +907,9 @@ static void test_delete_window(void) {
     CHECK(!delete_content_id_plain("UP0000/CUSA00001"));
     CHECK(!delete_content_id_plain(""));
 
-    /* DEL-6: intent waits; only explicit success or a confirmed registered-to-absent
-     * transition commits. Failure and age can only roll generated pending state back. */
+    /* DEL-6: intent waits; only a confirmed registered-to-absent app.db transition
+     * commits. An unbound AppUnInstallMainExecute ret = [0] line never commits deletion
+     * on its own. Failure and age can only roll generated pending state back. */
     static const struct {
         int report, db, seen;
         long since_report, since_intent, want;
@@ -916,8 +918,11 @@ static void test_delete_window(void) {
         {-1, 1, 0, 0, 0, 0},  /* still registered is not failure proof */
         {-1, 2, 0, 0, 0, 0},  /* absence without a seen transition may be pre-existing */
         {-1, 2, 1, 0, 0, 1},  /* normal successful PS4 delete writes no result line */
-        {0, 0, 0, 0, 0, 1},   /* explicit zero result is positive commit evidence */
-        {0, 1, 0, 0, 0, 1},
+        {0, 0, 0, 0, 0, 0},   /* unbound zero result with unknown db must NOT delete user files */
+        {0, 1, 0, 0, 0, 0},   /* unbound zero result while still registered must NOT delete */
+        {0, 1, 1, 0, 0, 0},   /* unbound zero result while still registered (after seen) must NOT delete */
+        {0, 2, 0, 0, 0, 0},   /* zero result without confirmed registered->absent transition must NOT delete */
+        {0, 2, 1, 0, 0, 1},   /* confirmed app.db transition commits */
         {1, 0, 0, 0, 0, 0},   /* let the database settle after a nonzero result */
         {1, 0, 0, DELETE_RESULT_SETTLE_SEC - 1, 0, 0},
         {1, 0, 0, DELETE_RESULT_SETTLE_SEC, 0, -1},
@@ -1545,6 +1550,19 @@ static void test_telemetry(void) {
     CHECK(!strcmp(line, "[api] games wall_ms=19 titles=21 usb_stats=3 fp_app=1 fp_patch=1 fp_ac=1 cache_miss=1"));
 }
 
+/* P4N-31 (specs/ps4-native.md): instance lock conflict classification. */
+static void test_lock_conflict(void) {
+    printf("lock port 9032 conflict classification\n");
+    const char *lodestar_reply = "HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n"
+                                 "{\"product\":\"Lodestar\",\"version\":\"Lodestar 0.1.2\"}";
+    CHECK(lock_conflict_classify(EADDRINUSE, lodestar_reply) == LOCK_CONFLICT_LODESTAR_RUNNING);
+    CHECK(lock_conflict_classify(EADDRINUSE, "") == LOCK_CONFLICT_OTHER_OR_UNKNOWN);
+    CHECK(lock_conflict_classify(EADDRINUSE, NULL) == LOCK_CONFLICT_OTHER_OR_UNKNOWN);
+    CHECK(lock_conflict_classify(EADDRINUSE, "{\"product\":\"Other\"}") == LOCK_CONFLICT_OTHER_OR_UNKNOWN);
+    CHECK(lock_conflict_classify(EACCES, lodestar_reply) == LOCK_CONFLICT_SYS_ERROR);
+    CHECK(lock_conflict_classify(EPERM, NULL) == LOCK_CONFLICT_SYS_ERROR);
+}
+
 int main(void) {
     test_crypto();
     test_app_json();
@@ -1575,6 +1593,7 @@ int main(void) {
     test_scanreq();
     test_scanfilter();
     test_telemetry();
+    test_lock_conflict();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;
 }

@@ -91,6 +91,10 @@ static int bgft_open(char *msg, unsigned long n) {
 }
 
 int install_pkg(const char *path, const char *name, int user, char *msg, unsigned long n) {
+    if (user <= 0xFF) {
+        snprintf(msg, n, "refusing BGFT install for invalid user id 0x%x", (unsigned)user);
+        return -1;
+    }
     if (bgft_open(msg, n))
         return -1;
     bgft_param_ex_t p;

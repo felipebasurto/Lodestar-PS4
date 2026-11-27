@@ -22,6 +22,9 @@ let LINKS = { configured: false }; // GET /api/links
 let DRIVES = [{ label: 'usb0', free: 120.5 * 1073741824, total: 500 * 1073741824 }]; // GET /api/games drives
 let NOTICES = []; // GET /api/games notices
 let ACTIVITY = { busy: false, phase: '', drive: '', title: '', title_id: '', done: 0, total: 0, group: 0, groups: 0, dlc_pending: [] };
+let DB_CORRUPT = false;
+let DB_CORRUPT_REASON = '';
+let COEXIST = { ps4mount_installed: false, ps4mount_autorun: false, ps4mount_state: false, auto_register_blocked: false, reasons: [] };
 const STORAGE = { free: 2.5e10, total: 8e10, games: 2, items: [{ id: 'install', bytes: 3e8 }, { id: 'log', bytes: 2097152 }, { id: 'appmeta', bytes: 5e5 }] }; // GET /api/storage
 const DESTS = { dests: [{ id: 'usb0', label: 'usb0', folder: '/mnt/usb0/PS4Mount', free: 5e11, fits: true }] };
 function reply(url) {
@@ -29,7 +32,8 @@ function reply(url) {
   if (url === '/api/dests') return DESTS;
   if (url === '/api/storage') return STORAGE;
   return url.indexOf('/api/log') === 0 ? { log: 'a\nb' } : url.indexOf('/api/config') === 0 ? CFG :
-    url.indexOf('/api/games') === 0 ? { version: GAMES_VERSION, lang: REPLY_LANG, games: GAMES, drives: DRIVES,
+    url.indexOf('/api/games') === 0 ? { version: GAMES_VERSION, lang: REPLY_LANG, db_corrupt: DB_CORRUPT,
+      db_corrupt_reason: DB_CORRUPT_REASON, coexist: COEXIST, games: GAMES, drives: DRIVES,
       notices: NOTICES, activity: ACTIVITY, dlc_mode: CFG.dlc_mode || 'external' } : { ok: true, message: 'ok ' + url };
 }
 const tick = () => new Promise(r => setTimeout(r, 30));
@@ -532,6 +536,7 @@ function tKeys(file) {
   ok(d.documentElement.lang === 'es', 'the page takes the language the console reports');
   ok(d.getElementById('rescan').textContent === 'Buscar juegos' && d.getElementById('settingsbtn').textContent === 'Ajustes', 'fixed texts in Spanish');
   ok(d.getElementById('setupnote').textContent.startsWith('Primer arranque'), 'a long fixed text in Spanish');
+  ok(!d.getElementById('setupnote').textContent.includes('2 minutos'), 'Spanish setup note does not promise a 2-minute auto-add');
   ok(d.getElementById('q').placeholder === 'Buscar juego o CUSA', 'placeholders in Spanish');
   { const c = d.querySelector('[data-g="CUSA34284"]'); c.click();
     ok(c.querySelector('.badge').textContent === 'Reinicia para jugar', 'states in Spanish');
@@ -550,6 +555,7 @@ function tKeys(file) {
   ok(reqs.some(r => r.url === '/api/config' && /(^|&)lang=en(&|$)/.test(r.body)), 'the chosen language is saved');
   REPLY_LANG = 'en'; w.load(); await tick(); await tick();
   ok(d.getElementById('rescan').textContent === 'Scan for games' && d.documentElement.lang === 'en', 'and the page switches back to English');
+  ok(!d.getElementById('setupnote').textContent.includes('2 minutes'), 'English setup note does not promise a 2-minute auto-add');
   REPLY_LANG = 'fr';
   p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
   await tick();
@@ -692,6 +698,70 @@ function tKeys(file) {
   const lcfg = reqs.find(r => r.url === '/api/config' && r.method === 'POST');
   ok(lcfg && lcfg.body.includes('dlc_mode=internal&dlc=1&dlc_big=1&internal=1'),
     'legacy saves dlc_mode, dlc, dlc_big and internal: ' + (lcfg && lcfg.body));
+
+  // --- REG-7 / REG-8: DB corruption banner in both panels (EN + ES) and no 2-minute auto-defaults copy
+  DB_CORRUPT = true;
+  DB_CORRUPT_REASON = 'marker present: app.db-corrupt';
+  REPLY_LANG = 'es';
+  p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('dbcorrupt-banner').hidden === false &&
+    d.getElementById('dbc-main').textContent.includes('Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar') &&
+    d.getElementById('dbc-detail').textContent.includes('app.db-corrupt'),
+    'modern panel shows explicit Spanish DB corruption banner (REG-7)');
+  ok(!d.getElementById('setupnote').textContent.includes('2 minutos'),
+    'first-start Spanish notice does not claim automatic 2-minute default registration (REG-8)');
+  p = page('legacy.html', {}); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('dbcorrupt-banner').style.display === 'block' &&
+    d.getElementById('dbc-main').textContent.includes('Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar') &&
+    d.getElementById('dbc-detail').textContent.includes('app.db-corrupt'),
+    'legacy panel shows explicit Spanish DB corruption banner (REG-7)');
+  REPLY_LANG = 'en';
+  p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('dbcorrupt-banner').hidden === false &&
+    d.getElementById('dbc-main').textContent.includes('System database flagged as damaged: do not keep registering; restart/recover before continuing'),
+    'modern panel shows explicit English DB corruption banner (REG-7)');
+  ok(!d.getElementById('setupnote').textContent.includes('2 minutes'),
+    'first-start English notice does not claim automatic 2-minute default registration (REG-8)');
+  DB_CORRUPT = false;
+  DB_CORRUPT_REASON = '';
+  REPLY_LANG = undefined;
+  p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('dbcorrupt-banner').hidden === true, 'DB corruption banner stays hidden when healthy');
+  ok(d.getElementById('coexist-banner').hidden === true, 'coexistence banner stays hidden when PS4Mount is absent');
+
+  // --- PANEL-13: PS4Mount coexistence banner in both panels (EN + ES)
+  COEXIST = { ps4mount_installed: true, ps4mount_autorun: true, ps4mount_state: true, auto_register_blocked: true, reasons: ['payload', 'autorun'] };
+  REPLY_LANG = 'es';
+  p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('coexist-banner').hidden === false &&
+    d.getElementById('cx-main').textContent.includes('PS4Mount sigue instalado o activo en AutoRun') &&
+    d.getElementById('cx-detail').textContent.includes('Lodestar nunca borra archivos de PS4Mount') &&
+    d.getElementById('cx-detail').textContent.includes('payload, autorun'),
+    'modern panel shows Spanish PS4Mount coexistence banner (PANEL-13)');
+  p = page('legacy.html', {}); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('coexist-banner').style.display === 'block' &&
+    d.getElementById('cx-main').textContent.includes('PS4Mount sigue instalado o activo en AutoRun'),
+    'legacy panel shows Spanish PS4Mount coexistence banner (PANEL-13)');
+  REPLY_LANG = 'en';
+  p = page('index.html', { dialog: true }); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('coexist-banner').hidden === false &&
+    d.getElementById('cx-main').textContent.includes('PS4Mount is still installed or active in GoldHEN AutoRun') &&
+    d.getElementById('cx-detail').textContent.includes('Lodestar never deletes PS4Mount files'),
+    'modern panel shows English PS4Mount coexistence banner (PANEL-13)');
+  p = page('legacy.html', {}); ({ w, d, reqs } = p);
+  await tick();
+  ok(d.getElementById('coexist-banner').style.display === 'block' &&
+    d.getElementById('cx-main').textContent.includes('PS4Mount is still installed or active in GoldHEN AutoRun'),
+    'legacy panel shows English PS4Mount coexistence banner (PANEL-13)');
+  COEXIST = { ps4mount_installed: false, ps4mount_autorun: false, ps4mount_state: false, auto_register_blocked: false, reasons: [] };
+  REPLY_LANG = undefined;
 })()
   /* jsdom keeps the windows' own timers: end the process, with the code ok() left */
   .then(() => process.exit(process.exitCode || 0), (e) => { console.error(e); process.exit(1); });

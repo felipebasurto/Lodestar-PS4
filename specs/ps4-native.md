@@ -273,9 +273,98 @@ at once. Stopping one payload and loading the other must preserve each product's
 The organized package bytes in `<drive>/ps4/<TITLE_ID>/` are user/library data, not product-private state.
 Lodestar may scan and serve them, but without Lodestar ownership evidence it must treat their mount layers and
 management records conservatively. A user-initiated console delete follows the normal delete contract; daemon
-cleanup must never use PS4Mount's `.src`, `.removed` or hold files as Lodestar evidence.
+cleanup must never use PS4Mount's `.src`, `.removed` or hold files as Lodestar evidence. When PS4Mount is
+installed or enabled in GoldHEN AutoRun, P4N-32 holds automatic registration and library migration so Lodestar
+does not re-register or move PS4Mount's shared library.
 Check: test for port/manifest and ownership decision tables; read for the console-wide service interlock.
 Source: user hardware coexistence requirement, 2026-11-26.
+
+### P4N-28: panel auto-launch requires a valid foreground user; never launch as user 0
+`sceUserServiceInitialize` is called with a valid priority parameter (`0x2BC`, normal priority) and its return
+code is logged (`0` ok, `0x80960003` already initialized in the borrowed host process, any other code is a
+failure). Before auto-opening the native panel app (`LODS00001`) on a first start, the foreground user ID
+variable is initialized to `-1` (never `0`) and queried with `sceUserServiceGetForegroundUser`. `sceLncUtilLaunchApp`
+must never be called if the query returns a non-zero status or an invalid user ID (`<= 0xFF`, which rejects
+`0`, `-1`, all negative values, `0xFE` `USER_ID_EVERYONE`, and `0xFF` `USER_ID_SYSTEM`), or while any game
+or the panel app is already open (or open-app inspection fails), or unless `app.db` freshly confirms the
+panel app is registered. The exact return code and user value are logged. When no valid foreground user is
+available, Lodestar skips auto-opening and leaves clear instructions in the log, console notification and
+panel notices telling the user to open Lodestar manually or use the web panel. The native panel app
+(`panel-app/main.c`) applies the same user-ID check to `sceUserServiceGetInitialUser`, rejecting non-zero
+return codes or `user <= 0xFF` before opening the pad or IME dialog, and `install_pkg` (`src/install.c`)
+rejects `user <= 0xFF` as defense in depth.
+The user predicate is REG-6. Check: test (system boundary, database-corruption regression on firmware 14.00).
+Test: `test/fw_sim.c` (`boot_launch_user`, `boot_panel_app_plan`, built with `-DSTRICT_FIRST_RUN_SAFETY`),
+`test/panel_lane_test.c` (invalid initial user id 0); compile boundary `test/sdkcheck.sh`.
+Source: firmware 14.00 rc.3 hardware incident (2026-11-27): auto-opening with unchecked `user = 0` was
+followed 200 ms later by `DbCorruptionOccured ... app.db` / `no such table: tbl_appbrowse_0000000000`.
+
+### P4N-29: first-run library adoption requires explicit user consent, never a UI timeout
+On a first start (no `config.txt` and no prior Lodestar `.src` or `catalog-*` state), Lodestar waits
+indefinitely for the user to explicitly save settings (`POST /api/config`); the scan loop stays closed
+(`boot_scan_gate`) and the main loop has no timeout of its own.
+No elapsed timeout, panel absence, panel close, or native-app crash may auto-save defaults or trigger adoption
+or registration of preexisting games (whether the library has 1 game or 20+ games). Opening or polling the
+panel is strictly observational and never completes first-run consent. Once the user explicitly saves settings
+(or on a subsequent run where `config.txt` or prior Lodestar state already exists), scans adopt and register
+packages according to the saved settings, through the pilot breaker of REG-8.
+Check: test (unwanted mass registration / BGFT write prevention, state/time ordering, real firmware 14.00
+regression). Test: `test/fw_sim.c` (the rc.3 timeline, built with `-DSTRICT_FIRST_RUN_SAFETY`); panel copy
+in `test/web/panel.test.js`.
+Source: firmware 14.00 rc.3 hardware incident (2026-11-27): after the panel app crashed on first start,
+the 120-second timeout auto-saved defaults and registered 20 preexisting games in 4 groups.
+
+### P4N-30: system database corruption markers are detected read-only without touching databases
+`app.db` remains strictly read-only (`mode=ro&nolock=1`); Lodestar never writes, creates, repairs or deletes
+any file under `/system_data/priv/mms/`. `mode=ro&nolock=1` acquires no locks that could fail ShellCore's
+writes and cannot modify `app.db`; its only trade-off is possible transient inconsistent reads on the reader
+side, which `db.c` already handles fail-closed (`db_confirms_registered` and `db_confirms_unregistered`).
+The system's `*.db-corrupt` markers are only looked at with read-only `stat()` by the REG-7 latch
+(`src/dbguard.c`), at startup and while running, never modified or deleted.
+Check: test (system boundary, read-only database contract). Test: `test/db_test.c`, `test/dbguard_test.c`,
+`test/policy.sh`; compile boundary `test/sdkcheck.sh`.
+Source: firmware 14.00 rc.3 hardware incident (2026-11-27): `app.db` passed `pragma quick_check=ok` while
+`/system_data/priv/mms/app.db-corrupt` existed.
+
+### P4N-31: busy instance lock reports real lock state without blaming PS4Mount
+The shared loopback lock on port 9032 (P4N-27) is preserved unchanged. When acquiring it fails, Lodestar
+logs the port, `errno` and `pid`, probes loopback panel port 8780 read-only (`GET /api/agent`) with a short
+timeout to check whether another Lodestar instance is already answering, and reports clearly whether Lodestar
+itself is already running, another active instance holds lock port 9032, or lock creation failed for another
+reason. It must not specifically claim PS4Mount/USB Mount is running when the holder may be Lodestar itself.
+Check: test (conflict classification in `test/unit.c` › `test_lock_conflict`); read for loopback probe and
+socket error handling (`test/sdkcheck.sh`).
+Source: firmware 14.00 rc.3 hardware incident (2026-11-27): a duplicate Lodestar load reported that PS4Mount
+was running because both share port 9032.
+
+### P4N-32: PS4Mount coexistence guard blocks automatic library registration
+Lodestar detects read-only whether PS4Mount (`Vld439/PS4Mount-PS4`) is installed or enabled in GoldHEN
+AutoRun: payload files `ps4mount-ps4.bin` / `ps4mount-ps4.elf` under `/data/GoldHEN/payloads` or
+`/data/payloads` (real files >= 4 KiB with ELF or payload magic), installed panel/shortcut directories
+`PSMT00001` or `PMNT00001` under `/user/app`, or an active non-comment `ps4mount-ps4.bin` / `ps4mount-ps4.elf`
+line in `/data/GoldHEN/payloads.ini`. Leftover `/data/ps4mount` or `/system_data/ps4mount` state alone is
+recorded as `ps4mount_state` for visibility without tripping the block, because Lodestar never deletes
+PS4Mount files (P4N-27).
+
+While PS4Mount is installed or active in AutoRun, Lodestar holds automatic registration, version-mismatch
+re-registration, and `migrate_organized` library moves so it does not re-register or move `<drive>/ps4/<TID>`
+titles already managed by PS4Mount. An explicit single-title Add (`POST /api/mount?title_id=<TID>`) from
+the panel remains allowed for that requested title alone. Lodestar emits a Spanish/English notice and
+exposes the read-only `coexist` object in `GET /api/status` and `GET /api/games`.
+Check: test (keep bar 2: data/system safety; keep bar 5: cross-product conflict). Test: `test/env_test.c`,
+`test/web/panel.test.js`; compile boundary `test/sdkcheck.sh`.
+Source: environment coexistence hazard review (`hazards/environment`), 2026-11-27.
+
+### P4N-33: settings save writes atomically before clearing first-start setup
+`config_save()` writes `/data/lodestar/config.txt` atomically through `write_file()` (`durable_replace`,
+SYS-2), checks that the buffer was built and the atomic rename succeeded, and calls `setup_set(0)` only
+after the file is durably in place. If saving fails, `app_config_set()` restores the previous in-memory
+settings, language and GoldHEN AutoRun state, logs the failure, and returns a Spanish/English error to
+the panel instead of dropping first-start protection or leaving half-written configuration on disk.
+Check: test (keep bar 2: data safety; keep bar 3: ordering). Test: `test/sysstate_test.c`; compile
+boundary `test/sdkcheck.sh`.
+Source: boot/registration hazard review (`hazards/boot-registration`), 2026-11-27 (renumbered from
+`P4N-32` to avoid colliding with the PS4Mount coexistence guard).
 
 ## Toshiba reference profile (not a compatibility requirement)
 

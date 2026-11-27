@@ -52,18 +52,20 @@ Check: test (keep bar 2: data loss/security). Test: `test/unit.c` › `test_remo
 A validated user-delete event may mark the title as pending so scans and registration batches do not newly
 initiate registration for it after the intent is observed, but it must not
 unlink ownership state, remove generated holds/BGFT state, or delete library/user packages at that point.
-Those destructive effects commit only after positive uninstall evidence: an explicit zero uninstall result or
-a successful fresh database read confirming the title is unregistered after it was confirmed registered during
-the pending delete. Absence without that observed transition is not commit evidence. The local commit must first detach the
-app, patch and add-on targets again; if they cannot be detached, it waits rather than deleting files beneath a
-live mount. A nonzero result rolls back only the generated pending marker after the result has settled. If no
-result arrives, the pending state may expire only in the rollback direction; a timeout is never evidence of
-successful deletion. A system registration call already inside the system installer cannot be recalled, but
-PS4Mount must not complete its own finish/marker effects for a pending-delete title. Loss of ownership evidence
-means the commit is refused, not guessed. Pending suppression may be memory-only: losing it can
-re-add a title, but must never delete data.
+Those destructive effects commit only after positive uninstall evidence: a successful fresh database read
+confirming the title is unregistered after it was confirmed registered during the pending delete. Absence
+without that observed transition is not commit evidence. An `AppUnInstallMainExecute ret = [0]` kernel-log
+line does not carry a title id and is never by itself proof that the pending title was deleted; it must not
+commit local deletion while `app.db` still shows the title registered or is unreadable. The local commit must
+first detach the app, patch and add-on targets again; if they cannot be detached, it waits rather than deleting
+files beneath a live mount. A nonzero result rolls back only the generated pending marker after the result has
+settled. If no result arrives, the pending state may expire only in the rollback direction; a timeout is never
+evidence of successful deletion. A system registration call already inside the system installer cannot be
+recalled, but PS4Mount must not complete its own finish/marker effects for a pending-delete title. Loss of
+ownership evidence means the commit is refused, not guessed. Pending suppression may be memory-only: losing
+it can re-add a title, but must never delete data.
 Check: test (keep bar 2: data loss; ordering). Test: `test/unit.c` › `test_delete_window` pending decisions.
-Source: delete audit 2026-11-25.
+Source: delete audit 2026-11-25; unbound-uninstall hazard fix (`hazards/system-state` H1), 2026-11-27.
 
 
 ### DEL-7: removal retention is scoped to the title the user action names

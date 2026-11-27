@@ -72,6 +72,63 @@ int main(void) {
     CHECK(!db_confirms_registered("CUSA00001"));
     CHECK(!exists(APP_DB)); /* opening read-only never creates it */
 
+    printf("inconsistent schema (missing tbl_appinfo)\n");
+    {
+        sqlite3 *bad;
+        CHECK(sqlite3_open(APP_DB, &bad) == SQLITE_OK);
+        exec(bad, "CREATE TABLE tbl_other(id INT); INSERT INTO tbl_other VALUES(1);");
+        sqlite3_close(bad);
+        uint8_t b0[32], b1[32];
+        file_hash(APP_DB, b0);
+        next_second();
+        CHECK(!db_is_registered("CUSA00001"));
+        CHECK(!db_ready()); /* valid sqlite file without tbl_appinfo must not mark DB ready */
+        CHECK(!db_confirms_registered("CUSA00001"));
+        CHECK(!db_confirms_unregistered("CUSA00001"));
+        file_hash(APP_DB, b1);
+        CHECK(!memcmp(b0, b1, 32)); /* never modified */
+        unlink(APP_DB);
+    }
+
+    printf("empty tbl_appinfo does not mark DB ready (SYS-1 / H3)\n");
+    {
+        sqlite3 *empty;
+        CHECK(sqlite3_open(APP_DB, &empty) == SQLITE_OK);
+        exec(empty, "CREATE TABLE tbl_appinfo(titleId TEXT, key INT, val);");
+        sqlite3_close(empty);
+        uint8_t b0[32], b1[32];
+        file_hash(APP_DB, b0);
+        next_second();
+        CHECK(!db_is_registered("CUSA00001"));
+        CHECK(!db_ready()); /* empty-but-successful read must not proceed to register */
+        CHECK(!db_confirms_registered("CUSA00001"));
+        CHECK(!db_confirms_unregistered("CUSA00001"));
+        file_hash(APP_DB, b1);
+        CHECK(!memcmp(b0, b1, 32));
+        unlink(APP_DB);
+    }
+
+    printf("first read while app.db-journal exists is held back (SYS-1)\n");
+    {
+        sqlite3 *jw;
+        CHECK(sqlite3_open(APP_DB, &jw) == SQLITE_OK);
+        exec(jw, "CREATE TABLE tbl_appinfo(titleId TEXT, key INT, val);"
+                 "INSERT INTO tbl_appinfo VALUES('CUSA00001','TITLE_ID','CUSA00001');");
+        sqlite3_close(jw);
+        FILE *jf = fopen(APP_DB "-journal", "wb");
+        CHECK(jf != NULL);
+        if (jf) {
+            fwrite("journal", 1, 7, jf);
+            fclose(jf);
+        }
+        next_second();
+        CHECK(!db_ready());
+        CHECK(!db_confirms_registered("CUSA00001"));
+        CHECK(!db_confirms_unregistered("CUSA00001"));
+        unlink(APP_DB "-journal");
+        unlink(APP_DB);
+    }
+
     printf("titles\n");
     sqlite3 *w;
     CHECK(sqlite3_open(APP_DB, &w) == SQLITE_OK);
@@ -142,16 +199,18 @@ int main(void) {
     next_second();
     CHECK(!db_is_registered("CUSA00005"));
 
-    printf("a write in progress does not block or empty the list\n");
+    printf("a write in progress does not block or empty the list (SYS-1)\n");
     exec(w, "BEGIN EXCLUSIVE; DELETE FROM tbl_appinfo;");
     next_second();
     double t0 = now();
     int seen = db_is_registered("CUSA00001");
     CHECK(now() - t0 < 1.0); /* nolock: no busy wait */
-    (void)seen;
+    CHECK(seen == 1); /* SYS-1: shrunk/empty read during hot journal keeps prior snapshot */
+    CHECK(!db_confirms_unregistered("CUSA00001"));
     exec(w, "ROLLBACK;");
     next_second();
     CHECK(db_is_registered("CUSA00001"));
+    CHECK(db_confirms_registered("CUSA00001"));
     sqlite3_close(w);
 
     printf("a damaged database\n");

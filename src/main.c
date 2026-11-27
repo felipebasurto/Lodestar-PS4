@@ -49,14 +49,19 @@
 #include "catalog.h"
 #include "catsnap.h"
 #include "check.h"
+#include "coexist.h"
 #include "upload.h"
 #include "crypto.h"
 #include "db.h"
+#include "dbguard.h"
 #include "delete.h"
 #include "dlcvec.h"
+#include "durable.h"
+#include "inventory.h"
 #include "links.h"
 #include "fw.h"
 #include "https.h"
+#include "bootplan.h"
 #include "install.h"
 #include "klogdup.h"
 #include "lang.h"
@@ -187,17 +192,18 @@ static void cfg_snapshot(config_t *out) {
     *out = g_cfg;
     pthread_mutex_unlock(&g_cfg_mu);
 }
-static int g_setup; /* a first start: no game is added until the settings are saved (first_start) */
-/* A first start with nobody at the panel for this long goes on with the default settings:
- * most never open the panel, and they would never get a game. */
-#define SETUP_WAIT 120
-static time_t g_setup_start;
-static time_t g_setup_seen; /* the panel's last look at the list during a first start */
+static int g_setup; /* a first start: no game is added until the settings are saved explicitly (REG-8) */
+static dbguard_t g_dbguard;
+static reg_breaker_t g_breaker;
+static int g_cfg_migrated;
+static pthread_mutex_t g_coexist_mu = PTHREAD_MUTEX_INITIALIZER;
+static coexist_state_t g_coexist;
+static int g_coexist_valid, g_coexist_warned;
+static char g_manual_add_tid[10];
+#define INV_FILE STATE_DIR "/inventory.tsv"
 
 static int setup_active(void) { return __atomic_load_n(&g_setup, __ATOMIC_ACQUIRE); }
 static void setup_set(int on) { __atomic_store_n(&g_setup, on, __ATOMIC_RELEASE); }
-static time_t setup_seen_at(void) { return __atomic_load_n(&g_setup_seen, __ATOMIC_ACQUIRE); }
-static void setup_seen_touch(void) { __atomic_store_n(&g_setup_seen, time(NULL), __ATOMIC_RELEASE); }
 
 int sceSystemServiceParamGetInt(int param_id, int *value);
 int sceSystemServicePowerTick(void);
@@ -297,7 +303,10 @@ static const char *notify_kind_name(notify_kind_t kind) {
     }
 }
 
-int sceUserServiceInitialize(void *);
+typedef struct {
+    int32_t priority;
+} user_service_init_t;
+int sceUserServiceInitialize(const user_service_init_t *);
 int sceUserServiceGetForegroundUser(int32_t *);
 int sceAppInstUtilInitialize(void);
 int sceKernelSendNotificationRequest(int, notify_request_t *, size_t, int);
@@ -370,6 +379,90 @@ static void notify_detail(const char *fmt, ...) {
     va_end(ap);
 }
 
+/* REG-6: a launch or a user-scoped install names a verified signed-in user, never 0 or -1. */
+static int foreground_user_id(uint32_t *out, const char *who) {
+    int32_t user = -1;
+    int rc = sceUserServiceGetForegroundUser(&user);
+    if (!boot_launch_user(rc, user, out)) {
+        printf("[main] %s skipped: no valid foreground user (rc=0x%08x, user=%d)\n", who, (unsigned)rc, (int)user);
+        return -1;
+    }
+    return 0;
+}
+
+/* REG-7: read-only check for system DB corruption markers or latched klog/error state. */
+static int dbguard_halt_active(void) {
+    int corrupt = dbguard_check_markers(&g_dbguard);
+    if (corrupt && dbguard_take_warn(&g_dbguard)) {
+        char reason[256];
+        dbguard_snapshot(&g_dbguard, reason, sizeof(reason));
+        printf("[dbguard] HALT: system database flagged as damaged (%s) - "
+               "base del sistema marcada como danada: no sigas registrando; reinicia/recupera antes de continuar\n",
+               reason);
+        notify_kind(NOTIFY_WARN, "%s",
+                    TR("System database flagged as damaged: do not keep registering; restart/recover before continuing",
+                       "Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar"));
+    }
+    return corrupt;
+}
+
+/* P4N-32: read-only PS4Mount coexistence snapshot shared by scans, notices, and panel API. */
+static void coexist_publish(void) {
+    coexist_paths_t paths = coexist_console_paths();
+    coexist_state_t s;
+    coexist_probe(&paths, &s);
+    pthread_mutex_lock(&g_coexist_mu);
+    g_coexist = s;
+    g_coexist_valid = 1;
+    pthread_mutex_unlock(&g_coexist_mu);
+}
+
+static void coexist_snapshot(coexist_state_t *out) {
+    pthread_mutex_lock(&g_coexist_mu);
+    int valid = g_coexist_valid;
+    if (valid)
+        *out = g_coexist;
+    pthread_mutex_unlock(&g_coexist_mu);
+    if (!valid) {
+        coexist_publish();
+        pthread_mutex_lock(&g_coexist_mu);
+        *out = g_coexist;
+        pthread_mutex_unlock(&g_coexist_mu);
+    }
+}
+
+static int auto_register_blocked(void) {
+    coexist_state_t s;
+    coexist_snapshot(&s);
+    return coexist_block_auto_register(&s);
+}
+
+static void coexist_warn_once(void) {
+    pthread_mutex_lock(&g_coexist_mu);
+    int fire = !g_coexist_warned;
+    g_coexist_warned = 1;
+    pthread_mutex_unlock(&g_coexist_mu);
+    if (fire) {
+        notify_kind(
+            NOTIFY_WARN, "%s",
+            TR("PS4Mount is installed or in AutoRun: automatic game registration is paused so the shared library is "
+               "not registered twice. Remove PS4Mount or disable it in AutoRun.",
+               "PS4Mount está instalado o en AutoRun: el registro automático de juegos está en pausa para no registrar "
+               "dos veces la biblioteca compartida. Quita PS4Mount o desactívalo en AutoRun."));
+    }
+}
+
+static void coexist_json(buf_t *out) {
+    coexist_state_t s;
+    coexist_snapshot(&s);
+    char js[256];
+    size_t n = coexist_format_json(&s, js, sizeof(js));
+    if (n) {
+        buf_printf(out, "\"coexist\":");
+        buf_put(out, js, n);
+    }
+}
+
 /* What the daemon is doing right now, for the panel: the phase of the scan or restore
  * under way ("" when idle), and the add-ons the system is still installing. Written on
  * the main loop only; the panel reads it under the same mutex. */
@@ -427,21 +520,7 @@ static void mkdirs(const char *path, mode_t mode) {
 }
 
 static int write_file(const char *path, const void *data, size_t len, mode_t mode) {
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
-    if (fd < 0)
-        return -1;
-    const uint8_t *p = data;
-    while (len) {
-        ssize_t n = write(fd, p, len);
-        if (n <= 0) {
-            close(fd);
-            return -1;
-        }
-        p += n;
-        len -= (size_t)n;
-    }
-    close(fd);
-    return 0;
+    return durable_replace(path, data, len, mode);
 }
 
 static int mounted_from(const char *mountpoint, char *from, size_t n) {
@@ -2219,9 +2298,14 @@ static int dlc_install(dlc_src_t *a) {
         printf("[dlc] %s: install refused, its add-on folder could not be detached safely\n", a->pkg.content_id);
         return 1;
     }
+    if (dbguard_halt_active()) {
+        printf("[dlc] %s: install refused, system database flagged as damaged\n", a->pkg.content_id);
+        return 1;
+    }
     const char *dlc_name = a->meta.title_valid ? a->meta.title : a->pkg.content_id;
-    int32_t user = 0;
-    sceUserServiceGetForegroundUser(&user);
+    uint32_t user;
+    if (foreground_user_id(&user, "dlc-install"))
+        return 1;
     char kind[24];
     snprintf(kind, sizeof(kind), "ac-%.16s", a->pkg.content_id + 20);
     int task = install_pkg(pkg_url(a->pkg.title_id, kind, a->path, url, sizeof(url)),
@@ -2520,28 +2604,36 @@ static void refresh_sandboxes(void) {
     if (g_sandboxes && time(NULL) == g_sandboxes_at)
         return;
     g_sandboxes_at = time(NULL);
-    g_nsandboxes = 0;
     int n = getfsstat(NULL, 0, MNT_NOWAIT);
     if (n <= 0)
         return;
-    struct statfs *list = mem_alloc(sizeof(*list) * (size_t)(n + 16));
-    char (*ids)[10] = realloc(g_sandboxes, sizeof(*ids) * (size_t)(n + 16));
-    if (ids)
-        g_sandboxes = ids;
+    int cap = n + 16;
+    struct statfs *list = mem_alloc(sizeof(*list) * (size_t)cap);
+    char (*ids)[10] = malloc(sizeof(*ids) * (size_t)cap);
     if (!list || !ids) {
+        free(ids);
         mem_free(list);
         return;
     }
     scan_note_mount_read();
-    n = getfsstat(list, (long)(sizeof(*list) * (size_t)(n + 16)), MNT_NOWAIT);
+    n = getfsstat(list, (long)(sizeof(*list) * (size_t)cap), MNT_NOWAIT);
+    if (n < 0) {
+        free(ids);
+        mem_free(list);
+        return;
+    }
+    int found = 0;
     static const char prefix[] = "/mnt/sandbox/pfsmnt/";
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n && found < cap; i++) {
         const char *on = list[i].f_mntonname;
         if (strlen(on) != sizeof(prefix) - 1 + 9 + 5 || strncmp(on, prefix, sizeof(prefix) - 1) ||
             strcmp(on + sizeof(prefix) - 1 + 9, "-app0"))
             continue;
-        snprintf(g_sandboxes[g_nsandboxes++], 10, "%.9s", on + sizeof(prefix) - 1);
+        snprintf(ids[found++], 10, "%.9s", on + sizeof(prefix) - 1);
     }
+    free(g_sandboxes);
+    g_sandboxes = ids;
+    g_nsandboxes = found;
     mem_free(list);
 }
 
@@ -3087,19 +3179,33 @@ static void pump_now(void);
  * update's param.sfo byte for byte; AppInstallAll writes the game's one there. */
 static void enforce_patch_sfo(const char *tid, int has_patch, const char *patch_path, uint32_t sfo_len,
                               const unsigned char *sfo_sha) {
-    if (!has_patch)
+    if (!has_patch || !patch_path || !patch_path[0] || !sfo_len)
         return;
     char path[96];
     snprintf(path, sizeof(path), "/system_data/priv/appmeta/%s/param.sfo", tid);
-    int fd = open(path, O_RDONLY), same = 0;
-    if (fd >= 0) {
-        uint8_t cur[8192], sha[32];
-        ssize_t n = read(fd, cur, sizeof(cur));
-        if (n > 0 && (uint32_t)n == sfo_len && sfo_len <= sizeof(cur)) {
-            sha256(cur, (size_t)n, sha);
-            same = !memcmp(sha, sfo_sha, sizeof(sha));
+    int same = 0;
+    if (sfo_len <= 8192) {
+        int fd = open(path, O_RDONLY);
+        if (fd >= 0) {
+            uint8_t cur[8192], sha[32];
+            ssize_t n = read(fd, cur, sizeof(cur));
+            if (n > 0 && (uint32_t)n == sfo_len) {
+                sha256(cur, (size_t)n, sha);
+                same = !memcmp(sha, sfo_sha, sizeof(sha));
+            }
+            close(fd);
         }
-        close(fd);
+    } else {
+        size_t n = 0;
+        uint8_t *cur = read_all(path, &n);
+        if (cur) {
+            if (n == sfo_len) {
+                uint8_t sha[32];
+                sha256(cur, n, sha);
+                same = !memcmp(sha, sfo_sha, sizeof(sha));
+            }
+            mem_free(cur);
+        }
     }
     if (same)
         return;
@@ -3271,6 +3377,7 @@ static void wait_db_quiet(int quiet, int limit) {
  * touched) and their own mounts stay in place underneath. */
 #define STAGE_DIR HOLD_DIR "/stage"
 
+static int open_apps(uint32_t *ids, char (*tids)[10], int max, int panel);
 static int open_games(uint32_t *ids, char (*tids)[10], int max);
 
 static void stage_clear(void) {
@@ -3292,29 +3399,59 @@ static int user_app_masked(void) {
     return !statfs("/user/app", &sf) && !strcmp(sf.f_mntonname, "/user/app") && !strcmp(sf.f_mntfromname, STAGE_DIR);
 }
 
-static void unmask_user_app(char (*tids)[10], int n) {
+static int stage_ops_is_masked(void *ctx) {
+    (void)ctx;
+    return user_app_masked();
+}
+
+static int stage_ops_child_mounted(void *ctx, const char *tid) {
+    (void)ctx;
     char target[64];
-    for (int i = 0; i < n; i++) {
-        snprintf(target, sizeof(target), "/user/app/%s", tids[i]);
-        if (user_app_masked() && mounted_from(target, NULL, 0) && unmount_tracked(target, 0) && unmount_tracked(target, MNT_FORCE))
-            printf("[reg] unmount %s: %s\n", target, strerror(errno));
-    }
-    /* the system keeps the folder open for a moment after AppInstallAll returned */
-    for (int i = 0; i < 12 && user_app_masked(); i++) {
-        if (!unmount_tracked("/user/app", 0))
-            break;
-        pump_events(250);
-    }
-    if (user_app_masked() && unmount_tracked("/user/app", MNT_FORCE))
-        printf("[reg] unmount /user/app: %s\n", strerror(errno));
-    if (user_app_masked())
-        printf("[reg] /user/app still shows only the new games\n");
-    g_masked = 0;
+    snprintf(target, sizeof(target), "/user/app/%s", tid);
+    return user_app_masked() && mounted_from(target, NULL, 0);
+}
+
+static int stage_ops_unmount(void *ctx, const char *path, int force) {
+    (void)ctx;
+    int rc = unmount_tracked(path, force ? MNT_FORCE : 0);
+    if (rc && force)
+        printf("[reg] unmount %s (force): %s\n", path, strerror(errno));
+    return rc;
+}
+
+static void stage_ops_sleep(void *ctx, int ms) {
+    (void)ctx;
+    pump_events(ms);
+}
+
+static void stage_ops_clear(void *ctx) {
+    (void)ctx;
     stage_clear();
 }
 
+/* REG-9: returns 0 only when /user/app is proven unmasked; otherwise preserves
+ * g_masked = 1 and STAGE_DIR so recovery does not lose mount bookkeeping. */
+static int unmask_user_app(char (*tids)[10], int n) {
+    const stage_unmask_ops_t ops = {
+        NULL,
+        stage_ops_is_masked,
+        stage_ops_child_mounted,
+        stage_ops_unmount,
+        stage_ops_sleep,
+        stage_ops_clear,
+    };
+    int rc = dbguard_unmask_user_app(&ops, tids, n, &g_masked);
+    if (rc != 0)
+        printf("[reg] /user/app still shows only the staged games after unmount retries; preserving stage and aborting\n");
+    return rc;
+}
+
 /* A daemon stopped while /user/app showed only the new games: show all of them again. */
-static void unmask_leftover(void) {
+static int unmask_leftover(void) {
+    if (__atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE)) {
+        printf("[reg] %s still running; leaving /user/app masked\n", reg_mode_name());
+        return -1;
+    }
     static char tids[MAX_TITLES][10];
     int n = 0;
     DIR *d = opendir(STAGE_DIR);
@@ -3326,23 +3463,25 @@ static void unmask_leftover(void) {
         closedir(d);
     printf("[reg] /user/app showed only %d game(s) from an earlier run, restoring it\n", n);
     g_masked = 1;
-    unmask_user_app(tids, n);
+    return unmask_user_app(tids, n);
 }
 
 /* Returns 1 when /user/app now shows only the games of tids that are not registered. */
 static int mask_user_app(char (*tids)[10], int n) {
     uint32_t ids[4];
     char open[4][10];
-    if (g_reg_mode != REG_ALL || open_games(ids, open, 4))
-        return 0; /* an open game keeps its folder in use: plain AppInstallAll */
-    if (user_app_masked())
-        unmask_leftover();
+    if (dbguard_halt_active())
+        return 0;
+    if (!boot_stage_mask_allowed(g_reg_mode, open_apps(ids, open, 4, -1), n))
+        return 0; /* an open app (the panel app too) or an unreadable process table keeps /user/app in use */
+    if (user_app_masked() && unmask_leftover())
+        return 0;
     stage_clear();
     mkdirs(STAGE_DIR, 0777);
     char new_tids[MAX_TITLES][10];
     int nn = 0;
     for (int i = 0; i < n && nn < MAX_TITLES; i++)
-        if (!db_is_registered(tids[i])) {
+        if (db_confirms_unregistered(tids[i])) {
             char p[PATH_MAX];
             snprintf(p, sizeof(p), STAGE_DIR "/%s", tids[i]);
             if (mkdir(p, 0777) && errno != EEXIST)
@@ -3365,42 +3504,99 @@ static int mask_user_app(char (*tids)[10], int n) {
     return 1;
 }
 
-static void install_all(char (*tids)[10], int n) {
+/* Returns 0 when the batch ran without DB errors or unmask failures, -1 on abort (REG-7/REG-9). */
+static int install_all(char (*tids)[10], int n) {
+    if (dbguard_halt_active())
+        return -1;
     int need = 0;
     for (int i = 0; i < n; i++)
-        need += !db_is_registered(tids[i]);
+        need += db_confirms_unregistered(tids[i]);
     if (!need)
-        return;
+        return 0;
     int masked = mask_user_app(tids, n);
-    if (install_all_start(tids, n) && masked) {
-        unmask_user_app(tids, n);
-        masked = 0;
+    if (user_app_masked() && !masked) {
+        /* A previous run left /user/app masked and it could not be restored: abort safely. */
+        printf("[reg] /user/app is stuck masked; aborting registration\n");
+        return -1;
     }
-    int done = n - need, idle = 0;
-    while (done < n && idle < 30) {
+    if (install_all_start(tids, n)) {
+        if (dbguard_can_unmask(masked, __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE)))
+            unmask_user_app(tids, n);
+        return -1;
+    }
+    int done = n - need, idle = 0, aborted = 0, unmask_fail = 0;
+    for (;;) {
         pump_events(1000);
+        int busy = __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE);
+        int rc = __atomic_load_n(&g_install_rc, __ATOMIC_ACQUIRE);
+        if (!busy && dbguard_observe_rc(&g_dbguard, rc, reg_mode_name()))
+            dbguard_halt_active();
+        int corrupt = dbguard_halt_active();
         int now = 0;
         for (int i = 0; i < n; i++)
-            now += db_is_registered(tids[i]);
+            now += db_confirms_registered(tids[i]);
         idle = now > done ? 0 : idle + 1;
         done = now;
-        if (masked && !__atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE)) {
-            unmask_user_app(tids, n);
+        inst_poll_t act = dbguard_install_poll(corrupt, busy, rc, done, n, idle);
+        if (act == INST_POLL_ABORT_DB_ERROR) {
+            aborted = 1;
+            /* REG-9: wait briefly for a live installer call to finish before unmasking;
+             * never force-unmount /user/app while AppInstallAll is still running. */
+            for (int w = 0; masked && __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE) && w < 5; w++)
+                pump_events(1000);
+            busy = __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE);
+            if (dbguard_can_unmask(masked, busy)) {
+                if (unmask_user_app(tids, n))
+                    unmask_fail = 1;
+                masked = 0;
+            } else if (masked) {
+                unmask_fail = 1;
+                g_masked = 1;
+            }
+            printf("[reg] database error/corruption during %s (rc=0x%08x, busy=%d); /user/app %s, aborting batch\n",
+                   reg_mode_name(), (unsigned)rc, busy, unmask_fail ? "STILL MASKED" : "restored");
+            break;
+        }
+        if (dbguard_can_unmask(masked, busy)) {
+            if (unmask_user_app(tids, n))
+                unmask_fail = 1;
             masked = 0;
         }
+        if (act == INST_POLL_DONE)
+            break;
     }
     /* the rows can be there before AppInstallAll returns: the other games stay hidden
-     * until it does (at most two minutes) */
-    for (int i = 0; masked && __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE) && i < 120; i++)
+     * until it does (at most two minutes). Never force-unmount while still busy (REG-9). */
+    for (int i = 0; !aborted && masked && __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE) && i < 120; i++) {
         pump_events(1000);
-    if (masked)
-        unmask_user_app(tids, n);
-    if (__atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE)) {
+        if (dbguard_halt_active()) {
+            aborted = 1;
+            break;
+        }
+    }
+    int busy = __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE);
+    if (dbguard_can_unmask(masked, busy)) {
+        if (unmask_user_app(tids, n))
+            unmask_fail = 1;
+        masked = 0;
+    } else if (masked) {
+        unmask_fail = 1;
+        g_masked = 1;
+        printf("[reg] %s still running after wait; leaving /user/app masked rather than forcing unmount\n",
+               reg_mode_name());
+    }
+    int rc = __atomic_load_n(&g_install_rc, __ATOMIC_ACQUIRE);
+    if (!busy && dbguard_observe_rc(&g_dbguard, rc, reg_mode_name()))
+        dbguard_halt_active();
+    if (busy) {
         printf("[reg] %s still running: %d of %d title(s) registered so far\n", reg_mode_name(), done, n);
     } else {
         printf("[reg] %s=0x%08x: %d of %d title(s) registered\n", reg_mode_name(),
-               __atomic_load_n(&g_install_rc, __ATOMIC_ACQUIRE), done, n);
+               (unsigned)rc, done, n);
     }
+    if (aborted || unmask_fail || dbguard_halt_active())
+        return -1;
+    return 0;
 }
 
 /* The system databases are only ever written by the system: ShellCore keeps them
@@ -3409,7 +3605,7 @@ static void install_all(char (*tids)[10], int n) {
  * is tried again later. */
 static int register_finish(title_src_t *t) {
     const char *tid = t->app.title_id;
-    if (!db_is_registered(tid)) {
+    if (!db_confirms_registered(tid)) {
         printf("[reg] %s: not registered by the system\n", tid);
         return -1;
     }
@@ -4210,6 +4406,56 @@ static void scan_finish(unsigned seq) {
 static int g_stop; /* one-way atomic stop intent: the long loops end before the daemon does */
 static int stop_requested(void) { return __atomic_load_n(&g_stop, __ATOMIC_ACQUIRE); }
 
+/* REG-10: persists Lodestar's own operational inventory under /data/lodestar before
+ * and after registration operations, preserving titles on other drives. Never reads or
+ * writes system DBs. */
+static void inventory_record_root(const char *root, const title_t *titles, const uint64_t *fps, int count,
+                                  const char *override_pending_state) {
+    if (!count)
+        return;
+    inv_list_t *inv = inv_alloc();
+    if (!inv) {
+        printf("[inv] could not allocate inventory table\n");
+        return;
+    }
+    (void)inv_load(inv, INV_FILE);
+    time_t now = time(NULL);
+    for (int i = 0; i < count; i++) {
+        title_info_copy_t icopy;
+        if (title_info_fp_copy(root, titles[i].tid, fps[i], &g_cfg, NULL, &icopy, NULL))
+            continue;
+        const title_info_t *info = &icopy.info;
+        inv_entry_t e;
+        memset(&e, 0, sizeof(e));
+        snprintf(e.title_id, sizeof(e.title_id), "%s", info->title_id);
+        snprintf(e.source, sizeof(e.source), "%s", info->app_path[0] ? info->app_path : info->dir);
+        snprintf(e.mount_mode, sizeof(e.mount_mode), "%s",
+                 installed_internally(info->title_id) ? "internal"
+                 : in_place()                         ? "hold-inplace"
+                                                      : "hold-organized");
+        snprintf(e.game_ver, sizeof(e.game_ver), "%s", info->game_ver);
+        snprintf(e.effective_ver, sizeof(e.effective_ver), "%s", info->ver);
+        e.has_patch = info->has_patch;
+        e.dlc_count = info->ndlc;
+        snprintf(e.dlc_mode, sizeof(e.dlc_mode), "%s", dlc_mode_name(g_cfg.dlc_mode));
+        const char *st = "pending";
+        if (installed_internally(info->title_id))
+            st = "internal";
+        else if (removed(info->title_id))
+            st = "removed";
+        else if (db_is_registered(info->title_id))
+            st = "registered";
+        else if (override_pending_state && *override_pending_state)
+            st = override_pending_state;
+        snprintf(e.state, sizeof(e.state), "%s", st);
+        e.updated_at = (int64_t)now;
+        inv_upsert(inv, &e);
+    }
+    if (inv_save(inv, INV_FILE))
+        printf("[inv] could not save %s\n", INV_FILE);
+    inv_free(inv);
+}
+
 static void scan_root(const char *root, int fresh, int reconnected) {
     const char *label = root_label(root);
     int have = in_place() ? catalog_has_games(root) : has_candidates(root);
@@ -4221,7 +4467,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     activity_set("scanning", label, NULL, NULL, 0, 0, 0, 0);
     if (fresh && g_scan_manual_active && !in_place())
         notify_kind(NOTIFY_DRIVE, TR("Scanning %s for PS4 games...", "Buscando juegos de PS4 en %s..."), label);
-    int moved = in_place() ? 0 : adopt_root_pkgs(root);
+    int moved = (in_place() || dbguard_halt_active()) ? 0 : adopt_root_pkgs(root);
     if (moved && !fresh)
         notify_kind(NOTIFY_DRIVE, TR("%s: %d new package(s) found", "%s: %d pkg(s) nuevo(s) encontrado(s)"), label, moved);
     static title_t titles[MAX_TITLES];
@@ -4267,6 +4513,36 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             t->state = -1; /* failed recently: tried again later */
         pending += t->state == 1;
     }
+    /* REG-10: persist operational inventory before any registration or metadata mutation. */
+    if (dbguard_halt_active()) {
+        inventory_record_root(root, titles, fps, count, "blocked_corrupt");
+        bgftscan_free(&g_bgftscan);
+        activity_clear();
+        return;
+    }
+    int coexist_blocked = auto_register_blocked();
+    int coexist_held = 0;
+    if (coexist_blocked) {
+        int allow_count = 0;
+        for (int i = 0; i < count; i++) {
+            if (titles[i].state == 1 && !coexist_title_register_allowed(1, titles[i].tid, g_manual_add_tid)) {
+                titles[i].state = -1;
+                coexist_held++;
+            } else if (titles[i].state == 1) {
+                allow_count++;
+            }
+        }
+        pending = allow_count;
+        if (coexist_held) {
+            printf("[coexist] held automatic registration for %d game(s) on %s (PS4Mount is installed or in AutoRun)\n",
+                   coexist_held, label);
+            coexist_warn_once();
+        }
+    }
+    inventory_record_root(root, titles, fps, count,
+                          coexist_blocked && coexist_held          ? "blocked_coexist"
+                          : g_breaker.mode == BREAKER_PILOT_REQUIRED ? "pending_pilot"
+                                                                     : "pending");
     /* the totals for a scan asked in the panel; otherwise only what changed */
     if (fresh && g_scan_manual_active && !count)
         notify_kind(NOTIFY_DRIVE, TR("%s: no PS4 games found", "%s: no se encontraron juegos de PS4"), label);
@@ -4280,7 +4556,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
                     label, pending);
     /* games already in the library: keep them mounted */
     for (int i = 0; i < count; i++) {
-        if (stop_requested())
+        if (stop_requested() || dbguard_halt_active())
             break;
         if (!(i % 8))
             pump_now();
@@ -4293,8 +4569,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         enforce_patch_sfo(info->title_id, info->has_patch, info->patch_path, info->sfo_len, info->sfo_sha);
         manage_info(info);
         /* PS4: the system registered another version (the update came later) */
-        const char *rv = db_app_ver(t->tid);
-        if (rv && *rv && strcmp(rv, info->ver)) {
+        const char *rv = db_confirms_registered(t->tid) ? db_app_ver(t->tid) : NULL;
+        if (!coexist_blocked && rv && *rv && strcmp(rv, info->ver)) {
             char why[64];
             snprintf(why, sizeof(why), TR("registered as %s, the update is %s", "registrado como %s, la actualización es %s"), rv,
                      info->ver);
@@ -4320,7 +4596,29 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             m->mount_warned = 0;
         }
     }
-    if (!pending) {
+    if (!pending || dbguard_halt_active()) {
+        if (dbguard_halt_active())
+            inventory_record_root(root, titles, fps, count, "blocked_corrupt");
+        bgftscan_free(&g_bgftscan);
+        activity_clear();
+        return;
+    }
+
+    /* REG-8: first-start / post-migration circuit breaker caps unattended registration
+     * to a single validated pilot title before holding the rest for explicit continuation. */
+    int normal_size = 0, normal_groups = 0;
+    boot_batch_plan(pending, g_cfg.batch, g_cfg.batch_size, &normal_size, &normal_groups);
+    int pilot_mode = g_breaker.mode == BREAKER_PILOT_REQUIRED;
+    int size = breaker_batch_limit(&g_breaker, pending, normal_size, dbguard_halt_active());
+    if (size <= 0) {
+        if (g_breaker.mode == BREAKER_PILOT_HOLD) {
+            printf("[dbguard] pilot %s verified; holding %d remaining title(s) for explicit Scan/Add\n",
+                   g_breaker.pilot_tid, pending);
+            inventory_record_root(root, titles, fps, count, "held_pilot");
+        } else if (g_breaker.mode == BREAKER_TRIPPED) {
+            printf("[dbguard] registration breaker tripped (%s); %d title(s) held\n", g_breaker.reason, pending);
+            inventory_record_root(root, titles, fps, count, "blocked_corrupt");
+        }
         bgftscan_free(&g_bgftscan);
         activity_clear();
         return;
@@ -4328,10 +4626,16 @@ static void scan_root(const char *root, int fresh, int reconnected) {
 
     /* New or changed games, in groups: one AppInstallAll per group and a quiet
      * period between groups, so the system is never flooded with registrations. */
-    int size = g_cfg.batch && g_cfg.batch_size > 0 ? g_cfg.batch_size : pending;
-    int groups = (pending + size - 1) / size, grouped = groups > 1, done = 0, ok = 0, group = 0;
+    int target_total = pilot_mode ? 1 : pending;
+    int groups = pilot_mode ? 1 : normal_groups;
+    int grouped = !pilot_mode && groups > 1;
+    int done = 0, ok = 0, group = 0, aborted = 0;
     int restart = 0; /* added games that wait for a restart (also when an earlier load marked it) */
-    if (grouped)
+    if (pilot_mode)
+        notify(TR("%s: pilot check - registering 1 of %d game(s) first before adding the rest",
+                  "%s: prueba piloto - registrando primero 1 de %d juego(s) antes de añadir el resto"),
+               label, pending);
+    else if (grouped)
         notify_detail(TR("%s: adding %d PS4 games in %d groups of up to %d", "%s: añadiendo %d juego(s) de PS4 en %d grupo(s) de hasta %d"),
                       label, pending, groups, size);
     int *members = malloc(sizeof(int) * (size_t)size);
@@ -4347,8 +4651,10 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     }
     memset(prepared, 0, sizeof(int) * (size_t)size);
     for (int i = 0; i < count;) {
-        if (stop_requested())
+        if (stop_requested() || dbguard_halt_active()) {
+            aborted = 1;
             break;
+        }
         int n = 0;
         for (; i < count && n < size; i++)
             if (titles[i].state == 1 && !delete_pending_is(titles[i].tid))
@@ -4357,6 +4663,10 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             break;
         if (group++)
             wait_db_quiet(BATCH_QUIET, 120);
+        if (dbguard_halt_active()) {
+            aborted = 1;
+            break;
+        }
         if (grouped) {
             buf_t names = {0};
             for (int k = 0; k < n; k++)
@@ -4368,8 +4678,10 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         }
         int np = 0;
         for (int k = 0; k < n; k++) {
-            if (stop_requested())
+            if (stop_requested() || dbguard_halt_active()) {
+                aborted = 1;
                 break;
+            }
             if (!(k % 4))
                 pump_now(); /* the panel answers while the files of a group are prepared */
             title_t *t = &titles[members[k]];
@@ -4377,12 +4689,12 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             prepared[k] = 0;
             if (delete_pending_is(t->tid))
                 continue;
-            activity_set("registering", label, t->name, t->tid, done + k + 1, pending, group, groups);
+            activity_set("registering", label, t->name, t->tid, done + k + 1, target_total, group, groups);
             if (!grouped) {
                 char extra[64] = "";
                 if (t->ndlc)
                     snprintf(extra, sizeof(extra), TR(" + %d add-on(s)", " + %d DLC"), t->ndlc);
-                notify_detail(TR("Adding %d/%d: %s%s%s (%s)", "Añadiendo %d/%d: %s%s%s (%s)"), done + k + 1, pending, t->name,
+                notify_detail(TR("Adding %d/%d: %s%s%s (%s)", "Añadiendo %d/%d: %s%s%s (%s)"), done + k + 1, target_total, t->name,
                               t->has_patch ? TR(" with update", " con actualización") : "", extra, t->tid);
             }
             if (src_open(&src, root, t->tid, &g_cfg) || register_prepare(&src)) {
@@ -4397,15 +4709,41 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             if (src.app.fd > 0)
                 src_close(&src);
         }
+        if (aborted || dbguard_halt_active()) {
+            aborted = 1;
+            break;
+        }
+        if (pilot_mode && np > 0)
+            breaker_note_pilot(&g_breaker, ids[0]);
         printf("[reg] group %d/%d: %d of %d ready, registering\n", group, groups, np, n);
-        install_all(ids, np);
+        int inst_rc = install_all(ids, np);
+        if (inst_rc != 0) {
+            aborted = 1;
+            if (pilot_mode)
+                breaker_after_pilot(&g_breaker, dbguard_halt_active(), 0, !user_app_masked(), pending - 1);
+            printf("[reg] batch aborted cleanly after install_all failure (db_corrupt=%d, masked=%d)\n",
+                   dbguard_halt_active(), user_app_masked());
+            break;
+        }
         /* own rows only after ShellCore stopped writing to its databases */
         wait_db_quiet(3, 30);
+        if (dbguard_halt_active()) {
+            aborted = 1;
+            if (pilot_mode)
+                breaker_after_pilot(&g_breaker, 1, 0, !user_app_masked(), pending - 1);
+            break;
+        }
+        int pilot_confirmed = 0;
         for (int k = 0; k < n; k++) {
             title_t *t = &titles[members[k]];
             title_src_t src;
             if (!prepared[k] || delete_pending_is(t->tid) || src_open(&src, root, t->tid, &g_cfg))
                 continue;
+            if (pilot_mode && !db_confirms_registered(t->tid)) {
+                printf("[dbguard] pilot %s not confirmed in app.db; tripping breaker\n", t->tid);
+                src_close(&src);
+                continue;
+            }
             if (register_finish(&src)) {
                 int first = retry_failed(t->tid);
                 if (!first && src.has_patch) {
@@ -4421,10 +4759,12 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             } else {
                 retry_clear(t->tid);
                 ok++;
+                if (pilot_mode)
+                    pilot_confirmed = 1;
                 int reboot = needs_reboot(t->tid);
                 restart += reboot;
                 if (!grouped && reboot) {
-                    if (pending == 1)
+                    if (target_total == 1)
                         notify_kind(NOTIFY_WARN, TR("%s added. Restart the console once to play it.%s",
                                                     "%s añadido. Reinicia la consola una vez para jugarlo.%s"),
                                     t->name, after_restart());
@@ -4433,8 +4773,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
                                                            "%s añadido. Reinicia la consola una vez para jugarlo.%s"),
                                            t->name, after_restart());
                 } else if (!grouped) {
-                    if (pending == 1)
-            notify_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
+                    if (target_total == 1)
+                        notify_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
                     else
                         notify_detail_kind(NOTIFY_READY, TR("%s ready to play", "%s listo para jugar"), t->name);
                 }
@@ -4442,12 +4782,32 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             src_close(&src);
         }
         done += n;
+        if (pilot_mode) {
+            int rem = pending > ok ? pending - ok : 0;
+            int bres = breaker_after_pilot(&g_breaker, dbguard_halt_active(), pilot_confirmed,
+                                           !user_app_masked(), rem);
+            if (bres < 0) {
+                notify_kind(NOTIFY_WARN, "%s",
+                            TR("Pilot registration check failed: holding remaining games to protect the system database",
+                               "Falló la comprobación del juego piloto: se pausan los demás juegos para proteger la base del sistema"));
+            } else if (bres > 0) {
+                notify(TR("Pilot game %s verified. Press Scan in the panel to register the remaining %d game(s).",
+                          "Juego piloto %s verificado. Pulsa Buscar en el panel para registrar los %d juego(s) restantes."),
+                       g_breaker.pilot_tid, rem);
+            }
+            break;
+        }
     }
     free(members);
     free(ids);
     free(prepared);
     bgftscan_free(&g_bgftscan); /* the epoch ends after registration mutations are reconciled */
-    if (pending > 1)
+    inventory_record_root(root, titles, fps, count,
+                          dbguard_halt_active() || aborted          ? "blocked_corrupt"
+                          : g_breaker.mode == BREAKER_PILOT_HOLD    ? "held_pilot"
+                          : g_breaker.mode == BREAKER_TRIPPED       ? "failed"
+                                                                    : "pending");
+    if (!pilot_mode && !aborted && pending > 1)
         notify_kind(NOTIFY_READY, TR("%s: %d of %d game(s) added%s%s", "%s: %d de %d juego(s) añadido(s)%s%s"), label, ok,
                     pending,
                     restart           ? TR(". Restart the console once to play the new ones.",
@@ -4714,6 +5074,13 @@ static void rescan_invalidate(void);
 static int scan_all(int hard) {
     static int seen[NROOTS], first = 1;
     char root[PATH_MAX];
+    coexist_publish();
+    if (dbguard_halt_active()) {
+        if (user_app_masked())
+            unmask_leftover();
+        printf("[dbguard] scan_all halted: system database flagged as damaged\n");
+        return 1;
+    }
     emu_sync();
     release_dlc_mounts();
     if (!db_ready()) {
@@ -4790,6 +5157,7 @@ static int scan_all(int hard) {
             seen[i] = present;
         }
     }
+    g_manual_add_tid[0] = 0;
     first = 0;
     return 1;
 }
@@ -4869,7 +5237,8 @@ static void trace_klog(const char *line) {
     int copy = 0;
     static const char *keys[] = {"CRASH", "Trophy:Register", "_pfs_mount", "mountpfs", "PrepareProcessLaunch",
                                  "preLaunchCheck", "scePlayGoCore", "process_mount", "process_check", "sqlite",
-                                 "SQLITE", "corrupt", "Corrupt", "CORRUPT", "dbr", "DBR", NULL};
+                                 "SQLITE", "corrupt", "Corrupt", "CORRUPT", "DbCorruption", "tbl_appbrowse",
+                                 "0x80f50061", "80f50061", "0x809c110e", "809c110e", "dbr", "DBR", NULL};
     for (int i = 0; keys[i] && !copy; i++)
         copy = strstr(line, keys[i]) != NULL;
     for (int i = 0; !copy && i < MAX_TITLES; i++)
@@ -4903,6 +5272,10 @@ static char g_last_launch[10]; /* the PS4's "APP_VER disagree" line names no tit
 /* Asks the main loop to remove tid from the library and add it again (once per title
  * and daemon run). Returns 1 when queued. */
 static int readd_queue(const char *tid, const char *why) {
+    if (dbguard_halt_active()) {
+        printf("[dbguard] readd %s refused: system database flagged as damaged\n", tid);
+        return 0;
+    }
     for (int i = 0; i < g_nreadd_done; i++)
         if (!strcmp(g_readd_done[i], tid))
             return 0; /* once per title and daemon run: the scan runs again and again */
@@ -5212,6 +5585,8 @@ static void handle_klog_line(const char *line) {
     const char *p;
     char id[40];
     trace_klog(line);
+    if (dbguard_observe_klog(&g_dbguard, line))
+        dbguard_halt_active();
     if ((p = after(line, "OnFocusActiveSceneChanged ["))) {
         /* "[from : type] -> [to : type]": follow the delete screens */
         const char *to = strstr(p, "] -> [");
@@ -5327,7 +5702,13 @@ static void handle_klog_line(const char *line) {
 
 /* --- web panel --- */
 
-void app_rescan(void) { scan_request_why(1, SCAN_TRIG_MANUAL); }
+void app_rescan(void) {
+    if (dbguard_halt_active())
+        return;
+    if (breaker_resume(&g_breaker, 0))
+        printf("[dbguard] manual scan resumed registration after pilot validation\n");
+    scan_request_why(1, SCAN_TRIG_MANUAL);
+}
 
 /* Owner-side invalidation of a hard scan epoch: every pkg is read again, even when its file
  * kept the same size and time (a pkg replaced in place looks unchanged otherwise). */
@@ -5458,7 +5839,14 @@ static void activity_json(buf_t *out) {
 /* The application-owned fields of /api/status. It is observational: unlike a library
  * request it does not mark the first setup as seen, and it never enumerates games. */
 static void app_status_state_json(buf_t *out) {
-    buf_printf(out, "\"setup\":%s,", setup_active() ? "true" : "false");
+    char corrupt_reason[256];
+    int corrupt = dbguard_snapshot(&g_dbguard, corrupt_reason, sizeof(corrupt_reason));
+    buf_printf(out, "\"setup\":%s,\"db_corrupt\":%s,\"db_corrupt_reason\":",
+               setup_active() ? "true" : "false", corrupt ? "true" : "false");
+    json_str(out, corrupt_reason);
+    buf_put(out, ",", 1);
+    coexist_json(out);
+    buf_put(out, ",", 1);
     activity_json(out);
     buf_put(out, ",", 1);
     notices_json(out, 5);
@@ -5470,9 +5858,14 @@ void app_games_json(buf_t *out) {
     memset(&am, 0, sizeof(am));
     config_t cfg;
     cfg_snapshot(&cfg);
-    if (setup_active())
-        setup_seen_touch(); /* someone is at the panel: the defaults wait */
-    buf_printf(out, "{\"lang\":\"%s\",\"setup\":%s,\"version\":", lang_tag(lang_current()), setup_active() ? "true" : "false");
+    char corrupt_reason[256];
+    int corrupt = dbguard_snapshot(&g_dbguard, corrupt_reason, sizeof(corrupt_reason));
+    buf_printf(out, "{\"lang\":\"%s\",\"setup\":%s,\"db_corrupt\":%s,\"db_corrupt_reason\":",
+               lang_tag(lang_current()), setup_active() ? "true" : "false", corrupt ? "true" : "false");
+    json_str(out, corrupt_reason);
+    buf_put(out, ",", 1);
+    coexist_json(out);
+    buf_printf(out, ",\"version\":");
     json_str(out, VERSION);
     /* the drives in use, with room left: where the pkgs are and what a send needs */
     buf_printf(out, ",\"drives\":[");
@@ -5657,7 +6050,13 @@ static int app_art(const char *tid, const char *name, uint32_t id, buf_t *out) {
     return -1;
 }
 
-int app_add(const char *tid, char *msg, size_t cap) {
+static int app_add_internal(const char *tid, char *msg, size_t cap, int manual) {
+    if (dbguard_halt_active()) {
+        snprintf(msg, cap, "%s",
+                 TR("System database flagged as damaged: do not keep registering; restart/recover before continuing",
+                    "Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar"));
+        return -1;
+    }
     char rm[64], root[PATH_MAX];
     if (find_root(tid, root, sizeof(root))) {
         snprintf(msg, cap, TR("%s is not on any connected drive", "%s no está en ninguna unidad conectada"), tid);
@@ -5666,10 +6065,15 @@ int app_add(const char *tid, char *msg, size_t cap) {
     snprintf(rm, sizeof(rm), STATE_DIR "/%s.removed", tid);
     unlink(rm);
     clear_removed_dlc_for(tid);
+    breaker_resume(&g_breaker, 0);
+    if (manual)
+        snprintf(g_manual_add_tid, sizeof(g_manual_add_tid), "%.9s", tid);
     scan_request_why(0, SCAN_TRIG_ADD);
     snprintf(msg, cap, TR("Adding %s to the library", "Añadiendo %s a la biblioteca"), tid);
     return 0;
 }
+
+int app_add(const char *tid, char *msg, size_t cap) { return app_add_internal(tid, msg, cap, 1); }
 
 /* sceAppInstUtilAppUnInstall in its own thread, waited for at most UNINSTALL_WAIT seconds:
  * a call that never returns (as InstallAll did after rest mode) must not freeze PS4Mount.
@@ -5743,6 +6147,12 @@ static int removal_dlc_tids(const char *root, const char *tid, const managed_t *
 }
 
 int app_remove(const char *tid, char *msg, size_t cap) {
+    if (dbguard_halt_active()) {
+        snprintf(msg, cap, "%s",
+                 TR("System database flagged as damaged: do not keep registering; restart/recover before continuing",
+                    "Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar"));
+        return -1;
+    }
     managed_t *m = managed_by(tid, NULL);
     char root[PATH_MAX], srcmark[64];
     snprintf(srcmark, sizeof(srcmark), STATE_DIR "/%s.src", tid);
@@ -5754,6 +6164,15 @@ int app_remove(const char *tid, char *msg, size_t cap) {
     if ((m && m->running) || title_running(tid)) {
         printf("[web] remove %s refused: game running\n", tid);
         snprintf(msg, cap, "%s", TR("Close the game before removing it", "Cierra el juego antes de quitarlo"));
+        return -1;
+    }
+    int reg = db_confirms_registered(tid);
+    int unreg = !reg && db_confirms_unregistered(tid);
+    if (!reg && !unreg) {
+        snprintf(msg, cap,
+                 TR("Could not read app.db for %s; nothing was removed",
+                    "No se pudo leer app.db para %s; no se quitó nada"),
+                 tid);
         return -1;
     }
     char dtids[MAX_DLC_TIDS][10];
@@ -5771,7 +6190,7 @@ int app_remove(const char *tid, char *msg, size_t cap) {
     snprintf(path, sizeof(path), STATE_DIR "/%s.removed", tid);
     write_file(path, tid, strlen(tid), 0666);
     unlink(srcpath);
-    int rc = db_is_registered(tid) ? uninstall_title(tid) : 0;
+    int rc = reg ? uninstall_title(tid) : 0;
     if (!rc) {
         clean_holds(tid, dtids, ndtids);
         /* the task goes with it: BGFT keeps the state of an id for the whole boot, and a
@@ -5803,6 +6222,14 @@ int app_remove(const char *tid, char *msg, size_t cap) {
 
 /* Removes a game refused with "system file disagree" from the library and adds it again. */
 static void readd_title(const char *tid) {
+    if (dbguard_halt_active()) {
+        printf("[dbguard] readd_title %s halted: system database flagged as damaged\n", tid);
+        return;
+    }
+    if (auto_register_blocked()) {
+        printf("[coexist] readd_title %s skipped: PS4Mount is installed or in AutoRun\n", tid);
+        return;
+    }
     char msg[256], name[128];
     snprintf(g_readd_active, sizeof(g_readd_active), "%s", tid);
     managed_t *m = managed_by(tid, NULL);
@@ -5814,15 +6241,20 @@ static void readd_title(const char *tid) {
            g_readd_why);
     int rc = app_remove(tid, msg, sizeof(msg));
     printf("[reg] %s: removed to add it again: %s\n", tid, msg);
-    if (g_readd_badpatch) {
-        /* the removal cleared it: the game comes back without the update */
-        g_readd_badpatch = 0;
-        write_badpatch(tid, g_readd_patch);
-        g_readd_patch[0] = 0;
-    }
-    if (!rc)
+    if (!rc) {
+        if (g_readd_badpatch) {
+            /* the removal cleared it: the game comes back without the update */
+            g_readd_badpatch = 0;
+            write_badpatch(tid, g_readd_patch);
+            g_readd_patch[0] = 0;
+        }
         wait_db_quiet(3, 30);
-    app_add(tid, msg, sizeof(msg));
+        app_add_internal(tid, msg, sizeof(msg), 0);
+    } else {
+        g_readd_badpatch = 0;
+        g_readd_patch[0] = 0;
+        printf("[reg] %s: skipping re-add because remove failed\n", tid);
+    }
     g_readd_active[0] = 0;
 }
 
@@ -6028,26 +6460,29 @@ int sceSystemServiceKillApp(uint32_t app_id, int how, int reason, int core_dump)
 #define PANEL_APP_TID "LODS00001"
 
 /* Open apps: processes named eboot.bin (PS4 and PS5 games alike), the games or only the
- * panel app. Fills up to max app ids and title ids, returns how many are open. */
+ * panel app. Fills up to max app ids and title ids, returns how many are open, or -1 if
+ * the process table could not be read (callers must fail closed on < 0). */
 static int open_apps(uint32_t *ids, char (*tids)[10], int max, int panel) {
     int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PROC, 0}, n = 0;
     size_t len = 0;
     if (sysctl(mib, 4, NULL, &len, NULL, 0) || !len)
-        return 0;
+        return -1;
     len += len / 4; /* processes started meanwhile */
     uint8_t *buf = mem_alloc(len); /* ~100 KB: off the libc heap */
     if (!buf || sysctl(mib, 4, buf, &len, NULL, 0)) {
         mem_free(buf);
-        return 0;
+        return -1;
     }
     for (size_t off = 0; off + sizeof(struct kinfo_proc) <= len;) {
         struct kinfo_proc *ki = (struct kinfo_proc *)(buf + off);
-        if (ki->ki_structsize < (int)sizeof(*ki) || (size_t)ki->ki_structsize > len - off)
-            break;
+        if (ki->ki_structsize < (int)sizeof(*ki) || (size_t)ki->ki_structsize > len - off) {
+            mem_free(buf);
+            return -1;
+        }
         app_info_t info;
         memset(&info, 0, sizeof(info));
         if (!strcmp(ki->ki_comm, "eboot.bin") && !sceKernelGetAppInfo(ki->ki_pid, &info) && info.app_id &&
-            (strncmp(info.title_id, PANEL_APP_TID, 9) == 0) == panel) {
+            (panel < 0 || (strncmp(info.title_id, PANEL_APP_TID, 9) == 0) == panel)) {
             if (n < max) {
                 ids[n] = info.app_id;
                 snprintf(tids[n], 10, "%.9s", info.title_id);
@@ -6070,17 +6505,22 @@ void app_panel_close(void) {
     uint32_t ids[2];
     char tids[2][10];
     int n = open_apps(ids, tids, 2, 1);
+    if (n <= 0)
+        return;
     for (int i = 0; i < n && i < 2; i++)
         printf("[main] panel app closed: 0x%x\n", (unsigned)sceSystemServiceKillApp(ids[i], -1, 0, 0));
 }
 
 /* Every pkg operation that takes games out of the library closes the open game first,
  * whichever it is: a game left open keeps reading pkgs that are being moved. 0 once no
- * game is open; -1 when one did not close within 30 seconds. */
+ * game is open; -1 when the process table could not be read or a game did not close
+ * within 30 seconds. */
 static int close_open_games(void) {
     uint32_t ids[8];
     char tids[8][10];
     int n = open_games(ids, tids, 8);
+    if (n < 0)
+        return -1;
     if (!n)
         return 0;
     for (int i = 0; i < n && i < 8; i++) {
@@ -6097,7 +6537,7 @@ static int close_open_games(void) {
         int mounted = 0;
         for (int i = 0; i < nc; i++)
             mounted |= title_running(closing[i]);
-        if (!open_games(ids, tids, 8) && !mounted) {
+        if (open_games(ids, tids, 8) == 0 && !mounted) {
             pump_events(2000); /* let the system finish unmounting the game */
             for (int i = 0; i < MAX_TITLES; i++)
                 g_managed[i].running = 0;
@@ -6254,7 +6694,7 @@ static int organized_on_root(const char *root, char (*tids)[10], int max) {
 /* organize off: gives back the pkgs of the games PS4Mount had organized, once per drive.
  * A game left open is not closed behind the user's back: the next scan tries again. */
 static void migrate_organized(void) {
-    if (g_cfg.organize)
+    if (!coexist_migrate_allowed(g_cfg.organize, dbguard_halt_active(), auto_register_blocked()))
         return;
     int pending = 0;
     for (int i = 0; i < NROOTS && !pending; i++) {
@@ -6289,6 +6729,12 @@ static void migrate_organized(void) {
 }
 
 int app_restore(const char *tids, char *msg, size_t cap) {
+    if (dbguard_halt_active()) {
+        snprintf(msg, cap, "%s",
+                 TR("System database flagged as damaged: do not keep registering; restart/recover before continuing",
+                    "Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar"));
+        return -1;
+    }
     if (!g_cfg.organize) {
         /* Nothing was moved or renamed: the pkgs are the user's, where they are. */
         snprintf(msg, cap, "%s",
@@ -6391,8 +6837,9 @@ static int clean_scan_path(const char *in, char *out, size_t n, char *why, size_
  * are saved once, so a drive plugged in already is not added whole with the defaults. A
  * console that ran an older version without ever saving them has catalogs or games. */
 static int first_start(void) {
-    if (exists(CONFIG_PATH))
-        return 0;
+    int has_config = exists(CONFIG_PATH);
+    if (has_config)
+        return boot_first_start(1, 0);
     DIR *d = opendir(STATE_DIR);
     struct dirent *e;
     int found = 0;
@@ -6402,11 +6849,10 @@ static int first_start(void) {
     }
     if (d)
         closedir(d);
-    return !found;
+    return boot_first_start(0, found);
 }
 
-static void config_save(void) {
-    setup_set(0); /* the settings were chosen: games are added from now on */
+static int config_save(void) {
     buf_t b = {0};
     buf_printf(&b, "ver=3\nbatch=%d\nbatch_size=%d\ndlc=%d\ndlc_mode=%s\ndlc_big=%d\nrestore_batch=%d\ninternal=%d\norganize=%d\nlang=%s\n",
                g_cfg.batch, g_cfg.batch_size, g_cfg.dlc, dlc_mode_name(g_cfg.dlc_mode), g_cfg.dlc_big, g_cfg.restore_batch,
@@ -6414,8 +6860,14 @@ static void config_save(void) {
     buf_printf(&b, "klog=%d\nautorun=%d\n", g_cfg.klog, g_cfg.autorun);
     for (int i = 0; i < g_cfg.npaths; i++)
         buf_printf(&b, "path=%s\n", g_cfg.paths[i]);
-    write_file(CONFIG_PATH, b.data, b.len, 0666);
+    int rc = (!b.data || !b.len || write_file(CONFIG_PATH, b.data, b.len, 0666)) ? -1 : 0;
     buf_free(&b);
+    if (rc) {
+        printf("[config] failed to save %s\n", CONFIG_PATH);
+        return -1;
+    }
+    setup_set(0); /* settings are durably saved: games may be added from now on (P4N-33) */
+    return 0;
 }
 
 static void config_load(void) {
@@ -6475,13 +6927,17 @@ static void config_load(void) {
      * they were, the console's installer found them again and a game could end up installed
      * on both drives (issue #4). The ps4 folder is the default again; turning it off is kept
      * from the next save on. */
-    if (ver < 2)
+    if (ver < 2) {
         c.organize = 1;
+        g_cfg_migrated = 1;
+    }
     /* ver 3 adds dlc_mode: a file from before only has dlc=, where on meant only that
      * add-ons were served. It is not consent to duplicate today's very large add-ons
      * internally, so on maps to external mounts; off stays off. */
-    if (ver < 3 && !dlc_mode_seen)
+    if (ver < 3 && !dlc_mode_seen) {
         c.dlc_mode = c.dlc ? DLC_EXTERNAL : DLC_OFF;
+        g_cfg_migrated = 1;
+    }
     c.dlc = c.dlc_mode != DLC_OFF;
     config_publish(&c);
     printf("[config] batch=%d batch_size=%d dlc=%d dlc_mode=%s restore_batch=%d organize=%d folders=%d\n",
@@ -6630,14 +7086,24 @@ int app_config_set(const char *body, char *msg, size_t cap) {
                                     "No se guardó: no se pudo actualizar la lista de AutoRun de GoldHEN"));
         return -1;
     }
+    config_t previous = g_cfg;
     config_publish(&c);
     apply_lang();
-    config_save();
+    if (config_save()) {
+        config_publish(&previous);
+        apply_lang();
+        if (autorun_changed)
+            autorun_apply(previous.autorun);
+        snprintf(msg, cap, "%s", TR("Not saved: could not write settings file", "No se guardó: no se pudo escribir el archivo de ajustes"));
+        return -1;
+    }
     printf("[config] saved: batch=%d batch_size=%d dlc=%d restore_batch=%d organize=%d folders=%d\n", c.batch,
            c.batch_size, c.dlc, c.restore_batch, c.organize, c.npaths);
-    if (was_organize && !c.organize) /* turned off: send the organized games back to where they were */
+    if (was_organize && !c.organize) { /* turned off: send the organized games back to where they were */
         for (int i = 0; i < NROOTS; i++)
             g_migrated[i] = 0;
+        breaker_init(&g_breaker, 0, 1);
+    }
     scan_request_why(0, SCAN_TRIG_CONFIG);
     snprintf(msg, cap, "%s", TR("Settings saved", "Ajustes guardados"));
     return 0;
@@ -6847,11 +7313,20 @@ static void install_received(void) {
     pthread_mutex_unlock(&g_inst_mu);
     if (!path[0])
         return;
+    if (dbguard_halt_active()) {
+        printf("[install] %s refused: system database flagged as damaged\n", path);
+        return;
+    }
     char tid[10] = "", title[128] = "", url[PATH_MAX + 8], msg[PATH_MAX + 64];
     if (pkg_id_title(path, tid, title, sizeof(title)))
         snprintf(title, sizeof(title), "%s", path);
-    int32_t user = 0;
-    sceUserServiceGetForegroundUser(&user);
+    uint32_t user;
+    if (foreground_user_id(&user, "install-received")) {
+        notify_kind(NOTIFY_WARN, TR("%s could not be installed: no signed-in PS4 user was detected",
+                                    "%s no se pudo instalar: no se detectó ningún usuario con la sesión iniciada en la PS4"),
+                    title);
+        return;
+    }
     int task = install_pkg(pkg_url(tid[0] ? tid : "install", "up", path, url, sizeof(url)), title, user, msg,
                            sizeof(msg));
     printf("[install] %s: %s\n", path, msg);
@@ -6979,32 +7454,56 @@ static void *panel_app_fetch(void *arg) {
     return NULL;
 }
 
+static const char *panel_url(char *out, size_t n);
+
 /* The tile, from the main loop: downloaded once per load when missing, and opened by a
- * first start (not over a game). */
+ * first start only when a valid signed-in foreground user is confirmed (P4N-28). */
 static void panel_app_step(void) {
     static time_t start;
     static int opened;
     if (!start)
         start = time(NULL);
+    if (dbguard_halt_active())
+        return;
     int have = installed_internally(PANEL_APP_TID);
-    if (have && !exists(PANEL_APP_DONE)) {
+    int done_marker = exists(PANEL_APP_DONE);
+    int db_reg = have && setup_active() && !opened ? db_confirms_registered(PANEL_APP_TID) : 0;
+    uint32_t ids[1];
+    char tids[1][10];
+    int busy = db_reg ? open_apps(ids, tids, 1, -1) : 0; /* any app, panel app included; -1: unreadable */
+    boot_panel_step_t plan = boot_panel_app_plan(
+        have, done_marker, setup_active(), opened, db_reg, busy,
+        __atomic_load_n(&g_panel_fetching, __ATOMIC_ACQUIRE), (long)(time(NULL) - start), PANEL_APP_DELAY,
+        upload_active(), install_waiting());
+    if (plan.mark_done) {
         int fd = open(PANEL_APP_DONE, O_WRONLY | O_CREAT, 0666);
         if (fd >= 0)
             close(fd);
     }
-    if (have && setup_active() && !opened && db_is_registered(PANEL_APP_TID)) {
-        uint32_t ids[1];
-        char tids[1][10];
+    if (plan.set_opened)
         opened = 1;
-        if (!open_games(ids, tids, 1)) {
-            int32_t user = 0;
-            sceUserServiceGetForegroundUser(&user);
-            lnc_param_t lp = {sizeof(lp), (uint32_t)user, 0, 0, 0};
-            printf("[panel-app] opened for the first start: 0x%x\n", (unsigned)sceLncUtilLaunchApp(PANEL_APP_TID, NULL, &lp));
+    if (plan.set_opened && busy)
+        printf("[panel-app] auto-launch skipped: an app is open or the process table is unreadable (%d)\n", busy);
+    if (plan.launch_app) {
+        char url[48];
+        uint32_t user;
+        if (foreground_user_id(&user, "panel-app")) {
+            notify_kind(NOTIFY_WARN,
+                        TR("Lodestar app was not opened automatically (no signed-in user). Open it from the home screen or go to %s",
+                           "La app Lodestar no se abrió automáticamente (sin usuario con la sesión iniciada). Ábrela desde el inicio o entra en %s"),
+                        panel_url(url, sizeof(url)));
+        } else {
+            lnc_param_t lp = {sizeof(lp), user, 0, 0, 0};
+            int lrc = sceLncUtilLaunchApp(PANEL_APP_TID, NULL, &lp);
+            printf("[panel-app] launch %s for user 0x%08x: 0x%08x\n", PANEL_APP_TID, (unsigned)user, (unsigned)lrc);
+            if (lrc < 0)
+                notify_kind(NOTIFY_WARN,
+                            TR("Could not open the Lodestar app automatically (0x%08x). Open it from the home screen or go to %s",
+                               "No se pudo abrir la app Lodestar automáticamente (0x%08x). Ábrela desde el inicio o entra en %s"),
+                            (unsigned)lrc, panel_url(url, sizeof(url)));
         }
     }
-    if (have || exists(PANEL_APP_DONE) || __atomic_load_n(&g_panel_fetching, __ATOMIC_ACQUIRE) ||
-        time(NULL) - start < PANEL_APP_DELAY || upload_active() || install_waiting())
+    if (!plan.start_fetch)
         return;
     pthread_t th;
     __atomic_store_n(&g_panel_fetching, 1, __ATOMIC_RELEASE);
@@ -7167,6 +7666,8 @@ static int g_klog = -1, g_web = -1;
 /* Closes the ports and the log before main returns: the process stays (it is the
  * loader's) and anything left open in it would keep the next PS4Mount out. */
 static void shutdown_daemon(int lock) {
+    if (user_app_masked() && !__atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE))
+        unmask_leftover();
     if (g_web >= 0)
         close(g_web);
     web_stop(); /* before subsystems and log: no worker may still call links or hold a queued fd */
@@ -7178,21 +7679,110 @@ static void shutdown_daemon(int lock) {
     if (lock >= 0)
         close(lock);
     g_web = g_klog = -1;
+    dbguard_destroy(&g_dbguard);
     log_stop();
 }
 
-static int single_instance(void) {
+static int single_instance(int *err_out) {
     int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0) {
+        if (err_out)
+            *err_out = errno;
+        return -1;
+    }
     struct sockaddr_in a = {0};
     a.sin_family = AF_INET;
     a.sin_port = htons(LOCK_PORT);
     a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    if (s < 0 || bind(s, (struct sockaddr *)&a, sizeof(a)) || listen(s, 1)) {
-        if (s >= 0)
-            close(s);
+    if (bind(s, (struct sockaddr *)&a, sizeof(a)) || listen(s, 1)) {
+        int e = errno;
+        close(s);
+        if (err_out)
+            *err_out = e;
         return -1;
     }
+    if (err_out)
+        *err_out = 0;
     return s;
+}
+
+/* Read-only loopback probe of the local web panel (/api/agent) to distinguish an already
+ * running Lodestar instance from another mount daemon sharing LOCK_PORT (P4N-31). */
+static void probe_local_lodestar(char *out, size_t cap) {
+    if (!out || !cap)
+        return;
+    out[0] = 0;
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0)
+        return;
+    struct timeval tv = {0, 300000};
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    struct sockaddr_in a = {0};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(WEB_PORT);
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (!connect(s, (struct sockaddr *)&a, sizeof(a))) {
+        static const char req[] = "GET /api/agent HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+        if (send(s, req, sizeof(req) - 1, 0) == (ssize_t)(sizeof(req) - 1)) {
+            size_t got = 0;
+            while (got + 1 < cap) {
+                ssize_t r = recv(s, out + got, cap - 1 - got, 0);
+                if (r <= 0)
+                    break;
+                got += (size_t)r;
+            }
+            out[got] = 0;
+        }
+    }
+    close(s);
+}
+
+static void report_lock_conflict(int bind_errno, int after_rest) {
+    char probe[512] = "";
+    if (bind_errno == EADDRINUSE)
+        probe_local_lodestar(probe, sizeof(probe));
+    lock_conflict_t kind = lock_conflict_classify(bind_errno, probe);
+    char line[256];
+    snprintf(line, sizeof(line), "[main] instance lock port %d unavailable (pid %d, errno=%d %s, probe=%s): %s\n",
+             LOCK_PORT, (int)getpid(), bind_errno, strerror(bind_errno),
+             kind == LOCK_CONFLICT_LODESTAR_RUNNING ? "lodestar-panel" :
+             bind_errno == EADDRINUSE ? "no-lodestar-reply" : "skipped",
+             after_rest ? "stopping after rest mode" : "this load ends here");
+    if (after_rest)
+        printf("%s", line);
+    else
+        log_append_line(STATE_DIR "/log.txt", line);
+    if (kind == LOCK_CONFLICT_LODESTAR_RUNNING) {
+        if (after_rest)
+            notify_kind(NOTIFY_WARN, "%s",
+                        TR(VERSION " stopped: another Lodestar instance is already running.",
+                           VERSION " detenido: ya hay otra instancia de Lodestar en marcha."));
+        else
+            notify_kind(NOTIFY_WARN, "%s",
+                        TR(VERSION " not started: Lodestar is already running.",
+                           VERSION " no arrancó: Lodestar ya está en marcha."));
+    } else if (kind == LOCK_CONFLICT_OTHER_OR_UNKNOWN) {
+        if (after_rest)
+            notify_kind(NOTIFY_WARN, "%s",
+                        TR(VERSION " stopped: another active instance already holds lock port 9032 (Lodestar or a compatible mount daemon). Stop it and load Lodestar again.",
+                           VERSION " detenido: otra instancia activa ocupa el puerto de bloqueo 9032 (Lodestar u otro gestor de montaje compatible). Deténla y vuelve a cargar Lodestar."));
+        else
+            notify_kind(NOTIFY_WARN, "%s",
+                        TR(VERSION " not started: another active instance already holds lock port 9032 (Lodestar or a compatible mount daemon). Stop it first.",
+                           VERSION " no arrancó: otra instancia activa ocupa el puerto de bloqueo 9032 (Lodestar u otro gestor de montaje compatible). Deténla antes."));
+    } else {
+        if (after_rest)
+            notify_kind(NOTIFY_WARN,
+                        TR(VERSION " stopped: could not reacquire lock port %d (%s).",
+                           VERSION " detenido: no se pudo recuperar el puerto de bloqueo %d (%s)."),
+                        LOCK_PORT, strerror(bind_errno));
+        else
+            notify_kind(NOTIFY_WARN,
+                        TR(VERSION " not started: could not bind lock port %d (%s).",
+                           VERSION " no arrancó: no se pudo abrir el puerto de bloqueo %d (%s)."),
+                        LOCK_PORT, strerror(bind_errno));
+    }
 }
 
 /* ---- GoldHEN's AutoRun ---- */
@@ -7310,7 +7900,7 @@ static int g_live; /* klogsrv replays its backlog first: live after the first qu
 static void keep_awake(void) {
     static time_t last;
     static int on;
-    int active = links_active();
+    int active = links_active() || __atomic_load_n(&g_install_busy, __ATOMIC_ACQUIRE) || g_ndlc_pending > 0;
     if (active != on) {
         on = active;
         printf("[power] %s\n", on ? "keeping the console out of rest mode while it transfers" : "rest mode allowed again");
@@ -7392,6 +7982,8 @@ static void pump_events(int ms) {
             }
             line[ll] = 0;
             ll = 0;
+            if (dbguard_observe_klog(&g_dbguard, line))
+                dbguard_halt_active();
             if (g_live)
                 handle_klog_line(line);
         }
@@ -7417,11 +8009,15 @@ static const char *panel_url(char *out, size_t n) {
 /* The start, as the console shows it. */
 static void notify_running(void) {
     char url[48];
+    if (dbguard_halt_active())
+        return;
+    if (auto_register_blocked()) {
+        coexist_warn_once();
+        return;
+    }
     if (setup_active() && g_reg_mode != REG_NONE && g_web >= 0)
-        notify(TR(VERSION ": first start. Choose the settings in the Lodestar app or at %s and save them. Without it, "
-                          "the games are added with the default settings in 2 minutes.",
-                  VERSION ": primera vez. Elige los ajustes en la app Lodestar o en %s y guárdalos. Si no, en 2 minutos "
-                          "se añaden los juegos con los ajustes por defecto."),
+        notify(TR(VERSION ": first start. Review settings in the Lodestar app or at %s and press Save. No games are added until you save.",
+                  VERSION ": primera vez. Revisa los ajustes en la app Lodestar o en %s y pulsa Guardar. No se añadirá ningún juego hasta que guardes."),
                panel_url(url, sizeof(url)));
     else if (g_reg_mode == REG_ALL && g_web >= 0)
         notify(TR(VERSION " running. Panel at %s", VERSION " en marcha. Panel en %s"), panel_url(url, sizeof(url)));
@@ -7440,40 +8036,47 @@ static void notify_running(void) {
 
 int main(void) {
     mkdirs(STATE_DIR, 0777);
-    /* the log goes to a file, every line with its time; when it cannot be opened, stdout
-     * stays as it was. Opened first of all: a load that ends before the panel is up is
-     * only seen here */
-    log_start(STATE_DIR "/log.txt");
-    setvbuf(stdout, NULL, _IOLBF, 0);
-    int lock = single_instance();
-    if (lock < 0) {
+    /* Acquire the single-instance lock before redirecting process-wide stdout so a
+     * duplicate payload load never disturbs an already-running daemon's log pipe. */
+    int lock_err = 0;
+    int lock = single_instance(&lock_err);
+    if (boot_lock_state(lock) == BOOT_LOCK_CONFLICT) {
         apply_lang(); /* the running daemon may be either product: use the console's language */
-        printf("[main] another mount daemon is running: this load ends here\n");
-        notify_kind(NOTIFY_WARN, "%s",
-                    TR(VERSION " not started: PS4Mount or another mount daemon is running. Stop it first.",
-                       VERSION " no arrancó: PS4Mount u otro gestor de montaje está en marcha. Deténlo antes."));
-        log_stop();
+        report_lock_conflict(lock_err, 0);
         return 0;
     }
-    sceUserServiceInitialize(0);
-    sceAppInstUtilInitialize();
+    /* the log goes to a file, every line with its time; when it cannot be opened, stdout
+     * stays as it was. */
+    log_start(STATE_DIR "/log.txt");
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    dbguard_init(&g_dbguard, DBGUARD_MMS_DIR);
+    user_service_init_t us_init = {0x2BC};
+    int us_rc = sceUserServiceInitialize(&us_init);
+    int ai_rc = sceAppInstUtilInitialize();
     /* the PS4 loader runs the payload in a process of its own and returning from main
      * goes back to it: no exit, no atexit. What the payload opened is closed by
      * shutdown() before main returns */
-    printf("[main] start (lock %d, pid %d)\n", lock, (int)getpid());
+    printf("[main] start (lock %d, pid %d, userSvc=0x%x, appInst=0x%x)\n", lock, (int)getpid(),
+           (unsigned)us_rc, (unsigned)ai_rc);
     cat_pump = pump_now; /* the panel answers during a catalog walk */
-    setup_set(first_start());
-    g_setup_start = time(NULL);
+    int fs = first_start();
+    setup_set(fs);
+    g_cfg_migrated = 0;
     config_load();
+    breaker_init(&g_breaker, fs, g_cfg_migrated);
     apply_lang();
     if (g_cfg.autorun && autorun_apply(1))
         printf("[config] autorun on: could not update payloads.ini\n");
     if (setup_active())
-        printf("[main] first start: no game is added until the settings are saved\n");
+        printf("[main] first start: waiting for explicit settings save before adopting existing games\n");
+    if (g_breaker.mode == BREAKER_PILOT_REQUIRED)
+        printf("[dbguard] registration pilot circuit breaker armed (%s)\n", g_breaker.reason);
     signal(SIGPIPE, SIG_IGN);
     check_firmware();
     if (user_app_masked())
         unmask_leftover();
+    dbguard_halt_active();
+    coexist_publish();
     /* left behind if an earlier load stopped mid-check: removed before the panel can ask for one */
     check_temp_cleanup();
     web_status_provider(app_status_state_json);
@@ -7489,12 +8092,11 @@ int main(void) {
             return 0;
         }
         if (!still_listening(lock)) {
-            /* lost in rest mode: take it again, or stop if another PS4Mount has it now */
+            /* lost in rest mode: take it again, or stop if another active instance holds it now */
             close(lock);
-            if ((lock = single_instance()) < 0) {
-                notify_kind(NOTIFY_WARN, "%s",
-                            TR(VERSION " stopped: another mount daemon is running. Stop it and load Lodestar again",
-                               VERSION " detenido: hay otro gestor de montaje en marcha. Deténlo y vuelve a cargar Lodestar"));
+            int relock_err = 0;
+            if ((lock = single_instance(&relock_err)) < 0) {
+                report_lock_conflict(relock_err, 1);
                 shutdown_daemon(-1);
                 return 0;
             }
@@ -7513,7 +8115,8 @@ int main(void) {
         if (g_deleting && time(NULL) - g_deleting_since > 600)
             end_delete_window(); /* the line of the screen change was missed */
         if (g_restore_n || g_restore_all) {
-            run_restore(g_restore_all ? NULL : g_restore_tids, g_restore_n, 1);
+            if (!dbguard_halt_active())
+                run_restore(g_restore_all ? NULL : g_restore_tids, g_restore_n, 1);
             g_restore_n = 0;
             g_restore_all = 0;
             continue;
@@ -7529,22 +8132,23 @@ int main(void) {
         install_received(); /* an app sent with "Send and install" */
         panel_app_step();
         if (scan_due(time(NULL)) && !g_deleting) {
-            time_t seen = setup_seen_at();
-            if (setup_active() && time(NULL) >= (seen > g_setup_start ? seen : g_setup_start) + SETUP_WAIT) {
-                printf("[main] first start: nobody at the panel, the default settings are saved\n");
-                config_save();
-            }
             int manual = 0, hard = 0;
             scan_trigger_t trig = SCAN_TRIG_ROUTINE;
             unsigned scan_seq = scan_begin_why(&manual, &hard, &trig);
             g_scan_manual_active = manual;
             int scanned = 1, ran_scan = 0;
             uint64_t scan_t0 = 0;
-            if (setup_active()) {
+            boot_scan_gate_t gate = boot_scan_gate(0, setup_active(), g_reg_mode, dbguard_halt_active());
+            if (gate == BOOT_SCAN_HALT_DB_CORRUPT) {
+                if (manual)
+                    notify_kind(NOTIFY_WARN, "%s",
+                                TR("System database flagged as damaged: do not keep registering; restart/recover before continuing",
+                                   "Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar"));
+            } else if (gate == BOOT_SCAN_WAIT_SETUP) {
                 if (manual)
                     notify("%s", TR("Save the settings in the app or the panel first: no game is added until then",
                                     "Guarda primero los ajustes en la app o en el panel: hasta entonces no se añade ningún juego"));
-            } else if (g_reg_mode != REG_NONE) {
+            } else if (gate == BOOT_SCAN_RUN) {
                 memset(&g_scan_m, 0, sizeof(g_scan_m));
                 g_scan_m.active = 1;
                 g_scan_m.seq = scan_seq;

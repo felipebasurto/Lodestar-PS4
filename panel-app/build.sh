@@ -23,11 +23,11 @@ VER=02.01
 W=../build/panel-app
 export OO_PS4_TOOLCHAIN=$O DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 rm -rf "$W" && mkdir -p "$W/sce_sys/about" "$W/sce_module"
-for source in main.c api.c draw.c view.c lane.c art.c ../src/json.c; do
+for source in main.c app.c applog.c render.c api.c draw.c view.c lane.c art.c ../src/json.c; do
     "$CC" --target=x86_64-pc-freebsd12-elf -std=gnu17 -fshort-wchar -fPIC -funwind-tables -O2 -Wall -Wextra \
         -c -isysroot "$O" -isystem "$O/include" -o "$W/$(basename "${source%.c}").o" "$source"
 done
-"$LD" "$W"/{main,api,draw,view,lane,art,json}.o -o "$W/panel-app.elf" -m elf_x86_64 -pie \
+"$LD" "$W"/{main,app,applog,render,api,draw,view,lane,art,json}.o -o "$W/panel-app.elf" -m elf_x86_64 -pie \
     --script "$O/link.x" --eh-frame-hdr -L"$O/lib" -lc -lkernel \
     -lSceUserService -lSceSystemService -lSceSysmodule -lSceImeDialog -lScePad -lSceVideoOut \
     -lSceFreeType -lSceNetCtl "$O/lib/crt1.o"

@@ -43,7 +43,9 @@ The web panels and the PS4 app give each game state the same name. Opening a gam
 restart, whose drive is away, that has another active copy, that is still to be added or that is
 installed on the console says what that means and what to do. While any game waits for a restart,
 both panels' libraries say so at the top: restart the console (rest mode does not count) and have
-Lodestar loaded afterwards. The console's notification for it asks to load Lodestar again unless it
+Lodestar loaded afterwards. While the system database is flagged as damaged (`db_corrupt`), both
+web panels show an explicit top-level warning telling the user not to continue registering and to
+restart/recover before continuing (`REG-7`). The console's notification for it asks to load Lodestar again unless it
 starts with GoldHEN. A warning says what happened and, when the user can do something, what.
 Check: test for the web names and restart notices (`test/web/panel.test.js`), read for the app and
 the notifications.
@@ -110,3 +112,55 @@ refresh) or the action stops being available for it, and one press performs at m
 Check: test (data loss: restore moves files; ordering: refreshes arrive mid-hold).
 Test: `test/panel_lane_test.c`.
 Source: user chose hold-to-confirm in the one-column prototype (2026-11-27).
+
+### PANEL-10: the native PS4 app exits only through SystemService
+
+Every exit path of `LODS00001` — normal close (Circle on the library or Exit on the L2 wheel) and
+early initialization failures — tears down initialized resources in order (wait bounded time for any
+pending VideoOut flip, close an open IME dialog, cooperatively cancel and join the worker thread,
+unregister and close VideoOut, unmap and release direct memory, close Pad, free caches and fonts,
+flush the app log) and terminates via `sceSystemServiceLoadExec("exit", NULL)`. The app never returns
+from `main`, never calls `exit`, `_exit`, `_Exit` or `abort`, and never detaches its worker thread.
+If `sceSystemServiceLoadExec` returns, it logs the status, requests navigation home, and parks in an
+idle sleep loop rather than returning to libc CRT teardown (which invokes `libkernel` `_exit` and
+triggers `SIGSYS` / `ExceptionCode 12`).
+Check: test (policy check in `test/policy.sh` for exit path, no `return` in `main`, no `exit`/`abort`,
+and no `pthread_detach`; host worker/shutdown tests in `test/panel_app_test.c`; the whole `main.c`
+run against fake system libraries in `test/panel_lane_test.c`, which counts the balanced opens and closes
+and the `sceSystemServiceLoadExec` call). Real console exit still requires a PS4 smoke test.
+Source: real PS4 rc.3 crash report (`ExceptionCode 12` / `SIGSYS` in `libkernel`), OpenOrbis v0.5.4
+`crt1.o`/`libc.a` inspection, and upstream `PS4Mount-PS4` termination path (2026-11-27).
+
+### PANEL-11: the native PS4 app keeps a bounded, redacted diagnostic log
+
+The PS4 app records init, high-level input, L2 wheel actions, holds, API task lifecycle, errors and
+exit to a bounded rotated log (`/data/lodestar/panel-app.log` with one `.old` backup) and an
+in-memory ring buffer so failures remain recoverable even if file I/O fails. Full download URLs and
+passwords are never written to the log.
+Check: test (privacy/redaction boundary and rotation cap in `test/panel_app_test.c`).
+Source: PS4 rc.3 crash investigation (2026-11-27).
+
+### PANEL-12: rendering composites in CPU RAM and updates only damaged double-buffered regions
+
+The PS4 app composites into a cached CPU-RAM shadow framebuffer and caches rasterized glyphs,
+background ground, scaled covers and dimmed wheel pill backdrops. Display-buffer damage is tracked
+independently for both VideoOut buffers across flips so that neither back buffer retains stale pixels
+from two frames ago; only damaged rectangles are streamed write-only to the target display buffer
+with zero reads from VideoOut memory. Input handling, holds and wheel pointing never wait on HTTP
+requests or artwork decoding.
+Check: test (pixel-exact double-buffering equivalence, damage/cache reduction metrics and zero
+blocking calls on input/render in `test/panel_render_test.c`; no NetCtl or IME call blocks the frame
+loop in `test/panel_lane_test.c`). Real frame pacing requires a PS4 smoke test.
+Source: PS4 rc.3 performance report (slow L2 wheel and UI caused by full-frame redraws, per-frame
+FreeType rasterization and alpha-blending reads on write-combining direct memory) (2026-11-27).
+
+### PANEL-13: web panels warn when PS4Mount coexistence holds automatic registration
+
+When `GET /api/games` reports `coexist.auto_register_blocked: true`, both the modern panel (`web/index.html`)
+and the legacy panel (`web/legacy.html`) show a prominent Spanish/English warning banner explaining that
+PS4Mount is still installed or active in GoldHEN AutoRun, that automatic registration is paused so the
+shared library is not re-registered twice, and that the user should remove PS4Mount or disable it in
+AutoRun before continuing (Lodestar never deletes PS4Mount's files). When `coexist.auto_register_blocked`
+is false or absent, the banner stays hidden.
+Check: test (`test/web/panel.test.js` in both modern and legacy panels, English and Spanish).
+Source: environment coexistence hazard review (`hazards/environment`), 2026-11-27.
