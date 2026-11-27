@@ -211,13 +211,27 @@ static void open_row_left(const panel_view *v, canvas c, const game *g, int y) {
         text(c, 296, y + 208, 990, 28, *g->issue || g->state != INTERNAL ? GOLD : MUTED, note);
 }
 
+static int hold_bar_fill_w(int bar_w, int held) {
+    if (bar_w <= 0)
+        return 0;
+    int w = held > 0 ? bar_w * held / 1000 : 0;
+    if (w < 16)
+        w = 16;
+    return w > bar_w ? bar_w : w;
+}
+
+static void draw_hold_bar(canvas c, int x, int y, int bar_w, int held) {
+    fill(c, x, y, bar_w, 8, RULE);
+    fill(c, x, y, hold_bar_fill_w(bar_w, held), 8, ORANGE);
+}
+
 static void open_row(const panel_view *v, canvas c, const game *g, int y) {
     background_tinted_rect(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, ORANGE, 22);
     frame(c, LEFT - EDGE, y, RIGHT - LEFT + 2 * EDGE, OPEN_ROW, 2, ORANGE);
     open_row_left(v, c, g, y);
     verbs(v, c, g, 1320, y + 68, 520, 1);
     if (v->holding)
-        fill(c, LEFT - EDGE, y + OPEN_ROW - 8, (RIGHT - LEFT + 2 * EDGE) * v->held / 1000, 8, ORANGE);
+        draw_hold_bar(c, LEFT - EDGE, y + OPEN_ROW - 8, RIGHT - LEFT + 2 * EDGE, v->held);
 }
 
 int panel_compute_library_slots(const panel_view *v, panel_slot_span out[PANEL_VISIBLE_ROWS]) {
@@ -421,7 +435,7 @@ static void show_detail(const panel_view *v, canvas c) {
         text(c, 548, 664, RIGHT - 548, 28, GOLD, g->issue);
     verbs(v, c, g, 548, 710, 700, 0);
     if (v->holding)
-        fill(c, 548, 860, 700 * v->held / 1000, 8, ORANGE);
+        draw_hold_bar(c, 548, 860, 700, v->held);
 }
 
 #define FIELD(f) #f
@@ -872,8 +886,8 @@ void panel_draw_hold_bar_delta(const panel_view *v, canvas c, int prev_held, rec
             *out_damage = (rect){0, 0, 0, 0};
         return;
     }
-    int prev_w = prev_held > 0 ? bar.w * prev_held / 1000 : 0;
-    int cur_w = v->held > 0 ? bar.w * v->held / 1000 : 0;
+    int prev_w = hold_bar_fill_w(bar.w, prev_held);
+    int cur_w = hold_bar_fill_w(bar.w, v->held);
     if (cur_w <= prev_w) {
         if (out_damage)
             *out_damage = (rect){0, 0, 0, 0};
@@ -947,7 +961,7 @@ void panel_draw_detail_verbs_region(const panel_view *v, canvas c) {
     background(sub);
     verbs(v, sub, v->focused, 548, 710, 700, 0);
     if (v->holding)
-        fill(sub, 548, 860, 700 * v->held / 1000, 8, ORANGE);
+        draw_hold_bar(sub, 548, 860, 700, v->held);
 }
 
 void panel_draw_settings_sidebar_region(const panel_view *v, canvas c) {

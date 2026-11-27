@@ -441,7 +441,17 @@ static void run_loop(ps4_sys *sys) {
             }
         }
 
-        sceKernelUsleep((sys->app.wheel || sys->app.held.action) ? 8000 : 16000);
+        const uint32_t arrows = PANEL_BTN_UP | PANEL_BTN_DOWN | PANEL_BTN_LEFT | PANEL_BTN_RIGHT;
+        int64_t elapsed_ms = clock_ms() - now;
+        if (elapsed_ms < 0)
+            elapsed_ms = 0;
+        unsigned target_us = (sys->app.dirty && sys->submitted >= 0) ? 4000u :
+                             (sys->app.wheel || sys->app.held.action || (sys->app.last_buttons & arrows)) ? 8000u : 16000u;
+        unsigned elapsed_us = (unsigned)(elapsed_ms > 16 ? 16 : elapsed_ms) * 1000u;
+        unsigned sleep_us = target_us > elapsed_us ? target_us - elapsed_us : 1000u;
+        if (sleep_us < 1000u)
+            sleep_us = 1000u;
+        sceKernelUsleep(sleep_us);
     }
 #ifdef PANEL_HOST_TEST
     panel_host_set_in_loop(0);
