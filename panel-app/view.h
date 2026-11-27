@@ -5,7 +5,7 @@
 #include "draw.h"
 #include "lane.h"
 
-enum { PAGE = 8, ART_SLOTS = 20, SETTINGS_COUNT = 9 };
+enum { PAGE = 8, PANEL_VISIBLE_ROWS = 7, ART_SLOTS = 20, SETTINGS_COUNT = 9 };
 enum page { LIBRARY, DETAIL, SETTINGS, PHONE, DOWNLOADS };
 
 enum {
@@ -64,26 +64,44 @@ typedef struct {
 void panel_draw(const panel_view *v, canvas c);
 
 /* Layout geometry & surgical partial-redraw primitives (pixel-exact with panel_draw). */
+int panel_list_first(int selected, int visible_count);
 rect panel_header_rect(void);
 rect panel_footer_rect(void);
+rect panel_section_bar_rect(void);
 rect panel_list_rect(void);
 rect panel_wheel_pill_rect(int idx);
 int panel_open_row_y(const panel_view *v);
 rect panel_open_row_rect(const panel_view *v);
 rect panel_hold_bar_rect(const panel_view *v);
 rect panel_detail_verbs_rect(void);
+rect panel_settings_sidebar_rect(void);
+rect panel_settings_sidebar_item_rect(int category);
+rect panel_settings_body_rect(void);
 rect panel_settings_row_rect(int row, int count);
 rect panel_settings_help_rect(void);
+rect panel_phone_addr_rect(void);
+rect panel_downloads_dest_rect(void);
+rect panel_downloads_status_rect(void);
+rect panel_downloads_body_rect(void);
 int panel_find_cover_rect(const panel_view *v, const char *id, rect *out);
 
 void panel_draw_header_region(const panel_view *v, canvas c);
 void panel_draw_footer_region(const panel_view *v, canvas c);
+void panel_draw_section_bar_region(const panel_view *v, canvas c);
 void panel_draw_library_list_region(const panel_view *v, canvas c, rect clip);
+void panel_draw_library_body_region(const panel_view *v, canvas c, rect clip);
 void panel_draw_open_row_region(const panel_view *v, canvas c);
 void panel_draw_hold_bar_delta(const panel_view *v, canvas c, int prev_held, rect *out_damage);
 void panel_draw_cover_region(const panel_view *v, canvas c, const char *id, rect r);
 void panel_draw_wheel_open(const panel_view *v, canvas c, uint32_t *pill_bg[WHEEL_ITEMS]);
 void panel_draw_wheel_pill(const panel_view *v, canvas c, int idx, const uint32_t *pill_bg);
 void panel_draw_detail_verbs_region(const panel_view *v, canvas c);
+void panel_draw_settings_sidebar_region(const panel_view *v, canvas c);
+void panel_draw_settings_sidebar_item_region(const panel_view *v, canvas c, int category);
+void panel_draw_settings_body_region(const panel_view *v, canvas c);
 void panel_draw_settings_row_region(const panel_view *v, canvas c, int row);
 void panel_draw_settings_help_region(const panel_view *v, canvas c);
+void panel_draw_phone_addr_region(const panel_view *v, canvas c);
+void panel_draw_downloads_dest_region(const panel_view *v, canvas c);
+void panel_draw_downloads_status_region(const panel_view *v, canvas c);
+void panel_draw_downloads_body_region(const panel_view *v, canvas c);

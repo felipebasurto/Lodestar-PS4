@@ -14,9 +14,16 @@ static rect clip_screen(rect r) {
     return (rect){x0, y0, x1 - x0, y1 - y0};
 }
 
-static int rects_overlap_or_touch(rect a, rect b) {
-    return a.x <= b.x + b.w && b.x <= a.x + a.w &&
-           a.y <= b.y + b.h && b.y <= a.y + a.h;
+static int rects_should_merge(rect a, rect b) {
+    /* Strictly overlapping rects must merge so blits never write a pixel twice. */
+    if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h)
+        return 1;
+    /* Exact-edge touching rects merge with zero wasted area. */
+    if (a.x == b.x && a.w == b.w && (a.y + a.h == b.y || b.y + b.h == a.y))
+        return 1;
+    if (a.y == b.y && a.h == b.h && (a.x + a.w == b.x || b.x + b.w == a.x))
+        return 1;
+    return 0;
 }
 
 static rect rect_union(rect a, rect b) {
@@ -52,12 +59,12 @@ void damage_add(damage_set *d, rect r) {
         return;
     }
 
-    /* Merge transitively with any overlapping or touching rect so blits never write a pixel twice. */
+    /* Merge transitively with any overlapping or exact-edge touching rect so blits stay disjoint. */
     int merged;
     do {
         merged = 0;
         for (int i = 0; i < d->count; i++) {
-            if (rects_overlap_or_touch(r, d->rects[i])) {
+            if (rects_should_merge(r, d->rects[i])) {
                 r = rect_union(r, d->rects[i]);
                 d->rects[i] = d->rects[--d->count];
                 merged = 1;
@@ -162,6 +169,7 @@ static void snapshot_from_view(view_snapshot *s, const panel_view *v) {
     s->wheel = v->wheel;
     s->wheel_at = v->wheel_at;
     s->links_ready = v->links_ready;
+    s->links_configured = v->links ? v->links->configured : 0;
     s->dest_ready = v->dest_ready;
     s->dest = v->dest;
     s->link_writing = v->link_writing;
@@ -184,6 +192,22 @@ static void snapshot_from_view(view_snapshot *s, const panel_view *v) {
         s->config = *v->config;
 }
 
+static int footer_differs(const view_snapshot *a, const view_snapshot *b) {
+    if (!a->valid)
+        return 1;
+    if (a->waiting != b->waiting || a->link_writing != b->link_writing ||
+        strcmp(a->feedback, b->feedback) != 0)
+        return 1;
+    if (b->page == LIBRARY &&
+        ((a->visible_count > 0) != (b->visible_count > 0) ||
+         (a->query[0] != 0) != (b->query[0] != 0)))
+        return 1;
+    if (b->page == DOWNLOADS &&
+        ((a->entered_url[0] != 0) != (b->entered_url[0] != 0)))
+        return 1;
+    return 0;
+}
+
 static int needs_full_page_redraw(const view_snapshot *p, const view_snapshot *c) {
     if (!p->valid)
         return 1;
@@ -193,38 +217,34 @@ static int needs_full_page_redraw(const view_snapshot *p, const view_snapshot *c
     if (p->wheel && !c->wheel)
         return 1; /* wheel closed: repaint underlying screen */
     if (c->wheel && (p->art_gen != c->art_gen || p->selected != c->selected ||
-                     p->setting_row != c->setting_row ||
+                     p->setting_row != c->setting_row || p->category != c->category ||
+                     p->in_sidebar != c->in_sidebar || p->section != c->section ||
+                     p->visible_count != c->visible_count || p->dest != c->dest ||
+                     p->links_gen != c->links_gen || p->config_gen != c->config_gen ||
+                     p->dests_gen != c->dests_gen ||
                      p->waiting != c->waiting || p->link_writing != c->link_writing ||
+                     strcmp(p->query, c->query) != 0 ||
                      strcmp(p->feedback, c->feedback) != 0 ||
+                     strcmp(p->local_url, c->local_url) != 0 ||
+                     strcmp(p->entered_url, c->entered_url) != 0 ||
                      memcmp(&p->config, &c->config, sizeof(settings)) != 0))
         return 1;
 
     if (c->page == LIBRARY) {
-        if (p->section != c->section || p->visible_count != c->visible_count ||
-            strcmp(p->query, c->query) != 0)
-            return 1;
         if (!c->online && p->loading_library != c->loading_library)
             return 1;
     } else if (c->page == DETAIL) {
         if (strcmp(p->focused_id, c->focused_id) != 0)
             return 1;
     } else if (c->page == SETTINGS) {
-        if (p->config_ready != c->config_ready || p->config_gen != c->config_gen ||
-            p->category != c->category || p->in_sidebar != c->in_sidebar)
+        if (p->config_ready != c->config_ready)
             return 1;
         if (!c->config_ready && p->loading_config != c->loading_config)
             return 1;
-        if (c->in_sidebar && memcmp(&p->config, &c->config, sizeof(settings)) != 0)
-            return 1;
-    } else if (c->page == PHONE) {
-        if (strcmp(p->local_url, c->local_url) != 0)
-            return 1;
     } else if (c->page == DOWNLOADS) {
-        if (p->links_ready != c->links_ready || p->links_gen != c->links_gen ||
-            p->dest_ready != c->dest_ready || p->dests_gen != c->dests_gen ||
-            p->dest != c->dest || p->link_writing != c->link_writing ||
-            p->loading_links != c->loading_links || p->loading_destinations != c->loading_destinations ||
-            strcmp(p->entered_url, c->entered_url) != 0)
+        if (p->links_ready != c->links_ready || p->links_configured != c->links_configured)
+            return 1;
+        if ((!c->links_ready || !c->links_configured) && p->loading_links != c->loading_links)
             return 1;
     }
     return 0;
@@ -278,16 +298,14 @@ int panel_renderer_present(panel_renderer *r, const panel_view *v, int back_idx,
     damage_clear(&frame_dmg);
 
     int full = needs_full_page_redraw(prev, &cur);
-    int footer_changed = !prev->valid || prev->waiting != cur.waiting ||
-                         prev->link_writing != cur.link_writing ||
-                         strcmp(prev->feedback, cur.feedback) != 0;
+    int footer_changed = footer_differs(prev, &cur);
 
     if (full) {
         draw_full_shadow(r, v);
         damage_mark_full(&frame_dmg);
         r->stats.shadow_full_redraws++;
     } else if (!prev->wheel && cur.wheel) {
-        /* Apply any same-frame underlying hold cancel or art update before taking wheel backdrop. */
+        /* Apply any same-frame underlying hold cancel before taking wheel backdrop. */
         if (cur.page == LIBRARY && (prev->holding != cur.holding || prev->held != cur.held))
             panel_draw_open_row_region(v, sh);
         else if (cur.page == DETAIL && (prev->holding != cur.holding || prev->held != cur.held))
@@ -315,33 +333,46 @@ int panel_renderer_present(panel_renderer *r, const panel_view *v, int back_idx,
     } else {
         int list_repainted = 0;
 
-        if (cur.page == LIBRARY && cur.online && cur.visible_count) {
-            if (prev->selected != cur.selected) {
-                int prev_first = prev->selected > 2 ? prev->selected - 2 : 0;
-                int cur_first = cur.selected > 2 ? cur.selected - 2 : 0;
-                rect sub = panel_list_rect();
-                if (prev_first == cur_first) {
-                    int min_sel = prev->selected < cur.selected ? prev->selected : cur.selected;
-                    int max_sel = prev->selected > cur.selected ? prev->selected : cur.selected;
-                    int y0 = PANEL_LIST_TOP + (min_sel - cur_first) * PANEL_ROW;
-                    int y1 = PANEL_LIST_TOP + (max_sel - cur_first) * PANEL_ROW + PANEL_OPEN_ROW;
-                    if (y1 > PANEL_LIST_BOTTOM)
-                        y1 = PANEL_LIST_BOTTOM;
-                    sub.y = y0;
-                    sub.h = y1 - y0;
+        if (cur.page == LIBRARY && cur.online && cur.has_catalog) {
+            int section_or_query = prev->section != cur.section || strcmp(prev->query, cur.query) != 0;
+            int vis_changed = prev->visible_count != cur.visible_count;
+            if (section_or_query || vis_changed) {
+                if (section_or_query) {
+                    panel_draw_section_bar_region(v, sh);
+                    damage_add(&frame_dmg, panel_section_bar_rect());
                 }
-                panel_draw_library_list_region(v, sh, sub);
-                damage_add(&frame_dmg, sub);
+                rect body = panel_list_rect();
+                panel_draw_library_body_region(v, sh, body);
+                damage_add(&frame_dmg, body);
                 list_repainted = 1;
-            } else if (prev->holding != cur.holding || prev->held != cur.held) {
-                if (cur.holding != NONE && cur.holding == prev->holding && cur.held > prev->held) {
-                    rect delta = {0};
-                    panel_draw_hold_bar_delta(v, sh, prev->held, &delta);
-                    if (delta.w > 0)
-                        damage_add(&frame_dmg, delta);
-                } else if (cur.holding != prev->holding || (cur.holding != NONE && cur.held < prev->held)) {
-                    panel_draw_open_row_region(v, sh);
-                    damage_add(&frame_dmg, panel_open_row_rect(v));
+            } else if (cur.visible_count) {
+                if (prev->selected != cur.selected) {
+                    int prev_first = panel_list_first(prev->selected, prev->visible_count);
+                    int cur_first = panel_list_first(cur.selected, cur.visible_count);
+                    rect sub = panel_list_rect();
+                    if (prev_first == cur_first) {
+                        int min_sel = prev->selected < cur.selected ? prev->selected : cur.selected;
+                        int max_sel = prev->selected > cur.selected ? prev->selected : cur.selected;
+                        int y0 = PANEL_LIST_TOP + (min_sel - cur_first) * PANEL_ROW;
+                        int y1 = PANEL_LIST_TOP + (max_sel - cur_first) * PANEL_ROW + PANEL_OPEN_ROW;
+                        if (y1 > PANEL_LIST_BOTTOM)
+                            y1 = PANEL_LIST_BOTTOM;
+                        sub.y = y0;
+                        sub.h = y1 - y0;
+                    }
+                    panel_draw_library_list_region(v, sh, sub);
+                    damage_add(&frame_dmg, sub);
+                    list_repainted = 1;
+                } else if (prev->holding != cur.holding || prev->held != cur.held) {
+                    if (cur.holding != NONE && cur.holding == prev->holding && cur.held > prev->held) {
+                        rect delta = {0};
+                        panel_draw_hold_bar_delta(v, sh, prev->held, &delta);
+                        if (delta.w > 0)
+                            damage_add(&frame_dmg, delta);
+                    } else if (cur.holding != prev->holding || (cur.holding != NONE && cur.held < prev->held)) {
+                        panel_draw_open_row_region(v, sh);
+                        damage_add(&frame_dmg, panel_open_row_rect(v));
+                    }
                 }
             }
         } else if (cur.page == DETAIL) {
@@ -356,18 +387,71 @@ int panel_renderer_present(panel_renderer *r, const panel_view *v, int back_idx,
                     damage_add(&frame_dmg, panel_detail_verbs_rect());
                 }
             }
-        } else if (cur.page == SETTINGS && cur.config_ready && !cur.in_sidebar) {
+        } else if (cur.page == SETTINGS && cur.config_ready) {
             int count = setting_start[cur.category + 1] - setting_start[cur.category];
-            if (prev->setting_row != cur.setting_row) {
-                panel_draw_settings_row_region(v, sh, prev->setting_row);
-                damage_add(&frame_dmg, panel_settings_row_rect(prev->setting_row, count));
-                panel_draw_settings_row_region(v, sh, cur.setting_row);
-                damage_add(&frame_dmg, panel_settings_row_rect(cur.setting_row, count));
+            if (prev->category != cur.category) {
+                panel_draw_settings_sidebar_region(v, sh);
+                damage_add(&frame_dmg, panel_settings_sidebar_rect());
+                panel_draw_settings_body_region(v, sh);
+                damage_add(&frame_dmg, panel_settings_body_rect());
+            } else if (prev->in_sidebar != cur.in_sidebar) {
+                panel_draw_settings_sidebar_item_region(v, sh, cur.category);
+                damage_add(&frame_dmg, panel_settings_sidebar_item_rect(cur.category));
+                if (prev->setting_row != cur.setting_row && prev->setting_row >= 0 && prev->setting_row <= count) {
+                    panel_draw_settings_row_region(v, sh, prev->setting_row);
+                    damage_add(&frame_dmg, panel_settings_row_rect(prev->setting_row, count));
+                }
+                if (cur.setting_row >= 0 && cur.setting_row <= count) {
+                    panel_draw_settings_row_region(v, sh, cur.setting_row);
+                    damage_add(&frame_dmg, panel_settings_row_rect(cur.setting_row, count));
+                }
                 panel_draw_settings_help_region(v, sh);
                 damage_add(&frame_dmg, panel_settings_help_rect());
+                if (memcmp(&prev->config, &cur.config, sizeof(settings)) != 0 || prev->config_gen != cur.config_gen) {
+                    panel_draw_settings_body_region(v, sh);
+                    damage_add(&frame_dmg, panel_settings_body_rect());
+                }
+            } else if (prev->config_gen != cur.config_gen) {
+                panel_draw_settings_body_region(v, sh);
+                damage_add(&frame_dmg, panel_settings_body_rect());
+            } else if (!cur.in_sidebar) {
+                if (prev->setting_row != cur.setting_row) {
+                    panel_draw_settings_row_region(v, sh, prev->setting_row);
+                    damage_add(&frame_dmg, panel_settings_row_rect(prev->setting_row, count));
+                    panel_draw_settings_row_region(v, sh, cur.setting_row);
+                    damage_add(&frame_dmg, panel_settings_row_rect(cur.setting_row, count));
+                    panel_draw_settings_help_region(v, sh);
+                    damage_add(&frame_dmg, panel_settings_help_rect());
+                } else if (memcmp(&prev->config, &cur.config, sizeof(settings)) != 0) {
+                    panel_draw_settings_row_region(v, sh, cur.setting_row);
+                    damage_add(&frame_dmg, panel_settings_row_rect(cur.setting_row, count));
+                }
             } else if (memcmp(&prev->config, &cur.config, sizeof(settings)) != 0) {
-                panel_draw_settings_row_region(v, sh, cur.setting_row);
-                damage_add(&frame_dmg, panel_settings_row_rect(cur.setting_row, count));
+                panel_draw_settings_body_region(v, sh);
+                damage_add(&frame_dmg, panel_settings_body_rect());
+            }
+        } else if (cur.page == PHONE) {
+            if (strcmp(prev->local_url, cur.local_url) != 0) {
+                panel_draw_phone_addr_region(v, sh);
+                damage_add(&frame_dmg, panel_phone_addr_rect());
+            }
+        } else if (cur.page == DOWNLOADS && cur.links_ready && cur.links_configured) {
+            int url_or_dests = strcmp(prev->entered_url, cur.entered_url) != 0 ||
+                               prev->dest_ready != cur.dest_ready ||
+                               prev->dests_gen != cur.dests_gen ||
+                               prev->loading_destinations != cur.loading_destinations;
+            if (url_or_dests) {
+                panel_draw_downloads_body_region(v, sh);
+                damage_add(&frame_dmg, panel_downloads_body_rect());
+            } else {
+                if (prev->dest != cur.dest) {
+                    panel_draw_downloads_dest_region(v, sh);
+                    damage_add(&frame_dmg, panel_downloads_dest_rect());
+                }
+                if (prev->links_gen != cur.links_gen) {
+                    panel_draw_downloads_status_region(v, sh);
+                    damage_add(&frame_dmg, panel_downloads_status_rect());
+                }
             }
         }
 

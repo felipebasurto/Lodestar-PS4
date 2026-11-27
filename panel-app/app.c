@@ -466,8 +466,8 @@ static void schedule(panel_app *app, int64_t now) {
     if (!app->online || app->wheel || app->held.action ||
         (app->page != LIBRARY && app->page != DETAIL) || !app->visible_count)
         return;
-    /* The focused game first, then the rows around it. */
-    int first = app->selected > 2 ? app->selected - 2 : 0;
+    /* The focused game first, then the visible rows around it. */
+    int first = panel_list_first(app->selected, app->visible_count);
     for (int i = -1; i < PAGE; i++) {
         int at = i < 0 ? app->selected : first + i;
         if (at >= app->visible_count)
