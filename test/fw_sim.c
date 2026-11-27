@@ -105,8 +105,8 @@ static void sim_tick(boot_sim_t *s, time_t now, int upload_active, int install_w
     if (p.start_fetch)
         s->panel_fetching = 1;
 
-    boot_scan_gate_t gate = boot_scan_gate(0, s->setup_active, s->reg_mode);
-    if (gate == BOOT_SCAN_RUN && boot_db_usable(s->db_ready, s->db_corrupt_marker)) {
+    boot_scan_gate_t gate = boot_scan_gate(0, s->setup_active, s->reg_mode, s->db_corrupt_marker);
+    if (gate == BOOT_SCAN_RUN && s->db_ready) {
         s->scans_run++;
         s->registered_games = s->library_games;
     }
@@ -133,6 +133,10 @@ static void test_foreground_user_and_panel_lifecycle(void) {
     CHECK(boot_fg_user_valid(0, -1) == 0, "negative user id is invalid");
     CHECK(boot_fg_user_valid(-1, 0x10000000) == 0, "failed sceUserServiceGetForegroundUser syscall");
     CHECK(boot_fg_user_valid(-1, 0) == 0, "failed syscall with zero user");
+    CHECK(boot_fg_user_valid(0, (int32_t)0xFFFFFFFFu) == 0, "SCE_USER_SERVICE_USER_ID_INVALID");
+    CHECK(boot_fg_user_valid(0, 0xFE) == 0, "SCE_USER_SERVICE_USER_ID_EVERYONE");
+    CHECK(boot_fg_user_valid(0, 0xFF) == 0, "SCE_USER_SERVICE_USER_ID_SYSTEM");
+    CHECK(boot_fg_user_valid((int)0x80960007u, 0x1b41e6e4) == 0, "a service error code with a stale user");
 
     /* Panel app lifecycle states: missing vs installed, delay, upload/install waiting, open game */
     boot_panel_step_t p = boot_panel_app_plan(0, 0, 1, 0, 0, 0, 0, 5, 20, 0, 0);
@@ -205,22 +209,19 @@ static void test_library_sizes(void) {
     }
 }
 
-static void test_db_states_and_install_outcomes(void) {
-    printf("app.db states, corrupt marker, staging /user/app and AppInstallAll outcomes\n");
-    CHECK(boot_db_usable(0, 0) == 0, "unreadable app.db (missing file or no tbl_appinfo, db_ready) blocks scan");
-    CHECK(boot_db_usable(0, 1) == 0, "unreadable and flagged");
-
-    CHECK(boot_db_usable(1, 0) == 1, "healthy app.db allows scan");
-#ifdef STRICT_FIRST_RUN_SAFETY
-    CHECK(boot_db_usable(1, 1) == 0, "STRICT: app.db-corrupt marker must block scan_all");
-#endif
-
+static void test_scan_gate_and_staging(void) {
+    printf("scan gate, staging /user/app\n");
     /* Scan gate combinations */
-    CHECK(boot_scan_gate(1, 0, REG_ALL) == BOOT_SCAN_SKIP_DELETING, "deleting defers scan");
-    CHECK(boot_scan_gate(0, 1, REG_ALL) == BOOT_SCAN_WAIT_SETUP, "setup_active waits");
-    CHECK(boot_scan_gate(0, 0, REG_NONE) == BOOT_SCAN_UNSUPPORTED_FW, "REG_NONE skips scan");
-    CHECK(boot_scan_gate(0, 0, REG_ALL) == BOOT_SCAN_RUN, "normal REG_ALL runs");
-    CHECK(boot_scan_gate(0, 0, REG_TITLEDIR) == BOOT_SCAN_RUN, "normal REG_TITLEDIR runs");
+    CHECK(boot_scan_gate(1, 0, REG_ALL, 0) == BOOT_SCAN_SKIP_DELETING, "deleting defers scan");
+    CHECK(boot_scan_gate(0, 1, REG_ALL, 0) == BOOT_SCAN_WAIT_SETUP, "setup_active waits");
+    CHECK(boot_scan_gate(0, 0, REG_NONE, 0) == BOOT_SCAN_UNSUPPORTED_FW, "REG_NONE skips scan");
+    CHECK(boot_scan_gate(0, 0, REG_ALL, 0) == BOOT_SCAN_RUN, "normal REG_ALL runs");
+    CHECK(boot_scan_gate(0, 0, REG_TITLEDIR, 0) == BOOT_SCAN_RUN, "normal REG_TITLEDIR runs");
+#ifdef STRICT_FIRST_RUN_SAFETY
+    CHECK(boot_scan_gate(0, 0, REG_ALL, 1) == BOOT_SCAN_HALT_DB_CORRUPT, "STRICT: app.db-corrupt marker must block scan_all");
+    CHECK(boot_scan_gate(0, 1, REG_ALL, 1) == BOOT_SCAN_HALT_DB_CORRUPT, "STRICT: and during the first start too");
+    CHECK(boot_scan_gate(0, 0, REG_TITLEDIR, 1) == BOOT_SCAN_HALT_DB_CORRUPT, "STRICT: and in one-at-a-time mode");
+#endif
 
     /* Staging /user/app masking and incomplete unmount */
     CHECK(boot_stage_mask_allowed(REG_ALL, 0, 1) == 1, "REG_ALL with no open games masks /user/app");
@@ -229,18 +230,6 @@ static void test_db_states_and_install_outcomes(void) {
     CHECK(boot_stage_mask_allowed(REG_TITLEDIR, 0, 20) == 0, "REG_TITLEDIR never masks /user/app");
     CHECK(boot_stage_mask_allowed(REG_NONE, 0, 20) == 0, "REG_NONE never masks /user/app");
     CHECK(boot_stage_mask_allowed(REG_ALL, 0, 0) == 0, "0 staged titles does not mask");
-
-    CHECK(boot_stage_unmask_ok(0) == 1, "clean unmask of /user/app");
-    CHECK(boot_stage_unmask_ok(1) == 0, "incomplete unmount leaves /user/app masked");
-
-    /* AppInstallAll outcomes */
-    CHECK(boot_install_all_outcome(REG_ALL, 0, 0, 20, 20, 0) == BOOT_REG_OK, "all 20 registered");
-    CHECK(boot_install_all_outcome(REG_ALL, 0, 0, 12, 20, 0) == BOOT_REG_PARTIAL, "12/20 partial registration");
-    CHECK(boot_install_all_outcome(REG_ALL, 0, 0, 0, 20, 0) == BOOT_REG_PARTIAL, "rc=0 but 0/20 registered");
-    CHECK(boot_install_all_outcome(REG_ALL, 0, -1, 0, 20, 0) == BOOT_REG_FAILED, "AppInstallAll error rc");
-    CHECK(boot_install_all_outcome(REG_ALL, 1, 0, 5, 20, 0) == BOOT_REG_BUSY_TIMEOUT, "AppInstallAll busy timeout");
-    CHECK(boot_install_all_outcome(REG_ALL, 0, 0, 20, 20, 1) == BOOT_REG_STUCK_MASKED, "incomplete /user/app unmount");
-    CHECK(boot_install_all_outcome(REG_NONE, 0, 0, 0, 20, 0) == BOOT_REG_UNSUPPORTED, "unsupported firmware");
 
     /* Stage cleanup safety (src/stage.h contract): never wipe staging on failed/partial install */
     CHECK(stage_installed_ok(1, 1, 1, 1, 4096, 4096) == 1, "valid + unmounted + confirmed + exact size => safe");
@@ -374,7 +363,7 @@ int main(int argc, char **argv) {
     test_lock_and_first_start();
     test_foreground_user_and_panel_lifecycle();
     test_library_sizes();
-    test_db_states_and_install_outcomes();
+    test_scan_gate_and_staging();
     test_scan_repetitions();
     test_rc3_timeline();
 

@@ -65,6 +65,8 @@ var LANGS = {
     'Removing {0} of {1}…': 'Quitando {0} de {1}…',
     'First start: review Settings and press Save before existing games are added. Nothing is registered automatically until you save.':
       'Primer arranque: revisa los Ajustes y pulsa Guardar antes de añadir los juegos existentes. No se registra nada automáticamente hasta que guardes.',
+    'System database flagged as damaged: do not keep registering; restart/recover before continuing':
+      'Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar',
     'Language': 'Idioma',
     'Restore original files': 'Restaurar archivos originales',
     'Takes games off the console and puts their pkgs (game, update and add-ons) back where they were, with the names they had. Nothing is deleted. The open game is closed first.':

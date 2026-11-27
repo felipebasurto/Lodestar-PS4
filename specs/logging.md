@@ -43,7 +43,9 @@ informational. An unreadable package without that prefix is still reported.
 `0x809c110e` (`SCE_DBRECOVERY_ERROR_APP_BROWSE_ACCESSOR_APP_DB_ERROR`) are reported as errors explaining
 that the corruption mark is raised by the system (ShellCore) and that comparing timestamps against
 Lodestar's start, any app launch, and any `[reg]` lines establishes what triggered it; `app.db-corrupt`
-marker notices are reported as warnings noting that Lodestar never modifies or deletes system databases.
+marker notices are reported as warnings noting that Lodestar never modifies or deletes system databases. A `[dbguard] HALT`
+line is reported as an error saying that Lodestar stopped registering and what to do: restart or recover the console
+before continuing, keep the markers, and read `/data/lodestar/inventory.tsv`.
 Check: test (keep bar 6: the report people act on). Test: `test/logcheck_test.sh`. Source: user (2026-11-24;
 firmware 14.00 `DbCorruptionOccured` audit, 2026-11-27).
 

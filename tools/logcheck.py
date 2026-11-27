@@ -23,6 +23,9 @@ STAMP = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ ")
 # (id, pattern, level, Spanish, English). Level: ERROR stops something working, WARN is a
 # thing to look at, INFO is the project telling what it did.
 SIGNATURES = [
+    ("db_halt", r"^HALT: system database flagged", "ERROR",
+     "Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar. No borres los marcadores ni escribas bases del sistema a mano; inspecciona /data/lodestar/inventory.tsv y el log.",
+     "System database flagged as damaged: do not keep registering; restart/recover before continuing. Do not delete markers or edit system databases by hand; inspect /data/lodestar/inventory.tsv and the log."),
     ("content_url", r"invalid content_url", "ERROR",
      "El instalador del sistema (BGFT) rechazó la ruta del pkg. Pasa si la ruta es demasiado larga (más de 95 bytes) o pasa por /data en vez de /user/data. Mueve el pkg a una carpeta con nombre corto.",
      "The system's installer (BGFT) refused the pkg's path: too long (over 95 bytes) or through /data instead of /user/data. Move the pkg to a folder with a short name."),

@@ -1,0 +1,22 @@
+File: test/data/logs/db_corrupt.log  (4 lines)
+From 2026-11-27 10:00:00 to 2026-11-27 10:00:00
+
+== Version and console
+  [main] start (lock 4, pid 51, userSvc=0x0, appInst=0x0)
+  1 start(s) of Lodestar in this log
+
+== Lines by module
+  [main] 1  [fw] 1  [klog] 1  [dbguard] 1
+
+== What to look at
+  [ERROR] System database flagged as damaged: do not keep registering; restart/recover before continuing. Do not delete markers or edit system databases by hand; inspect /data/lodestar/inventory.tsv and the log.
+        1 time(s); first line: [dbguard] HALT: system database flagged as damaged (klog: DbCorruptionOccured /system_data/priv/mms/app.db) - base del sistema marcada como danada: no sigas reg
+  [ERROR] The system queried user 0's browse table (tbl_appbrowse_0000000000), which does not exist in app.db. This usually happens when an app launch or query passes user_id=0 without a valid foreground user. Check the timeline: look at what ran immediately before; Lodestar never writes app.db.
+        1 time(s); first line: [klog] [SceShellCore] DbCorruptionOccured /system_data/priv/mms/app.db detail: no such table: tbl_appbrowse_0000000000
+  [ERROR] The system (ShellCore/DBR) logged a database corruption event (DbCorruptionOccured / 0x80f50061 / 0x809c110e) and sets the system marker app.db-corrupt to rebuild on reboot. This is a system-owned marker, not written by Lodestar. Check the log timeline: whether it was preceded by a tbl_appbrowse_0000000000 query, a BGFT/AppInstallAll registration, or whether the marker already existed at startup.
+        2 time(s); first line: [klog] [SceShellCore] DbCorruptionOccured /system_data/priv/mms/app.db detail: no such table: tbl_appbrowse_0000000000
+
+== Temporary files Lodestar deleted from internal storage
+  None.
+
+Result: 3 known error(s) and 0 warning(s). Read them above.

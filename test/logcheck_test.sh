@@ -34,6 +34,8 @@ check pkg_size_zero en 1
 check pkg_size_zero es 1
 check db_corruption en 1
 check db_corruption es 1
+check db_corrupt en 1
+check db_corrupt es 1
 # the log read from the standard input (curl .../api/log | ...) gives the same report
 got=$(python3 -I tools/logcheck.py --lang en - < test/data/logs/healthy.log | sed 's/^File: .*$//')
 want=$(sed 's/^File: .*$//' test/data/logs/healthy.en.expected)

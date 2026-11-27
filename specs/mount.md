@@ -101,4 +101,5 @@ Source: scan performance audit after P4N-15.
   or refuse.
 - Can `/user/app` masking be made fully ownership-aware without changing ShellCore registration
   timing? The staging mount itself is current-owned, but the stacked namespace needs console
-  evidence before further changes.
+  evidence before further changes. Error/unmount recovery and batch abort rules for staging are
+  specified in `specs/registration.md` (`REG-9`).

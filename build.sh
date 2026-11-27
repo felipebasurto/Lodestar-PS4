@@ -86,7 +86,7 @@ if [ ! -f "$LA/libarchive.a" ]; then
     $B/orbis-ar rcs "$LA/libarchive.a" "$LA"/*.o
 fi
 $B/orbis-clang -O2 -Wall -Wextra -Ibuild -Ithird_party/sqlite -Ithird_party/bearssl/inc -Ithird_party/libarchive -o build/lodestar-ps4.elf \
-    src/main.c src/fw.c src/logts.c src/klogdup.c src/web.c src/pkg.c src/build.c src/check.c src/upload.c src/install.c src/lang.c src/mem.c src/db.c src/origin.c src/autorun.c src/crypto.c \
+    src/main.c src/fw.c src/logts.c src/klogdup.c src/web.c src/pkg.c src/build.c src/check.c src/upload.c src/install.c src/lang.c src/mem.c src/db.c src/dbguard.c src/inventory.c src/origin.c src/autorun.c src/crypto.c \
     src/badpatch.c src/bgftscan.c src/catalog.c src/catsnap.c src/shortpath.c src/titlecache.c src/https.c src/json.c src/links.c src/rar5dec.c src/la_alloc.c "$SQ" "$BR/libbearssl.a" "$LA/libarchive.a" \
     -lSceUserService -lSceAppInstUtil -lSceSystemService -lkernel_sys
 # The .bin (what Payload Guest lists) is raw code that loads the ELF appended to it:

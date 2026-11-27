@@ -66,24 +66,22 @@ static inline boot_panel_step_t boot_panel_app_plan(int have_installed, int done
     return plan;
 }
 
-/* scan_all() reads app.db to tell the games that need registering: with an unreadable
- * database (db_ready covers a missing file and a missing tbl_appinfo) or one the system
- * flagged as damaged (REG-7) every game would look unregistered and be added again. */
-static inline int boot_db_usable(int db_ready, int db_corrupt) {
-    return db_ready != 0 && !db_corrupt;
-}
-
 typedef enum {
     BOOT_SCAN_SKIP_DELETING = 0,
+    BOOT_SCAN_HALT_DB_CORRUPT,
     BOOT_SCAN_WAIT_SETUP,
     BOOT_SCAN_UNSUPPORTED_FW,
     BOOT_SCAN_RUN,
 } boot_scan_gate_t;
 
-/* Main-loop scan gate matching src/main.c. */
-static inline boot_scan_gate_t boot_scan_gate(int deleting, int setup_active, int reg_mode) {
+/* Main-loop scan gate. A first start waits for the explicit save (REG-8): no timeout and no
+ * panel absence ever opens it. A database the system flagged as damaged (REG-7) stops every
+ * registration whatever the setup says: with it every game would look unregistered. */
+static inline boot_scan_gate_t boot_scan_gate(int deleting, int setup_active, int reg_mode, int db_corrupt) {
     if (deleting)
         return BOOT_SCAN_SKIP_DELETING;
+    if (db_corrupt)
+        return BOOT_SCAN_HALT_DB_CORRUPT;
     if (setup_active)
         return BOOT_SCAN_WAIT_SETUP;
     if (reg_mode == REG_NONE)
@@ -95,11 +93,6 @@ static inline boot_scan_gate_t boot_scan_gate(int deleting, int setup_active, in
  * open and at least one title actually needs registration. */
 static inline int boot_stage_mask_allowed(int reg_mode, int open_games_count, int need_count) {
     return reg_mode == REG_ALL && open_games_count == 0 && need_count > 0;
-}
-
-/* Postcondition of unmask_user_app(): 1 only when /user/app is no longer masked. */
-static inline int boot_stage_unmask_ok(int still_masked_after_force) {
-    return !still_masked_after_force;
 }
 
 /* Group sizing for scan_root() registration batches (0, 1, 20, 768... pending games). */
@@ -119,31 +112,6 @@ static inline int boot_batch_plan(int pending, int batch_enabled, int batch_size
     if (out_groups)
         *out_groups = groups;
     return groups;
-}
-
-typedef enum {
-    BOOT_REG_OK = 0,
-    BOOT_REG_UNSUPPORTED,
-    BOOT_REG_STUCK_MASKED,
-    BOOT_REG_BUSY_TIMEOUT,
-    BOOT_REG_FAILED,
-    BOOT_REG_PARTIAL,
-} boot_reg_outcome_t;
-
-/* Classifies the observable result of an install_all() registration pass. */
-static inline boot_reg_outcome_t boot_install_all_outcome(int reg_mode, int install_busy, int install_rc,
-                                                          int registered, int total, int unmask_still_masked) {
-    if (reg_mode == REG_NONE)
-        return BOOT_REG_UNSUPPORTED;
-    if (unmask_still_masked)
-        return BOOT_REG_STUCK_MASKED;
-    if (install_busy)
-        return BOOT_REG_BUSY_TIMEOUT;
-    if (install_rc != 0)
-        return BOOT_REG_FAILED;
-    if (registered < total)
-        return BOOT_REG_PARTIAL;
-    return BOOT_REG_OK;
 }
 
 /* Who holds the lock port (P4N-31): bind_errno of the failed bind and what the local panel
