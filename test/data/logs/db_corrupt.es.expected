@@ -1,0 +1,18 @@
+Archivo: test/data/logs/db_corrupt.log  (5 líneas)
+Desde 2026-11-27 10:00:00 hasta 2026-11-27 10:00:01
+
+== Versión y consola
+  [main] start (lock 4, pid 51, userSvc=0x0, appInst=0x0)
+  1 arranque(s) de Lodestar en este log
+
+== Líneas por módulo
+  [dbguard] 2  [main] 1  [fw] 1  [klog] 1
+
+== Qué hay que mirar
+  [ERROR] Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar. No borres los marcadores ni escribas bases del sistema a mano; inspecciona /data/lodestar/inventory.tsv y el log.
+        2 vez/veces; primera línea: [klog] [SceShellCore] DbCorruptionOccured /system_data/priv/mms/app.db detail: no such table: tbl_appbrowse_0000000000
+
+== Archivos temporales que Lodestar borró de la memoria interna
+  Ninguno.
+
+Resultado: 1 error(es) y 0 aviso(s) conocidos. Léelos arriba.

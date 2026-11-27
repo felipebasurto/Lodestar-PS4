@@ -1,0 +1,5 @@
+2026-11-27 10:00:00.100 [main] start (lock 4, pid 51, userSvc=0x0, appInst=0x0)
+2026-11-27 10:00:00.120 [fw] firmware 14.00, registration via AppInstallAll
+2026-11-27 10:00:00.300 [klog] [SceShellCore] DbCorruptionOccured /system_data/priv/mms/app.db detail: no such table: tbl_appbrowse_0000000000
+2026-11-27 10:00:00.301 [dbguard] HALT: system database flagged as damaged (klog: DbCorruptionOccured /system_data/priv/mms/app.db) - base del sistema marcada como danada: no sigas registrando; reinicia/recupera antes de continuar
+2026-11-27 10:00:01.000 [dbguard] scan_all halted: system database flagged as damaged

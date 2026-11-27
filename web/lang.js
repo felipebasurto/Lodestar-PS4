@@ -63,8 +63,10 @@ var LANGS = {
     '{0} removed; not removed: {1}': '{0} quitado(s); sin quitar: {1}',
     '{0} game(s) removed from the library': '{0} juego(s) quitado(s) de la biblioteca',
     'Removing {0} of {1}…': 'Quitando {0} de {1}…',
-    'First start: review Settings and press Save. No game is added while this page is open. If it stays closed for 2 minutes, the default settings are used.':
-      'Primer arranque: revisa los Ajustes y pulsa Guardar. Mientras esta página esté abierta no se añade ningún juego. Si queda cerrada 2 minutos, se usan los ajustes por defecto.',
+    'First start: review Settings and press Save. No game is added until you save.':
+      'Primer arranque: revisa los Ajustes y pulsa Guardar. No se añadirá ningún juego hasta que guardes.',
+    'System database flagged as damaged: do not keep registering; restart/recover before continuing':
+      'Base del sistema marcada como dañada: no sigas registrando; reinicia/recupera antes de continuar',
     'Language': 'Idioma',
     'Restore original files': 'Restaurar archivos originales',
     'Takes games off the console and puts their pkgs (game, update and add-ons) back where they were, with the names they had. Nothing is deleted. The open game is closed first.':

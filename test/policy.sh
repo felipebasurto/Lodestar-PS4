@@ -14,12 +14,15 @@ grep -nE 'sqlite3_(exec|blob_open|backup_init)\b' "${SRC[@]}" && rule "sqlite3 c
 grep -nE 'SQLITE_OPEN_(READWRITE|CREATE)' "${SRC[@]}" && rule "a database opened for writing"
 grep -nE 'sqlite3_prepare' "${SRC[@]}" | grep -vE 'sqlite3_prepare(_v2)?\([^,]+, "SELECT ' && rule "SQL other than SELECT"
 grep -n 'sqlite3_open' "${SRC[@]}" | grep -v 'mode=ro&nolock=1' && rule "every sqlite3_open must use mode=ro&nolock=1"
-grep -nE '"/system_data/priv/mms/[^"]*"' "${SRC[@]}" | grep -vE 'APP_DB|db_mtime|static const char \*files|"/system_data/priv/mms/[a-z]+\.db(-journal)?"' &&
+grep -nE '"/system_data/priv/mms/[^"]*"' "${SRC[@]}" | grep -vE 'APP_DB|db_mtime|static const char \*files|DBGUARD_MMS_DIR|"/system_data/priv/mms/[a-z]+\.db(-(journal|corrupt))?"' &&
     rule "a path into the system database folder outside the read-only uses"
 for f in "${SRC[@]}"; do
-    awk '/write_file\(|open\([^)]*O_(WRONLY|RDWR)/ && /priv\/mms/ {print FILENAME":"NR": "$0; bad=1} END {exit bad}' "$f" ||
-        rule "a write into /system_data/priv/mms"
+    awk '/(write_file|unlink|remove|rename)\(|open\([^)]*O_(WRONLY|RDWR)|fopen\([^)]*"[wa]/ && /priv\/mms/ {print FILENAME":"NR": "$0; bad=1} END {exit bad}' "$f" ||
+        rule "a write or delete into /system_data/priv/mms"
 done
+# Foreground user must never be queried unchecked (REG-6).
+grep -n 'sceUserServiceGetForegroundUser(' "${SRC[@]}" | grep -vE 'int rc = sceUserServiceGetForegroundUser\(|int sceUserServiceGetForegroundUser\(' &&
+    rule "unchecked sceUserServiceGetForegroundUser() call (must check rc and user > 0 via dbguard_user_ok)"
 
 # No shell, no other programs: the payload has no business running commands.
 grep -nE '\b(system|popen|execl|execlp|execle|execv|execvp|execve)\s*\(' "${SRC[@]}" && rule "running commands"

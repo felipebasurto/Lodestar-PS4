@@ -1,0 +1,18 @@
+File: test/data/logs/db_corrupt.log  (5 lines)
+From 2026-11-27 10:00:00 to 2026-11-27 10:00:01
+
+== Version and console
+  [main] start (lock 4, pid 51, userSvc=0x0, appInst=0x0)
+  1 start(s) of Lodestar in this log
+
+== Lines by module
+  [dbguard] 2  [main] 1  [fw] 1  [klog] 1
+
+== What to look at
+  [ERROR] System database flagged as damaged: do not keep registering; restart/recover before continuing. Do not delete markers or edit system databases by hand; inspect /data/lodestar/inventory.tsv and the log.
+        2 time(s); first line: [klog] [SceShellCore] DbCorruptionOccured /system_data/priv/mms/app.db detail: no such table: tbl_appbrowse_0000000000
+
+== Temporary files Lodestar deleted from internal storage
+  None.
+
+Result: 1 known error(s) and 0 warning(s). Read them above.

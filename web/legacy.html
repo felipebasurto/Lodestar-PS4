@@ -69,6 +69,9 @@ textarea{width:100%;min-height:90px;font-family:monospace;font-size:14px}
 .warn{color:#ffcb47;font-size:15px;background:#221c0c;border:1px solid #7d6527;padding:6px 8px;margin-top:4px}
 #restart-banner{border-bottom:1px solid #7d6527;color:#ffcb47;padding:0 0 12px;margin:0 0 24px}
 #restart-banner .rb-main{font-weight:500}
+#dbcorrupt-banner{border-bottom:1px solid #a83c3c;color:#ff9e9e;padding:0 0 12px;margin:0 0 24px}
+#dbcorrupt-banner .dbc-main{font-weight:500}
+#dbcorrupt-banner .dbc-detail{color:#c9b2b2;font-size:.9em;margin-top:4px}
 #actbar{border:1px solid #2c3036;background:#121418;padding:10px 14px;margin:0 0 12px;font-size:16px}
 #actbar .db-main{font-weight:500;display:block}
 #actbar .db-sub{color:#a9aeb6;font-size:15px;display:block;margin-top:4px}
@@ -101,6 +104,10 @@ pre{white-space:pre-wrap;font-size:12px;background:#050607;padding:12px;border:1
 </header>
 
 <div class="view on" id="v-games">
+  <div id="dbcorrupt-banner" role="alert" style="display:none">
+    <div class="dbc-main" id="dbc-main"></div>
+    <div class="dbc-detail" id="dbc-detail"></div>
+  </div>
   <div id="restart-banner" style="display:none">
     <div class="rb-main" id="rb-main"></div>
   </div>
@@ -348,6 +355,12 @@ function load(done) {
     games = j.games;
     activity = j.activity || {};
     $('ver').innerHTML = esc(j.version);
+    var dbcb = $('dbcorrupt-banner');
+    dbcb.style.display = j.db_corrupt ? 'block' : 'none';
+    if (j.db_corrupt) {
+      $('dbc-main').textContent = t('System database flagged as damaged: do not keep registering; restart/recover before continuing');
+      $('dbc-detail').textContent = j.db_corrupt_reason || '';
+    }
     render();
     renderAct();
     renderRestart();

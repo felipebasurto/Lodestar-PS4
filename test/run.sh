@@ -108,6 +108,10 @@ echo "== system database"
 $CC $FLAGS -Ithird_party/sqlite -DAPP_DB="\"$B/app.db\"" -o "$B/db_test" test/db_test.c src/db.c src/crypto.c src/mem.c src/la_alloc.c "$SQ"
 "$B/db_test"
 
+echo "== database guardrails & circuit breakers (REG-6..REG-10)"
+$CC $FLAGS -pthread -o "$B/dbguard_test" test/dbguard_test.c src/dbguard.c src/inventory.c src/mem.c
+"$B/dbguard_test"
+
 echo "== web panel server"
 $CC $FLAGS -Itest -o "$B/http_test" test/http_test.c test/stubs.c src/web.c src/lang.c src/build.c src/mem.c src/crypto.c -lpthread
 "$B/http_test"

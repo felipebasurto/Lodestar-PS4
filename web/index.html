@@ -83,6 +83,8 @@ progress:indeterminate{background:repeating-linear-gradient(90deg,var(--accent) 
 /* library */
 main{padding:28px 24px 48px;max-width:1368px;margin:0 auto}
 #restart-banner{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;border:1px solid rgba(255,203,71,.55);background:rgba(35,29,10,.9);color:var(--gold);padding:10px 14px;margin-bottom:22px;font-size:18px}
+#dbcorrupt-banner{display:flex;flex-direction:column;gap:4px;border:1px solid rgba(255,107,107,.75);background:rgba(52,14,14,.92);color:#ffb0b0;padding:12px 14px;margin-bottom:22px;font-size:18px}
+#dbcorrupt-banner .dbc-detail{font-size:14px;color:var(--muted)}
 .libbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;margin:0 0 14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .library-heading{flex:1;margin:0;font-size:34px;line-height:1.05;font-weight:700}
 input[type=search]{-webkit-appearance:none;background:rgba(0,0,0,.6);color:var(--fg);border:1px solid var(--line);border-radius:0;padding:8px 12px;font:inherit;width:300px;max-width:100%}
@@ -235,11 +237,15 @@ form.settings input.num{width:6em}
   <span class="db-sub" id="lb-sub"></span></div>
 <div id="actbar"><span class="db-main" id="ab-text"></span><progress id="act-prog" max="1" value="0" hidden></progress><span class="db-sub" id="ab-sub"></span></div>
 <main>
+  <div id="dbcorrupt-banner" role="alert" hidden>
+    <div id="dbc-main"></div>
+    <div class="dbc-detail" id="dbc-detail"></div>
+  </div>
   <div id="restart-banner" role="alert" hidden>
     <div class="rb-main" id="rb-main"></div>
     <button type="button" id="restart-filter" class="small"></button>
   </div>
-  <div class="warn" id="setupnote" hidden>First start: review Settings and press Save. No game is added while this page is open. If it stays closed for 2 minutes, the default settings are used.</div>
+  <div class="warn" id="setupnote" hidden>First start: review Settings and press Save. No game is added until you save.</div>
   <div class="libbar">
     <h2 class="library-heading">Library</h2>
     <input id="q" type="search" placeholder="Search game or CUSA" aria-label="Search game or CUSA">
@@ -671,6 +677,12 @@ function load() {
     renderStorage();
     renderActivity();
     renderNotices();
+    var dbcb = $('dbcorrupt-banner');
+    dbcb.hidden = !j.db_corrupt;
+    if (j.db_corrupt) {
+      $('dbc-main').textContent = t('System database flagged as damaged: do not keep registering; restart/recover before continuing');
+      $('dbc-detail').textContent = j.db_corrupt_reason || '';
+    }
     $('setupnote').hidden = !j.setup;
     $('mc-ver').textContent = j.version;
     $('mc-dot').className = 'dot ok';
