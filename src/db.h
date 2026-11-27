@@ -20,3 +20,7 @@ int db_confirms_unregistered(const char *title_id);
  * title is not registered. The PS4 refuses to start a game whose update has another
  * one ("APP_VER disagree"). */
 const char *db_app_ver(const char *title_id);
+/* Read-only stat() check for the system's corruption marker (app.db-corrupt).
+ * Never opens, modifies, repairs, or deletes any database or marker file. */
+int db_corrupt_marker_present(void);
+const char *db_corrupt_marker_path(void);

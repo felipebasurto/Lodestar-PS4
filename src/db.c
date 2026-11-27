@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #include "sqlite3.h"
@@ -191,4 +192,11 @@ const char *db_app_ver(const char *title_id) {
         snprintf(ver_buf, sizeof(ver_buf), "%s", row->ver);
     pthread_mutex_unlock(&g_mu);
     return found ? ver_buf : NULL;
+}
+
+const char *db_corrupt_marker_path(void) { return APP_DB "-corrupt"; }
+
+int db_corrupt_marker_present(void) {
+    struct stat st;
+    return stat(APP_DB "-corrupt", &st) == 0;
 }

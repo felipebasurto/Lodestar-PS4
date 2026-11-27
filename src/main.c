@@ -54,6 +54,7 @@
 #include "db.h"
 #include "delete.h"
 #include "dlcvec.h"
+#include "firstrun.h"
 #include "links.h"
 #include "fw.h"
 #include "https.h"
@@ -187,17 +188,34 @@ static void cfg_snapshot(config_t *out) {
     *out = g_cfg;
     pthread_mutex_unlock(&g_cfg_mu);
 }
-static int g_setup; /* a first start: no game is added until the settings are saved (first_start) */
-/* A first start with nobody at the panel for this long goes on with the default settings:
- * most never open the panel, and they would never get a game. */
-#define SETUP_WAIT 120
-static time_t g_setup_start;
-static time_t g_setup_seen; /* the panel's last look at the list during a first start */
+static int g_setup; /* atomic mirror of g_firstrun awaiting explicit settings save */
+static firstrun_state_t g_firstrun;
+static pthread_mutex_t g_firstrun_mu = PTHREAD_MUTEX_INITIALIZER;
 
 static int setup_active(void) { return __atomic_load_n(&g_setup, __ATOMIC_ACQUIRE); }
-static void setup_set(int on) { __atomic_store_n(&g_setup, on, __ATOMIC_RELEASE); }
-static time_t setup_seen_at(void) { return __atomic_load_n(&g_setup_seen, __ATOMIC_ACQUIRE); }
-static void setup_seen_touch(void) { __atomic_store_n(&g_setup_seen, time(NULL), __ATOMIC_RELEASE); }
+static void firstrun_begin(int is_first) {
+    pthread_mutex_lock(&g_firstrun_mu);
+    firstrun_init(&g_firstrun, is_first, (int64_t)time(NULL));
+    __atomic_store_n(&g_setup, firstrun_awaiting_consent(&g_firstrun), __ATOMIC_RELEASE);
+    pthread_mutex_unlock(&g_firstrun_mu);
+}
+static void setup_seen_touch(void) {
+    pthread_mutex_lock(&g_firstrun_mu);
+    firstrun_on_panel_seen(&g_firstrun, (int64_t)time(NULL));
+    pthread_mutex_unlock(&g_firstrun_mu);
+}
+static void firstrun_confirm_saved(void) {
+    pthread_mutex_lock(&g_firstrun_mu);
+    firstrun_on_settings_saved(&g_firstrun);
+    __atomic_store_n(&g_setup, firstrun_awaiting_consent(&g_firstrun), __ATOMIC_RELEASE);
+    pthread_mutex_unlock(&g_firstrun_mu);
+}
+static int firstrun_allows_scan(void) {
+    pthread_mutex_lock(&g_firstrun_mu);
+    int ok = firstrun_scan_decision(&g_firstrun, (int64_t)time(NULL), 0) == FIRSTRUN_SCAN_ALLOW;
+    pthread_mutex_unlock(&g_firstrun_mu);
+    return ok;
+}
 
 int sceSystemServiceParamGetInt(int param_id, int *value);
 int sceSystemServicePowerTick(void);
@@ -297,7 +315,10 @@ static const char *notify_kind_name(notify_kind_t kind) {
     }
 }
 
-int sceUserServiceInitialize(void *);
+typedef struct {
+    int32_t priority;
+} user_service_init_t;
+int sceUserServiceInitialize(const user_service_init_t *);
 int sceUserServiceGetForegroundUser(int32_t *);
 int sceAppInstUtilInitialize(void);
 int sceKernelSendNotificationRequest(int, notify_request_t *, size_t, int);
@@ -2220,8 +2241,13 @@ static int dlc_install(dlc_src_t *a) {
         return 1;
     }
     const char *dlc_name = a->meta.title_valid ? a->meta.title : a->pkg.content_id;
-    int32_t user = 0;
-    sceUserServiceGetForegroundUser(&user);
+    int32_t user = -1;
+    int urc = sceUserServiceGetForegroundUser(&user);
+    if (urc != 0 || !user_id_valid(user)) {
+        printf("[dlc] %s: foreground user unavailable (rc=0x%08x, user=%d), passing 0 to BGFT\n",
+               a->pkg.content_id, (unsigned)urc, (int)user);
+        user = 0;
+    }
     char kind[24];
     snprintf(kind, sizeof(kind), "ac-%.16s", a->pkg.content_id + 20);
     int task = install_pkg(pkg_url(a->pkg.title_id, kind, a->path, url, sizeof(url)),
@@ -3087,19 +3113,33 @@ static void pump_now(void);
  * update's param.sfo byte for byte; AppInstallAll writes the game's one there. */
 static void enforce_patch_sfo(const char *tid, int has_patch, const char *patch_path, uint32_t sfo_len,
                               const unsigned char *sfo_sha) {
-    if (!has_patch)
+    if (!has_patch || !patch_path || !patch_path[0] || !sfo_len)
         return;
     char path[96];
     snprintf(path, sizeof(path), "/system_data/priv/appmeta/%s/param.sfo", tid);
-    int fd = open(path, O_RDONLY), same = 0;
-    if (fd >= 0) {
-        uint8_t cur[8192], sha[32];
-        ssize_t n = read(fd, cur, sizeof(cur));
-        if (n > 0 && (uint32_t)n == sfo_len && sfo_len <= sizeof(cur)) {
-            sha256(cur, (size_t)n, sha);
-            same = !memcmp(sha, sfo_sha, sizeof(sha));
+    int same = 0;
+    if (sfo_len <= 8192) {
+        int fd = open(path, O_RDONLY);
+        if (fd >= 0) {
+            uint8_t cur[8192], sha[32];
+            ssize_t n = read(fd, cur, sizeof(cur));
+            if (n > 0 && (uint32_t)n == sfo_len) {
+                sha256(cur, (size_t)n, sha);
+                same = !memcmp(sha, sfo_sha, sizeof(sha));
+            }
+            close(fd);
         }
-        close(fd);
+    } else {
+        size_t n = 0;
+        uint8_t *cur = read_all(path, &n);
+        if (cur) {
+            if (n == sfo_len) {
+                uint8_t sha[32];
+                sha256(cur, n, sha);
+                same = !memcmp(sha, sfo_sha, sizeof(sha));
+            }
+            mem_free(cur);
+        }
     }
     if (same)
         return;
@@ -3307,8 +3347,11 @@ static void unmask_user_app(char (*tids)[10], int n) {
     }
     if (user_app_masked() && unmount_tracked("/user/app", MNT_FORCE))
         printf("[reg] unmount /user/app: %s\n", strerror(errno));
-    if (user_app_masked())
+    if (user_app_masked()) {
         printf("[reg] /user/app still shows only the new games\n");
+        g_masked = 1;
+        return;
+    }
     g_masked = 0;
     stage_clear();
 }
@@ -3333,10 +3376,13 @@ static void unmask_leftover(void) {
 static int mask_user_app(char (*tids)[10], int n) {
     uint32_t ids[4];
     char open[4][10];
-    if (g_reg_mode != REG_ALL || open_games(ids, open, 4))
-        return 0; /* an open game keeps its folder in use: plain AppInstallAll */
-    if (user_app_masked())
+    if (g_reg_mode != REG_ALL || open_games(ids, open, 4) != 0)
+        return 0; /* an open game (or unreadable process table): plain AppInstallAll */
+    if (user_app_masked()) {
         unmask_leftover();
+        if (user_app_masked())
+            return 0; /* refused to layer another stage over a stuck mount */
+    }
     stage_clear();
     mkdirs(STAGE_DIR, 0777);
     char new_tids[MAX_TITLES][10];
@@ -3372,9 +3418,11 @@ static void install_all(char (*tids)[10], int n) {
     if (!need)
         return;
     int masked = mask_user_app(tids, n);
-    if (install_all_start(tids, n) && masked) {
-        unmask_user_app(tids, n);
-        masked = 0;
+    if (install_all_start(tids, n)) {
+        if (masked)
+            unmask_user_app(tids, n);
+        printf("[reg] %s could not be started (busy or thread creation failed)\n", reg_mode_name());
+        return;
     }
     int done = n - need, idle = 0;
     while (done < n && idle < 30) {
@@ -4293,7 +4341,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         enforce_patch_sfo(info->title_id, info->has_patch, info->patch_path, info->sfo_len, info->sfo_sha);
         manage_info(info);
         /* PS4: the system registered another version (the update came later) */
-        const char *rv = db_app_ver(t->tid);
+        const char *rv = db_confirms_registered(t->tid) ? db_app_ver(t->tid) : NULL;
         if (rv && *rv && strcmp(rv, info->ver)) {
             char why[64];
             snprintf(why, sizeof(why), TR("registered as %s, the update is %s", "registrado como %s, la actualización es %s"), rv,
@@ -4869,7 +4917,8 @@ static void trace_klog(const char *line) {
     int copy = 0;
     static const char *keys[] = {"CRASH", "Trophy:Register", "_pfs_mount", "mountpfs", "PrepareProcessLaunch",
                                  "preLaunchCheck", "scePlayGoCore", "process_mount", "process_check", "sqlite",
-                                 "SQLITE", "corrupt", "Corrupt", "CORRUPT", "dbr", "DBR", NULL};
+                                 "SQLITE", "corrupt", "Corrupt", "CORRUPT", "DbCorruption", "tbl_appbrowse",
+                                 "0x80f50061", "80f50061", "0x809c110e", "809c110e", "dbr", "DBR", NULL};
     for (int i = 0; keys[i] && !copy; i++)
         copy = strstr(line, keys[i]) != NULL;
     for (int i = 0; !copy && i < MAX_TITLES; i++)
@@ -6028,17 +6077,18 @@ int sceSystemServiceKillApp(uint32_t app_id, int how, int reason, int core_dump)
 #define PANEL_APP_TID "LODS00001"
 
 /* Open apps: processes named eboot.bin (PS4 and PS5 games alike), the games or only the
- * panel app. Fills up to max app ids and title ids, returns how many are open. */
+ * panel app. Fills up to max app ids and title ids, returns how many are open, or -1 if
+ * the process table could not be read (callers must fail closed on < 0). */
 static int open_apps(uint32_t *ids, char (*tids)[10], int max, int panel) {
     int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PROC, 0}, n = 0;
     size_t len = 0;
     if (sysctl(mib, 4, NULL, &len, NULL, 0) || !len)
-        return 0;
+        return -1;
     len += len / 4; /* processes started meanwhile */
     uint8_t *buf = mem_alloc(len); /* ~100 KB: off the libc heap */
     if (!buf || sysctl(mib, 4, buf, &len, NULL, 0)) {
         mem_free(buf);
-        return 0;
+        return -1;
     }
     for (size_t off = 0; off + sizeof(struct kinfo_proc) <= len;) {
         struct kinfo_proc *ki = (struct kinfo_proc *)(buf + off);
@@ -6067,20 +6117,28 @@ static int open_games(uint32_t *ids, char (*tids)[10], int max) {
 /* Back on the panel's first page inside the panel app: the app cannot close itself while
  * it shows the page. */
 void app_panel_close(void) {
+    pthread_mutex_lock(&g_firstrun_mu);
+    firstrun_on_panel_closed(&g_firstrun);
+    pthread_mutex_unlock(&g_firstrun_mu);
     uint32_t ids[2];
     char tids[2][10];
     int n = open_apps(ids, tids, 2, 1);
+    if (n <= 0)
+        return;
     for (int i = 0; i < n && i < 2; i++)
         printf("[main] panel app closed: 0x%x\n", (unsigned)sceSystemServiceKillApp(ids[i], -1, 0, 0));
 }
 
 /* Every pkg operation that takes games out of the library closes the open game first,
  * whichever it is: a game left open keeps reading pkgs that are being moved. 0 once no
- * game is open; -1 when one did not close within 30 seconds. */
+ * game is open; -1 when the process table could not be read or a game did not close
+ * within 30 seconds. */
 static int close_open_games(void) {
     uint32_t ids[8];
     char tids[8][10];
     int n = open_games(ids, tids, 8);
+    if (n < 0)
+        return -1;
     if (!n)
         return 0;
     for (int i = 0; i < n && i < 8; i++) {
@@ -6097,7 +6155,7 @@ static int close_open_games(void) {
         int mounted = 0;
         for (int i = 0; i < nc; i++)
             mounted |= title_running(closing[i]);
-        if (!open_games(ids, tids, 8) && !mounted) {
+        if (open_games(ids, tids, 8) == 0 && !mounted) {
             pump_events(2000); /* let the system finish unmounting the game */
             for (int i = 0; i < MAX_TITLES; i++)
                 g_managed[i].running = 0;
@@ -6406,7 +6464,7 @@ static int first_start(void) {
 }
 
 static void config_save(void) {
-    setup_set(0); /* the settings were chosen: games are added from now on */
+    firstrun_confirm_saved(); /* explicit settings save: initial adoption and scans are now allowed */
     buf_t b = {0};
     buf_printf(&b, "ver=3\nbatch=%d\nbatch_size=%d\ndlc=%d\ndlc_mode=%s\ndlc_big=%d\nrestore_batch=%d\ninternal=%d\norganize=%d\nlang=%s\n",
                g_cfg.batch, g_cfg.batch_size, g_cfg.dlc, dlc_mode_name(g_cfg.dlc_mode), g_cfg.dlc_big, g_cfg.restore_batch,
@@ -6850,8 +6908,13 @@ static void install_received(void) {
     char tid[10] = "", title[128] = "", url[PATH_MAX + 8], msg[PATH_MAX + 64];
     if (pkg_id_title(path, tid, title, sizeof(title)))
         snprintf(title, sizeof(title), "%s", path);
-    int32_t user = 0;
-    sceUserServiceGetForegroundUser(&user);
+    int32_t user = -1;
+    int urc = sceUserServiceGetForegroundUser(&user);
+    if (urc != 0 || !user_id_valid(user)) {
+        printf("[install] %s: foreground user unavailable (rc=0x%08x, user=%d), passing 0 to BGFT\n",
+               path, (unsigned)urc, (int)user);
+        user = 0;
+    }
     int task = install_pkg(pkg_url(tid[0] ? tid : "install", "up", path, url, sizeof(url)), title, user, msg,
                            sizeof(msg));
     printf("[install] %s: %s\n", path, msg);
@@ -6979,8 +7042,10 @@ static void *panel_app_fetch(void *arg) {
     return NULL;
 }
 
+static const char *panel_url(char *out, size_t n);
+
 /* The tile, from the main loop: downloaded once per load when missing, and opened by a
- * first start (not over a game). */
+ * first start only when a valid signed-in foreground user is confirmed (P4N-28). */
 static void panel_app_step(void) {
     static time_t start;
     static int opened;
@@ -6992,15 +7057,37 @@ static void panel_app_step(void) {
         if (fd >= 0)
             close(fd);
     }
-    if (have && setup_active() && !opened && db_is_registered(PANEL_APP_TID)) {
+    if (have && setup_active() && !opened && db_confirms_registered(PANEL_APP_TID)) {
         uint32_t ids[1];
         char tids[1][10];
+        int og = open_games(ids, tids, 1);
+        int op = open_apps(ids, tids, 1, 1);
+        int32_t user = -1;
+        int urc = (og == 0 && op == 0) ? sceUserServiceGetForegroundUser(&user) : -1;
+        panel_launch_action_t act = panel_launch_decide(have, setup_active(), opened, 1, og, op, urc, user);
         opened = 1;
-        if (!open_games(ids, tids, 1)) {
-            int32_t user = 0;
-            sceUserServiceGetForegroundUser(&user);
+        if (act == PANEL_LAUNCH_OPEN) {
             lnc_param_t lp = {sizeof(lp), (uint32_t)user, 0, 0, 0};
-            printf("[panel-app] opened for the first start: 0x%x\n", (unsigned)sceLncUtilLaunchApp(PANEL_APP_TID, NULL, &lp));
+            int lrc = sceLncUtilLaunchApp(PANEL_APP_TID, NULL, &lp);
+            printf("[panel-app] launch %s for user 0x%08x (%d): fg_rc=0x%08x launch_rc=0x%08x\n",
+                   PANEL_APP_TID, (unsigned)user, (int)user, (unsigned)urc, (unsigned)lrc);
+            if (lrc < 0) {
+                char url[48];
+                notify_kind(NOTIFY_WARN,
+                            TR("Could not open the Lodestar app automatically (0x%08x). Open it from the home screen or go to %s",
+                               "No se pudo abrir la app Lodestar automáticamente (0x%08x). Ábrela desde el inicio o entra en %s"),
+                            (unsigned)lrc, panel_url(url, sizeof(url)));
+            }
+        } else if (act == PANEL_LAUNCH_SKIP_NO_USER) {
+            char url[48];
+            printf("[panel-app] auto-launch skipped: invalid foreground user (fg_rc=0x%08x, user=%d / 0x%08x)\n",
+                   (unsigned)urc, (int)user, (unsigned)user);
+            notify_kind(NOTIFY_WARN,
+                        TR("Lodestar app was not opened automatically (no valid signed-in user). Open it from the home screen or go to %s",
+                           "La app Lodestar no se abrió automáticamente (sin usuario válido). Ábrela desde el inicio o entra en %s"),
+                        panel_url(url, sizeof(url)));
+        } else if (act == PANEL_LAUNCH_SKIP_BUSY) {
+            printf("[panel-app] auto-launch skipped: busy (open_games=%d, open_panel=%d)\n", og, op);
         }
     }
     if (have || exists(PANEL_APP_DONE) || __atomic_load_n(&g_panel_fetching, __ATOMIC_ACQUIRE) ||
@@ -7181,18 +7268,122 @@ static void shutdown_daemon(int lock) {
     log_stop();
 }
 
-static int single_instance(void) {
+static int single_instance(int *err_out) {
     int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0) {
+        if (err_out)
+            *err_out = errno;
+        return -1;
+    }
     struct sockaddr_in a = {0};
     a.sin_family = AF_INET;
     a.sin_port = htons(LOCK_PORT);
     a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    if (s < 0 || bind(s, (struct sockaddr *)&a, sizeof(a)) || listen(s, 1)) {
-        if (s >= 0)
-            close(s);
+    if (bind(s, (struct sockaddr *)&a, sizeof(a)) || listen(s, 1)) {
+        int e = errno;
+        close(s);
+        if (err_out)
+            *err_out = e;
         return -1;
     }
+    if (err_out)
+        *err_out = 0;
     return s;
+}
+
+/* Read-only loopback probe of the local web panel (/api/agent) to distinguish an already
+ * running Lodestar instance from another mount daemon sharing LOCK_PORT (P4N-31). */
+static void probe_local_lodestar(char *out, size_t cap) {
+    if (!out || !cap)
+        return;
+    out[0] = 0;
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0)
+        return;
+    struct timeval tv = {0, 300000};
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    struct sockaddr_in a = {0};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(WEB_PORT);
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (!connect(s, (struct sockaddr *)&a, sizeof(a))) {
+        static const char req[] = "GET /api/agent HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+        if (send(s, req, sizeof(req) - 1, 0) == (ssize_t)(sizeof(req) - 1)) {
+            size_t got = 0;
+            while (got + 1 < cap) {
+                ssize_t r = recv(s, out + got, cap - 1 - got, 0);
+                if (r <= 0)
+                    break;
+                got += (size_t)r;
+            }
+            out[got] = 0;
+        }
+    }
+    close(s);
+}
+
+static void report_lock_conflict(int bind_errno, int after_rest) {
+    char probe[512] = "";
+    if (bind_errno == EADDRINUSE)
+        probe_local_lodestar(probe, sizeof(probe));
+    lock_conflict_t kind = lock_conflict_classify(bind_errno, probe);
+    printf("[main] instance lock port %d unavailable (pid %d, errno=%d %s, probe=%s): %s\n",
+           LOCK_PORT, (int)getpid(), bind_errno, strerror(bind_errno),
+           kind == LOCK_CONFLICT_LODESTAR_RUNNING ? "lodestar-panel" :
+           bind_errno == EADDRINUSE ? "no-lodestar-reply" : "skipped",
+           after_rest ? "stopping after rest mode" : "this load ends here");
+    if (kind == LOCK_CONFLICT_LODESTAR_RUNNING) {
+        if (after_rest)
+            notify_kind(NOTIFY_WARN, "%s",
+                        TR(VERSION " stopped: another Lodestar instance is already running.",
+                           VERSION " detenido: ya hay otra instancia de Lodestar en marcha."));
+        else
+            notify_kind(NOTIFY_WARN, "%s",
+                        TR(VERSION " not started: Lodestar is already running.",
+                           VERSION " no arrancó: Lodestar ya está en marcha."));
+    } else if (kind == LOCK_CONFLICT_OTHER_OR_UNKNOWN) {
+        if (after_rest)
+            notify_kind(NOTIFY_WARN, "%s",
+                        TR(VERSION " stopped: another active instance already holds lock port 9032 (Lodestar or a compatible mount daemon). Stop it and load Lodestar again.",
+                           VERSION " detenido: otra instancia activa ocupa el puerto de bloqueo 9032 (Lodestar u otro gestor de montaje compatible). Deténla y vuelve a cargar Lodestar."));
+        else
+            notify_kind(NOTIFY_WARN, "%s",
+                        TR(VERSION " not started: another active instance already holds lock port 9032 (Lodestar or a compatible mount daemon). Stop it first.",
+                           VERSION " no arrancó: otra instancia activa ocupa el puerto de bloqueo 9032 (Lodestar u otro gestor de montaje compatible). Deténla antes."));
+    } else {
+        if (after_rest)
+            notify_kind(NOTIFY_WARN,
+                        TR(VERSION " stopped: could not reacquire lock port %d (%s).",
+                           VERSION " detenido: no se pudo recuperar el puerto de bloqueo %d (%s)."),
+                        LOCK_PORT, strerror(bind_errno));
+        else
+            notify_kind(NOTIFY_WARN,
+                        TR(VERSION " not started: could not bind lock port %d (%s).",
+                           VERSION " no arrancó: no se pudo abrir el puerto de bloqueo %d (%s)."),
+                        LOCK_PORT, strerror(bind_errno));
+    }
+}
+
+/* Read-only diagnostic for the system's app.db-corrupt marker (P4N-30).
+ * Never opens, modifies, repairs, or deletes any file under /system_data/priv/mms/. */
+static void check_db_corrupt_marker(int at_startup) {
+    static int reported;
+    if (reported || !db_corrupt_marker_present())
+        return;
+    reported = 1;
+    printf("[db] system corruption marker detected (%s): %s; Lodestar never writes or repairs system databases\n",
+           db_corrupt_marker_path(),
+           at_startup ? "already existed at startup" : "appeared while running");
+    if (at_startup) {
+        notify_kind(NOTIFY_WARN, "%s",
+                    TR("System notice: app.db-corrupt already existed before Lodestar started. Lodestar will not modify or repair it.",
+                       "Aviso del sistema: app.db-corrupt ya existía antes de arrancar Lodestar. Lodestar no lo modificará ni lo reparará."));
+    } else {
+        notify_kind(NOTIFY_WARN, "%s",
+                    TR("System notice: app.db-corrupt appeared while running. Lodestar does not write or repair system databases.",
+                       "Aviso del sistema: app.db-corrupt apareció durante la ejecución. Lodestar no escribe ni repara bases de datos del sistema."));
+    }
 }
 
 /* ---- GoldHEN's AutoRun ---- */
@@ -7418,10 +7609,8 @@ static const char *panel_url(char *out, size_t n) {
 static void notify_running(void) {
     char url[48];
     if (setup_active() && g_reg_mode != REG_NONE && g_web >= 0)
-        notify(TR(VERSION ": first start. Choose the settings in the Lodestar app or at %s and save them. Without it, "
-                          "the games are added with the default settings in 2 minutes.",
-                  VERSION ": primera vez. Elige los ajustes en la app Lodestar o en %s y guárdalos. Si no, en 2 minutos "
-                          "se añaden los juegos con los ajustes por defecto."),
+        notify(TR(VERSION ": first start. Open the Lodestar app or %s and save the settings to start adding games.",
+                  VERSION ": primera vez. Abre la app Lodestar o %s y guarda los ajustes para empezar a añadir juegos."),
                panel_url(url, sizeof(url)));
     else if (g_reg_mode == REG_ALL && g_web >= 0)
         notify(TR(VERSION " running. Panel at %s", VERSION " en marcha. Panel en %s"), panel_url(url, sizeof(url)));
@@ -7445,31 +7634,32 @@ int main(void) {
      * only seen here */
     log_start(STATE_DIR "/log.txt");
     setvbuf(stdout, NULL, _IOLBF, 0);
-    int lock = single_instance();
+    int lock_err = 0;
+    int lock = single_instance(&lock_err);
     if (lock < 0) {
         apply_lang(); /* the running daemon may be either product: use the console's language */
-        printf("[main] another mount daemon is running: this load ends here\n");
-        notify_kind(NOTIFY_WARN, "%s",
-                    TR(VERSION " not started: PS4Mount or another mount daemon is running. Stop it first.",
-                       VERSION " no arrancó: PS4Mount u otro gestor de montaje está en marcha. Deténlo antes."));
+        report_lock_conflict(lock_err, 0);
         log_stop();
         return 0;
     }
-    sceUserServiceInitialize(0);
+    user_service_init_t us_init = {0x2BC};
+    int us_rc = sceUserServiceInitialize(&us_init);
+    printf("[main] sceUserServiceInitialize(priority=0x%x)=0x%08x%s\n", (unsigned)us_init.priority, (unsigned)us_rc,
+           us_rc == 0 ? " (ok)" : us_rc == (int)0x80960003 ? " (already initialized)" : " (failed)");
     sceAppInstUtilInitialize();
     /* the PS4 loader runs the payload in a process of its own and returning from main
      * goes back to it: no exit, no atexit. What the payload opened is closed by
      * shutdown() before main returns */
     printf("[main] start (lock %d, pid %d)\n", lock, (int)getpid());
     cat_pump = pump_now; /* the panel answers during a catalog walk */
-    setup_set(first_start());
-    g_setup_start = time(NULL);
+    firstrun_begin(first_start());
     config_load();
     apply_lang();
+    check_db_corrupt_marker(1);
     if (g_cfg.autorun && autorun_apply(1))
         printf("[config] autorun on: could not update payloads.ini\n");
     if (setup_active())
-        printf("[main] first start: no game is added until the settings are saved\n");
+        printf("[main] first start: waiting for explicit settings save before adopting existing games\n");
     signal(SIGPIPE, SIG_IGN);
     check_firmware();
     if (user_app_masked())
@@ -7489,12 +7679,11 @@ int main(void) {
             return 0;
         }
         if (!still_listening(lock)) {
-            /* lost in rest mode: take it again, or stop if another PS4Mount has it now */
+            /* lost in rest mode: take it again, or stop if another active instance holds it now */
             close(lock);
-            if ((lock = single_instance()) < 0) {
-                notify_kind(NOTIFY_WARN, "%s",
-                            TR(VERSION " stopped: another mount daemon is running. Stop it and load Lodestar again",
-                               VERSION " detenido: hay otro gestor de montaje en marcha. Deténlo y vuelve a cargar Lodestar"));
+            int relock_err = 0;
+            if ((lock = single_instance(&relock_err)) < 0) {
+                report_lock_conflict(relock_err, 1);
                 shutdown_daemon(-1);
                 return 0;
             }
@@ -7508,6 +7697,7 @@ int main(void) {
             if (was || g_web >= 0) /* log changes only, not every retry */
                 printf("[main] web panel %s\n", g_web >= 0 ? "listening again" : "unavailable");
         }
+        check_db_corrupt_marker(0);
         if (g_deleting && g_deleting_close_at && time(NULL) >= g_deleting_close_at)
             end_delete_window();
         if (g_deleting && time(NULL) - g_deleting_since > 600)
@@ -7529,18 +7719,13 @@ int main(void) {
         install_received(); /* an app sent with "Send and install" */
         panel_app_step();
         if (scan_due(time(NULL)) && !g_deleting) {
-            time_t seen = setup_seen_at();
-            if (setup_active() && time(NULL) >= (seen > g_setup_start ? seen : g_setup_start) + SETUP_WAIT) {
-                printf("[main] first start: nobody at the panel, the default settings are saved\n");
-                config_save();
-            }
             int manual = 0, hard = 0;
             scan_trigger_t trig = SCAN_TRIG_ROUTINE;
             unsigned scan_seq = scan_begin_why(&manual, &hard, &trig);
             g_scan_manual_active = manual;
             int scanned = 1, ran_scan = 0;
             uint64_t scan_t0 = 0;
-            if (setup_active()) {
+            if (!firstrun_allows_scan()) {
                 if (manual)
                     notify("%s", TR("Save the settings in the app or the panel first: no game is added until then",
                                     "Guarda primero los ajustes en la app o en el panel: hasta entonces no se añade ningún juego"));
